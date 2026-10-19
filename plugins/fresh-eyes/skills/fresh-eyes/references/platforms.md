@@ -7,6 +7,10 @@
   and boots them. Other devices (the user's emulator, a phone) are read-only to us.
 - Never run the Maestro CLI on a device the Maestro MCP is driving: the CLI uninstalls the MCP's driver on exit
   and every later MCP call fails with `DeviceServerDiedException` until a new device serial is used.
+  Recovery: restart the owned emulator on another port (`emulator -avd fresh-eyes-pixel -port 5564`, ownership
+  is checked by AVD name, not port) or ask the user to reconnect the Maestro MCP server (`/mcp`).
+- Android builds need `ANDROID_HOME` (usually `~/Library/Android/sdk`) in the build command's environment;
+  a stale `android/` folder from an older SDK needs `npx expo prebuild -p android` first.
 
 ## Traps that make a run falsely green
 
