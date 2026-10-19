@@ -72,9 +72,10 @@ def plan(config, preflight, mode, screens=None):
     else:
         chosen = list(by_id)
     plats = preflight.get("platforms", {})
-    ok = [p for p in PLATFORMS if plats.get(p, {}).get("ok")]
+    targets = config.get("platforms", PLATFORMS)
+    ok = [p for p in targets if plats.get(p, {}).get("ok")]
     unchecked = [{"what": "%s: all screens" % p, "why": "no ready device or build (see preflight)"}
-                 for p in PLATFORMS if p not in ok]
+                 for p in targets if p not in ok]
     has_seed = bool((config.get("hooks") or {}).get("seed"))
     cells = []
     for p in ok:

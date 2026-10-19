@@ -48,6 +48,12 @@ class PlanTest(unittest.TestCase):
         self.assertTrue(all(c["platform"] == "android" for c in cov["cells"]))
         self.assertTrue(any(u["what"].startswith("ios") for u in cov["unchecked"]))
 
+    def test_plan_respects_config_platforms(self):
+        cfg = dict(ONE_SCREEN, platforms=["android"])
+        pre = {"platforms": {"android": {"ok": True}}, "mutating_allowed": True}
+        cov = plan(cfg, pre, "full")
+        self.assertFalse(any(u["what"].startswith("ios") for u in cov["unchecked"]))
+
     def test_platform_only_probe_skipped_on_other_platform(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0].update(states=["default"], probes=["hardware-back"])
