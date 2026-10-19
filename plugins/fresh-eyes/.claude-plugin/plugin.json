@@ -1,0 +1,17 @@
+{
+  "name": "fresh-eyes",
+  "version": "0.1.0",
+  "description": "Tests a running iOS/Android app like a picky human QA + designer and writes findings to your backlog.",
+  "license": "MIT",
+  "keywords": [
+    "qa",
+    "mobile",
+    "maestro",
+    "react-native",
+    "expo",
+    "visual-testing"
+  ],
+  "author": {
+    "name": "Rasul"
+  }
+}
