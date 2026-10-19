@@ -96,6 +96,24 @@ class DevicesTest(unittest.TestCase):
                     "window InputMethod": "Window{abc InputMethod}:\n    mFrame=[0,1484][1080,2400] ...\n"})
         self.assertEqual(devices.keyboard_top(Device("android", "emulator-5560", "x")), 1484)
 
+    def test_apply_setting_maps_names(self):
+        fake = self.patch({})
+        own = Device("android", "emulator-5560", "fresh-eyes-pixel")
+        devices.apply_setting(own, "dark")
+        devices.apply_setting(own, "font-xl")
+        devices.apply_setting(own, "offline")
+        shells = " | ".join(c[-1] for c in fake.calls)
+        self.assertIn("cmd uimode night yes", shells)
+        self.assertIn("font_scale 1.3", shells)
+        self.assertIn("svc wifi disable", shells)
+
+    def test_apply_setting_unknown_and_foreign(self):
+        self.patch({})
+        with self.assertRaises(FEError):
+            devices.apply_setting(Device("android", "emulator-5560", "fresh-eyes-pixel"), "sepia")
+        with self.assertRaises(FEError):
+            devices.apply_setting(Device("android", "emulator-5554", ""), "dark")
+
     def test_animations_disabled_detected(self):
         self.patch({"window_animation_scale": "0.0\n", "transition_animation_scale": "1.0\n",
                     "animator_duration_scale": "1.0\n"})

@@ -6,6 +6,8 @@ CLI:
   devices.py list
   devices.py ensure --platform android|ios [--kind default|small]
   devices.py screenshot --platform P --device ID --out PNG
+  devices.py set --platform P --device ID --name NAME --what dark|light|font-xl|font-default|offline|online|...
+  devices.py app --platform P --device ID --name NAME --app BUNDLE --do launch|terminate|clear|background
 """
 import argparse
 import json
@@ -354,6 +356,25 @@ def screen_size(dev):
     return None
 
 
+SETTINGS = {
+    "dark": lambda d: set_dark(d, True), "light": lambda d: set_dark(d, False),
+    "font-xl": lambda d: set_font_scale(d, "xl"), "font-default": lambda d: set_font_scale(d, "default"),
+    "offline": lambda d: set_network(d, False), "online": lambda d: set_network(d, True),
+    "soft-keyboard": set_soft_keyboard, "animations-on": enable_animations,
+}
+
+
+def apply_setting(dev, what):
+    if what not in SETTINGS:
+        raise FEError("unknown setting %s (known: %s)" % (what, ", ".join(sorted(SETTINGS))))
+    _require_owned(dev, "apply %s" % what)
+    SETTINGS[what](dev)
+
+
+APP_ACTIONS = {"launch": launch, "terminate": terminate, "clear": clear_app,
+               "background": background_foreground}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -363,11 +384,22 @@ def main():
     p = sub.add_parser("screenshot"); p.add_argument("--platform", required=True); p.add_argument("--device",
                                                                                                 required=True)
     p.add_argument("--out", required=True)
+    p = sub.add_parser("set"); p.add_argument("--platform", required=True); p.add_argument("--device", required=True)
+    p.add_argument("--name", required=True); p.add_argument("--what", required=True, choices=sorted(SETTINGS))
+    p = sub.add_parser("app"); p.add_argument("--platform", required=True); p.add_argument("--device", required=True)
+    p.add_argument("--name", required=True); p.add_argument("--app", required=True)
+    p.add_argument("--do", required=True, choices=sorted(APP_ACTIONS))
     a = ap.parse_args()
     if a.cmd == "list":
         out = [dict(d._asdict(), owned=is_owned(d)) for d in list_devices()]
     elif a.cmd == "ensure":
         out = ensure_owned(a.platform, a.kind)._asdict()
+    elif a.cmd == "set":
+        apply_setting(Device(a.platform, a.device, a.name), a.what)
+        out = {"set": a.what}
+    elif a.cmd == "app":
+        APP_ACTIONS[a.do](Device(a.platform, a.device, a.name), a.app)
+        out = {"app": a.app, "do": a.do}
     else:
         out = screenshot(Device(a.platform, a.device, ""), a.out)
     print(json.dumps(out, ensure_ascii=False))

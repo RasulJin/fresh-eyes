@@ -7,10 +7,11 @@
   preflight.json  coverage.json  report.md  requests.json (optional)
   <platform>/<screen>/<state>-<probe>/      ← one evidence pack per cell
     screen.png screen_1000.png som.png som.json nodes.json hierarchy.txt candidates.json meta.json
-    crops/*.png  [video.mp4 motion.json sheet_*.png around.json]  findings.json  [taps.json]
+    crops/*.png  [video.mp4 motion.json sheet_*.png around.json]  [taps.json]
+  <platform>/<screen>/findings.json         ← one per screen × platform (reviewer, then verifier)
 ```
 
-## `findings.json` (written by the reviewer into one pack per screen × platform)
+## `findings.json` (`<run>/<platform>/<screen>/findings.json`)
 
 ```json
 {"pack": "<path>", "findings": [{
