@@ -48,7 +48,8 @@ def _template(name):
 
 
 def next_id(text, prefix):
-    nums = [int(m) for m in re.findall(r"^### %s-(\d+)\b" % re.escape(prefix), text, flags=re.M)]
+    """One past the highest PREFIX-N mentioned anywhere: entries live in headings, bullets and tables."""
+    nums = [int(m) for m in re.findall(r"\b%s-(\d+)\b" % re.escape(prefix), text)]
     return max(nums) + 1 if nums else 1
 
 
@@ -85,7 +86,7 @@ def append(path, finding, template, date=None):
 
 def set_status(path, item_id, status, note, line=None, template="ru-backlog"):
     lines = _read(path).split("\n")
-    head = re.compile(r"^### %s(?=[ ·—])" % re.escape(item_id))
+    head = re.compile(r"^(?:#{2,4} %s(?=[ ·—])|- \*\*%s\*\*)" % (re.escape(item_id), re.escape(item_id)))
     hits = [i + 1 for i, l in enumerate(lines) if head.match(l)]
     if not hits:
         raise FEError("%s not found in %s" % (item_id, path))

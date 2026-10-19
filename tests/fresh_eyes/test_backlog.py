@@ -50,6 +50,16 @@ class BacklogTest(unittest.TestCase):
         self.assertEqual(next_id(BACKLOG, "IMP"), 13)
         self.assertEqual(next_id("# empty", "BUG"), 1)
 
+    def test_next_id_sees_other_entry_formats(self):
+        text = BACKLOG + "\n## IMP-13 — разбор\n- **IMP-14** — `fixed` клавиатура\n- **IMP-19** — счётчик\n"
+        self.assertEqual(next_id(text, "IMP"), 20)
+
+    def test_set_status_bullet_entry(self):
+        with tmpdir() as d:
+            p = write(d, BACKLOG + "\n- **IMP-14** — `fixed` (2026-10-03) — клавиатуру нельзя закрыть\n")
+            set_status(p, "IMP-14", "verified", "ok")
+            self.assertIn("- **IMP-14** — `verified` (2026-10-03)", read(p))
+
     def test_render_ru(self):
         text = render(FINDING, "ru-backlog", "BUG-54", "2026-10-19")
         self.assertTrue(text.startswith("### BUG-54 · Сетка обрезана — `open`"))
