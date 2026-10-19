@@ -12,6 +12,7 @@ CLI:
 import argparse
 import json
 import math
+import os
 import shutil
 
 from fe_common import FEError, FFMPEG, cli, image_size, read_json, read_rgb, run, write_png
@@ -19,7 +20,15 @@ from fe_common import FEError, FFMPEG, cli, image_size, read_json, read_rgb, run
 DIFF_TOL = 24  # max per-channel difference still counted as "background"
 
 
+def _parent(dst):
+    d = os.path.dirname(dst)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    return dst
+
+
 def downscale(src, dst, long_side=1000):
+    _parent(dst)
     w, h = image_size(src)
     if max(w, h) <= long_side:
         if src != dst:
@@ -44,6 +53,7 @@ def _clamp_box(bbox, w, h, pad):
 
 
 def crop(src, dst, bbox, pad=8, zoom=1):
+    _parent(dst)
     w, h = image_size(src)
     x, y, cw, ch = _clamp_box(bbox, w, h, pad)
     vf = "crop=%d:%d:%d:%d" % (cw, ch, x, y)
@@ -84,6 +94,7 @@ def corner_radius(src, bbox, corner):
 def side_by_side(srcs, dst, height=160):
     if len(srcs) < 2:
         raise FEError("side_by_side needs at least two images")
+    _parent(dst)
     args = []
     for s in srcs:
         args += ["-i", s]
@@ -96,6 +107,7 @@ def side_by_side(srcs, dst, height=160):
 def tile(srcs, dst, cols=4, frame_h=300):
     if not srcs:
         raise FEError("tile needs at least one image")
+    _parent(dst)
     w, h = image_size(srcs[0])
     fw = int(round(w * frame_h / float(h) / 2.0)) * 2
     rows = int(math.ceil(len(srcs) / float(cols)))
@@ -147,7 +159,7 @@ def som_overlay(src, items, dst, max_items=60):
     """Draw numbered boxes over the screenshot; return [{n, node_ids, bbox}]."""
     w, h, data = read_rgb(src)
     buf = bytearray(data)
-    scale = max(3, w // 270)
+    scale = max(4, w // 120)  # digits stay readable after the 1000 px downscale
     t = max(3, w // 360)
     mapping = []
     for i, it in enumerate(items[:max_items]):
