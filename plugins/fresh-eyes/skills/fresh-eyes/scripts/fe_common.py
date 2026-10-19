@@ -38,6 +38,34 @@ def write_json(path, obj):
         f.write("\n")
 
 
+FFMPEG = ["ffmpeg", "-y", "-loglevel", "error"]
+
+
+def image_size(path):
+    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+               "-of", "csv=p=0:s=x", path]).stdout.decode().strip()
+    w, h = out.splitlines()[0].split("x")
+    return int(w), int(h)
+
+
+def read_rgb(path):
+    """Decode any image ffmpeg reads into (w, h, rgb24 bytes)."""
+    w, h = image_size(path)
+    data = run(FFMPEG + ["-i", path, "-f", "rawvideo", "-pix_fmt", "rgb24", "-frames:v", "1", "-"]).stdout
+    if len(data) != w * h * 3:
+        raise FEError("decoded %d bytes, expected %d for %s" % (len(data), w * h * 3, path))
+    return w, h, data
+
+
+def write_png(path, w, h, rgb):
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    run(FFMPEG + ["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (w, h), "-i", "-",
+                  "-frames:v", "1", path], input=bytes(rgb))
+    return path
+
+
 def cli(fn):
     """Run a CLI main; turn FEError into {"error": ...} on stdout and exit code 2."""
     try:
