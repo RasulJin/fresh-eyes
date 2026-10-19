@@ -86,7 +86,7 @@ words / nothing (= the current diff).
    `coverage.py next` is empty. Prompt: run folder, config path, platform, device id and name from preflight,
    the cell ids.
 8. Review: one `fresh-eyes:reviewer` per screen × platform with done cells (up to 4 in parallel). Prompt: the
-   pack folders, `.fresh-eyes/spec.md` + screen id, `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the
+   pack folders, `.fresh-eyes/spec.md` + the screen id and its `neighbors` ids (their rules often apply), `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the
    `references` from config.
 9. Verify: `fresh-eyes:verifier` with all `findings.json` paths. If it answers `needs: requests`, run the
    navigator in requests mode with `$RUN/requests.json`, then the verifier again (second pass).
