@@ -93,6 +93,15 @@ class PreflightTest(unittest.TestCase):
         with mock.patch.object(preflight, "_bundle_text", lambda platform, artifact: "x " + STAGING + " y"):
             self.assertTrue(preflight.check(config(), "full", fix=False)["env"]["verified"])
 
+    def test_quick_with_artifact_checks_bundle(self):
+        self.fake_devices()
+        cfg = config()
+        cfg["builds"]["quick"]["android"] = {"artifact": "build/app.apk"}
+        with mock.patch.object(preflight, "_bundle_text", lambda platform, artifact: "x " + PROD):
+            self.assertFalse(preflight.check(cfg, "quick", fix=False)["env"]["verified"])
+        with mock.patch.object(preflight, "_bundle_text", lambda platform, artifact: "x " + STAGING):
+            self.assertTrue(preflight.check(cfg, "quick", fix=False)["env"]["verified"])
+
     def test_brief_exit_zero_on_problems(self):
         self.fake_devices(listed=())
         with tmpdir() as d:

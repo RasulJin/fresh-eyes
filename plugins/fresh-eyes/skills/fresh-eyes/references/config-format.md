@@ -57,7 +57,8 @@ noted. Example (generic values):
   Only `name` `staging` or `local` can enable mutation.
 - `accounts`: names of environment variables holding test credentials. Values never go into files or reports.
 - `builds.quick|full.<platform>`: `build` (command, run in `cwd`), `install` (optional), `start` (Metro),
-  `metro_env` (env for Metro), `artifact` (built file for full mode).
+  `metro_env` (env for Metro), `artifact` (built file). A build with `artifact` (e.g. a release APK, no Metro)
+  is checked by reading the backend URL inside its bundle, in quick mode too.
 - `hooks`: optional project commands: `seed` creates data for states like `empty`/`long-text`, `cleanup`
   removes what the run created, `new_account` creates a fresh test account. Without `seed` those states are
   reported as not checked.

@@ -91,7 +91,7 @@ def _platform_state(config, platform, kind_needed_small, fix):
     return state
 
 
-def _env(config, mode, ok_platforms):
+def _env(config, mode, ok_platforms, project="."):
     env = config.get("env") or {}
     expected = env.get("api_expected")
     forbidden = env.get("api_forbidden") or []
@@ -102,14 +102,17 @@ def _env(config, mode, ok_platforms):
     verified = True
     for p in ok_platforms:
         build = ((config.get("builds") or {}).get(mode) or {}).get(p) or {}
-        if mode == "quick":
+        if not build.get("artifact"):
             url = (build.get("metro_env") or {}).get("EXPO_PUBLIC_API_URL")
             good = url == expected and url not in forbidden
             if not good:
                 res["problems"].append("%s quick build points at %s, expected %s" % (p, url, expected))
         else:
+            artifact = build.get("artifact", "")
+            if artifact and not os.path.isabs(artifact):
+                artifact = os.path.join(project, artifact)
             try:
-                text = _bundle_text(p, build.get("artifact", ""))
+                text = _bundle_text(p, artifact)
             except (OSError, subprocess.SubprocessError) as e:
                 text = ""
                 res["problems"].append("%s: cannot read bundle of %s: %s" % (p, build.get("artifact"), e))
@@ -122,13 +125,13 @@ def _env(config, mode, ok_platforms):
     return res
 
 
-def check(config, mode, fix=False):
+def check(config, mode, fix=False, project="."):
     wants_small = any("small-screen" in s.get("states", []) for s in config.get("screens", []))
     platforms = {}
     for p in config.get("platforms", ["android", "ios"]):
         platforms[p] = _platform_state(config, p, wants_small, fix)
     ok_platforms = [p for p, s in platforms.items() if s["ok"]]
-    env = _env(config, mode, ok_platforms)
+    env = _env(config, mode, ok_platforms, project)
     unchecked = ["%s: %s" % (p, "; ".join(s["problems"])) for p, s in platforms.items() if not s["ok"]]
     unchecked += env["problems"]
     tools = {"ffmpeg": bool(shutil.which("ffmpeg")), "ffprobe": bool(shutil.which("ffprobe")),
@@ -163,7 +166,7 @@ def cli_main():
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     try:
-        res = check(read_json(os.path.join(a.project, ".fresh-eyes", "config.json")), a.mode, a.fix)
+        res = check(read_json(os.path.join(a.project, ".fresh-eyes", "config.json")), a.mode, a.fix, a.project)
     except (FEError, OSError, ValueError) as e:
         res = {"ok": False, "mode": a.mode, "platforms": {}, "env": {"name": None, "verified": False,
                                                                      "api_host": None},
