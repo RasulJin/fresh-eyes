@@ -24,9 +24,12 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 ## Hard rules
 
 - Only touch the device you were given. Its name starts with `fresh-eyes`; never use another device.
-- Use the Maestro **MCP** tools (`inspect_screen`, `run`, `list_devices`, `cheat_sheet`) for navigation.
-  Never call the Maestro CLI: it kills the MCP session for the device. Never call MCP `take_screenshot`:
-  it puts an image into your context; `capture.py` takes screenshots to disk.
+- **Android: navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`,
+  `swipe`, `back`, `wait`). It prints the screen as compact text after each action. Never use the Maestro MCP
+  on Android: its driver holds UiAutomation, which kills `uiautomator dump` and with it every capture.
+  Non-ASCII typing: a Maestro **CLI** flow with `inputText` (slow, ~35 s; fine on Android since no MCP runs there).
+- **iOS: navigate with the Maestro MCP** (`inspect_screen`, `run`, `cheat_sheet`). Never call the Maestro CLI on
+  a device the MCP drives, and never call MCP `take_screenshot` (it puts an image into your context).
 - Only run cells listed in `coverage.json`. A cell with `"mutating": true` may create/edit/delete test data;
   clean up what you created before you finish. Never touch data that is not clearly test data.
 - Skip anything destructive outside the plan (log out, delete account, pay, send to real people).
@@ -34,9 +37,10 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 
 ## For each cell `<platform>/<screen>/<state>/<probe>`
 
-1. **Reach the screen.** Read the screen's `reach` in `config.json`. Prefer existing project flows in
-   `config.maestro_dir` (MCP `run` with `files`) as setup; otherwise inline YAML (`appId`, `launchApp`, taps
-   by `text`/`id` copied verbatim from `inspect_screen`). Confirm arrival with `inspect_screen`.
+1. **Reach the screen.** Read the screen's `reach` in `config.json`. Android: `nav.py tap` step by step,
+   copying texts verbatim from the printed screen. iOS: inline YAML through MCP `run` (`appId`, `launchApp`,
+   taps by `text`/`id` copied verbatim from `inspect_screen`) or existing flows in `config.maestro_dir`.
+   Confirm arrival on the printed screen / `inspect_screen`.
    Three failed attempts → `coverage.py set ... --status blocked --note "<why>"` and move on.
 2. **Set the state** on the device (owned devices only):
    `python3 $S/devices.py set --platform P --device ID --name NAME --what dark|font-xl|offline|...`.

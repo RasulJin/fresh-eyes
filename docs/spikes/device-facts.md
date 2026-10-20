@@ -46,3 +46,12 @@ Machine: macOS, Xcode 26.2 (17C52), iOS runtime `com.apple.CoreSimulator.SimRunt
 - Created `fresh-eyes iPhone 17` (`1EB9BE1B-BF5B-44BD-B1D4-CE6CCCD69C4D`) and `fresh-eyes iPhone 16e` (`B5D11571-5DD9-45C0-80AE-160584346287`) with `xcrun simctl create "<name>" com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-26-2`.
 - `idb` is not installed. The iOS tap mechanism and the hierarchy source are decided in Task 16 (the Maestro CLI cannot be used next to the MCP, see Q6).
 - The Maestro MCP lists simulators by UDID as `device_id`.
+
+## Q10 — UiAutomation conflict (found 2026-10-20 while connecting the first app)
+- With the Maestro MCP driver running on an emulator (`dev.mobile.maestro` process), `adb exec-out uiautomator dump`
+  prints `Killed`: only one UiAutomation client is allowed.
+- `am force-stop dev.mobile.maestro(.test)` frees it (the dump works again), but the MCP session for that device stays
+  dead (`DeviceServerDiedException`) until the MCP server restarts.
+- **Decision:** on Android, `nav.py` (uiautomator + adb input) does navigation and capture shares the same channel;
+  the Maestro MCP is used only on iOS. Bonus: the navigator reads ~1.5k chars of compressed screen text instead of
+  ~15k chars of MCP JSON per screen.

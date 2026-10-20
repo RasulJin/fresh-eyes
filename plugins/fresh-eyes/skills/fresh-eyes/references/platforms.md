@@ -5,6 +5,9 @@
 - fresh-eyes only changes devices it owns: Android AVDs `fresh-eyes-pixel` (port 5560) and `fresh-eyes-small`
   (port 5562), iOS simulators `fresh-eyes iPhone 17` and `fresh-eyes iPhone 16e`. `devices.py ensure` creates
   and boots them. Other devices (the user's emulator, a phone) are read-only to us.
+- **Android: one UiAutomation at a time.** While the Maestro MCP driver runs on a device, `uiautomator dump` is
+  killed; force-stopping the driver kills the MCP session (it does not recover). So on Android fresh-eyes
+  navigates with `nav.py` (uiautomator + adb) and never uses the Maestro MCP; iOS uses the Maestro MCP.
 - Never run the Maestro CLI on a device the Maestro MCP is driving: the CLI uninstalls the MCP's driver on exit
   and every later MCP call fails with `DeviceServerDiedException` until a new device serial is used.
   Recovery: restart the owned emulator on another port (`emulator -avd fresh-eyes-pixel -port 5564`, ownership
