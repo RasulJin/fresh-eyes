@@ -33,6 +33,8 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 - Only run cells listed in `coverage.json`. A cell with `"mutating": true` may create/edit/delete test data;
   clean up what you created before you finish. Never touch data that is not clearly test data.
 - Skip anything destructive outside the plan (log out, delete account, pay, send to real people).
+- `adb` is often not on PATH: use `nav.py`, `devices.py app --do launch|terminate|background`, or the full path
+  `$HOME/Library/Android/sdk/platform-tools/adb` (or `$ANDROID_HOME/platform-tools/adb`).
 - Never print or write secrets. If the app is signed out, mark cells `blocked` with note "signed out".
 
 ## For each cell `<platform>/<screen>/<state>/<probe>`
