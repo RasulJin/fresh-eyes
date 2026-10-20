@@ -66,12 +66,7 @@ def crop(src, dst, bbox, pad=8, zoom=1):
 _DIRS = {"tl": (1, 1), "tr": (-1, 1), "bl": (1, -1), "br": (-1, -1)}
 
 
-def corner_radius(src, bbox, corner):
-    """Estimate a corner's radius in px: walk the diagonal inward from the bbox corner until the shape starts.
-    For a circle arc of radius r the diagonal meets it at t = r(1 - 1/sqrt2)."""
-    if corner not in _DIRS:
-        raise FEError("corner must be one of tl, tr, bl, br")
-    w, h, data = read_rgb(src)
+def _radius_in(w, h, data, bbox, corner):
     dx, dy = _DIRS[corner]
     x0 = bbox[0] if dx > 0 else bbox[0] + bbox[2] - 1
     y0 = bbox[1] if dy > 0 else bbox[1] + bbox[3] - 1
@@ -89,6 +84,49 @@ def corner_radius(src, bbox, corner):
         if max(abs(p[i] - bg[i]) for i in range(3)) > DIFF_TOL:
             return t / (1 - 1 / math.sqrt(2))
     return float("inf")
+
+
+def corner_radius(src, bbox, corner):
+    """Estimate a corner's radius in px: walk the diagonal inward from the bbox corner until the shape starts.
+    For a circle arc of radius r the diagonal meets it at t = r(1 - 1/sqrt2)."""
+    if corner not in _DIRS:
+        raise FEError("corner must be one of tl, tr, bl, br")
+    w, h, data = read_rgb(src)
+    return _radius_in(w, h, data, bbox, corner)
+
+
+SURFACE_MIN_SHARE = 0.12  # panels, sheets, dialogs, big cards
+SHARP_PX = 4
+
+
+def corner_candidates(src, nodes, screen_wh, max_surfaces=5):
+    """Big surfaces with visibly sharp corners. Corners on the left/right screen edge are skipped:
+    edge-to-edge surfaces show no corner there."""
+    sw, sh = screen_wh
+    w, h, data = read_rgb(src)
+    surfaces = [n for n in nodes if n["bounds"][2] * n["bounds"][3] >= SURFACE_MIN_SHARE * sw * sh
+                and not (n["bounds"][2] >= sw - 2 and n["bounds"][3] >= sh - 2)
+                and not n.get("rid", "").startswith("com.android.systemui")]
+    out, seen = [], set()
+    for n in sorted(surfaces, key=lambda n: -n["bounds"][2] * n["bounds"][3]):
+        box = tuple(n["bounds"])
+        if box in seen:
+            continue
+        seen.add(box)
+        x, y, bw, bh = box
+        sharp = []
+        for corner in ("tl", "tr", "bl", "br"):
+            cx = x if corner[1] == "l" else x + bw
+            if cx <= 1 or cx >= sw - 1:
+                continue
+            if _radius_in(w, h, data, list(box), corner) < SHARP_PX:
+                sharp.append(corner)
+        if sharp:
+            out.append({"check": "sharp_corners", "node_ids": [n["id"]], "bbox": list(box), "corners": sharp,
+                        "detail": "radius < %d px at %s" % (SHARP_PX, ", ".join(sharp)), "hint": "low"})
+        if len(out) >= max_surfaces:
+            break
+    return out
 
 
 def side_by_side(srcs, dst, height=160):

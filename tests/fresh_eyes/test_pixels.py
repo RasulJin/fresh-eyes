@@ -87,3 +87,33 @@ class PixelsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CornerCandidatesTest(unittest.TestCase):
+    def test_sharp_drawer_flagged_on_visible_corners_only(self):
+        from pixels import corner_candidates
+        with tmpdir() as d:
+            p = make_png(os.path.join(d, "drawer.png"), 300, 600, bg=(60, 60, 60),
+                         rects=[(0, 0, 200, 600, (250, 250, 250), 0)])
+            nodes = [{"id": "root", "parent": None, "bounds": [0, 0, 300, 600], "rid": "", "cls": "F"},
+                     {"id": "panel", "parent": "root", "bounds": [0, 0, 200, 600], "rid": "", "cls": "ViewGroup"}]
+            c = corner_candidates(p, nodes, [300, 600])
+        self.assertEqual(len(c), 1)
+        self.assertEqual(c[0]["check"], "sharp_corners")
+        self.assertEqual(sorted(c[0]["corners"]), ["br", "tr"])  # tl/bl sit on the screen edge
+
+    def test_rounded_drawer_not_flagged(self):
+        from pixels import corner_candidates
+        with tmpdir() as d:
+            p = make_png(os.path.join(d, "drawer.png"), 300, 600, bg=(60, 60, 60),
+                         rects=[(0, 0, 200, 600, (250, 250, 250), 30)])
+            nodes = [{"id": "root", "parent": None, "bounds": [0, 0, 300, 600], "rid": "", "cls": "F"},
+                     {"id": "panel", "parent": "root", "bounds": [0, 0, 200, 600], "rid": "", "cls": "ViewGroup"}]
+            self.assertEqual(corner_candidates(p, nodes, [300, 600]), [])
+
+    def test_small_nodes_ignored(self):
+        from pixels import corner_candidates
+        with tmpdir() as d:
+            p = make_png(os.path.join(d, "x.png"), 300, 600, rects=[(10, 10, 40, 40, (0, 0, 0), 0)])
+            nodes = [{"id": "chip", "parent": None, "bounds": [10, 10, 40, 40], "rid": "", "cls": "View"}]
+            self.assertEqual(corner_candidates(p, nodes, [300, 600]), [])

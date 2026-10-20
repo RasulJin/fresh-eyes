@@ -25,11 +25,12 @@ from fe_common import FEError, image_size, read_json, write_json
 from geometry import run_all
 from hierarchy import HierarchyError, compress, normalize
 from motion import DEFAULT_CEILING_MS, analyze
-from pixels import crop, downscale, som_overlay
+from pixels import corner_candidates, crop, downscale, som_overlay
 
 MIN_DP = {"android": 48, "ios": 44}
 MAX_CROPS = 12
 MAX_MARKS = 60
+CORNER_CROP = 96  # px around a corner, zoomed x2 for the reviewer
 
 
 def _dump_uiautomator(dev):
@@ -86,6 +87,8 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
            "keyboard_top": devices.keyboard_top(dev) if keyboard else None}
     before_nodes = read_json(os.path.join(before, "nodes.json")) if before else None
     candidates = run_all(nodes, ctx, before_nodes)
+    app_nodes = [n for n in nodes if not n["rid"].startswith("com.android.systemui")]
+    candidates += corner_candidates(shot, app_nodes, [w, h])
     write_json(os.path.join(out, "candidates.json"), candidates)
     downscale(shot, os.path.join(out, "screen_1000.png"))
     full_som = os.path.join(out, ".som_full.png")
@@ -96,8 +99,17 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
     counters = {}
     for c in candidates[:MAX_CROPS]:
         counters[c["check"]] = counters.get(c["check"], 0) + 1
+        k = counters[c["check"]]
         try:
-            crop(shot, os.path.join(out, "crops", "%s-%d.png" % (c["check"], counters[c["check"]])), c["bbox"])
+            if c["check"] == "sharp_corners":
+                x, y, bw, bh = c["bbox"]
+                for corner in c["corners"]:
+                    cx = x if corner[1] == "l" else x + bw - CORNER_CROP
+                    cy = y if corner[0] == "t" else y + bh - CORNER_CROP
+                    crop(shot, os.path.join(out, "crops", "sharp_corners-%d-%s.png" % (k, corner)),
+                         [cx, cy, CORNER_CROP, CORNER_CROP], pad=CORNER_CROP // 2, zoom=2)
+            else:
+                crop(shot, os.path.join(out, "crops", "%s-%d.png" % (c["check"], k)), c["bbox"])
         except FEError:
             continue  # bbox fully off-screen: nothing to show, the candidate still stands
     meta.update(source=source, nodes=len(nodes), candidates=len(candidates), **{k: ctx[k] for k in

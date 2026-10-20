@@ -102,3 +102,26 @@ class AroundTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SnapCornerTest(unittest.TestCase):
+    def test_snap_adds_sharp_corner_candidate_with_corner_crops(self):
+        from tests.fresh_eyes.helpers import make_png
+
+        def shot(dev, dst):
+            return make_png(dst, 300, 600, bg=(60, 60, 60), rects=[(0, 0, 200, 600, (250, 250, 250), 0)])
+
+        xml = ('<hierarchy><node bounds="[0,0][300,600]" class="F"><node bounds="[0,0][200,600]" '
+               'class="android.view.ViewGroup" text="" content-desc="" resource-id="" clickable="false"/>'
+               '</node></hierarchy>')
+        with tmpdir() as d, mock.patch.object(devices, "screenshot", shot), \
+                mock.patch.object(devices, "px_per_dp", lambda dv: 2.0), \
+                mock.patch.object(devices, "keyboard_top", lambda dv: None), \
+                mock.patch.object(capture, "_dump_uiautomator", lambda dev: xml):
+            pack = os.path.join(d, "p")
+            capture.snap("android", "emulator-5560", pack)
+            cands = read_json(os.path.join(pack, "candidates.json"))
+            self.assertIn("sharp_corners", [c["check"] for c in cands])
+            crops = sorted(os.listdir(os.path.join(pack, "crops")))
+            self.assertIn("sharp_corners-1-tr.png", crops)
+            self.assertIn("sharp_corners-1-br.png", crops)
