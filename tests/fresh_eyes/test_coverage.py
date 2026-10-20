@@ -54,6 +54,23 @@ class PlanTest(unittest.TestCase):
         cov = plan(cfg, pre, "full")
         self.assertFalse(any(u["what"].startswith("ios") for u in cov["unchecked"]))
 
+    def test_journeys_touching_chosen_screens_are_planned(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["journeys"] = [{"id": "reply", "steps": "x", "screens": ["profile-trips"], "mutating": True},
+                           {"id": "other", "steps": "y", "screens": ["feed"], "mutating": False}]
+        pre = dict(BOTH_OK_MUT_OFF, platforms={"android": {"ok": True}}, mutating_allowed=True)
+        cfg["platforms"] = ["android"]
+        ids = [c["id"] for c in plan(cfg, pre, "quick", ["profile-trips"])["cells"]]
+        self.assertIn("android/journey/reply/journey", ids)
+        self.assertNotIn("android/journey/other/journey", ids)
+
+    def test_mutating_journey_unchecked_without_staging(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["journeys"] = [{"id": "reply", "steps": "x", "screens": ["profile-trips"], "mutating": True}]
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        self.assertFalse(any("journey" in c["id"] for c in cov["cells"]))
+        self.assertTrue(any("reply" in u["what"] for u in cov["unchecked"]))
+
     def test_platform_only_probe_skipped_on_other_platform(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0].update(states=["default"], probes=["hardware-back"])

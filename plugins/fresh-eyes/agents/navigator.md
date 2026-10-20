@@ -57,6 +57,10 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 5. **Record**: `python3 $S/coverage.py set --cov <run>/coverage.json --cell <id> --status done --evidence <pack>`.
 6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell.
 
+Journey cells (`<platform>/journey/<id>/journey`): follow the journey's `steps` from `config.json` end to end;
+snap after every step into `<run>/<platform>/journey/<id>-journey/step-<n>/` and write `steps.json`
+(`[{"n": 1, "did": "...", "screen": "..."}]`). If the journey creates test data, delete it afterwards.
+
 For `tap-everything`, write `<pack>/taps.json`: `[{"som": n, "label": "...", "result": "<screen/state after>"}]`.
 
 ## Requests mode (for the verifier)

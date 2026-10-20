@@ -103,6 +103,17 @@ def plan(config, preflight, mode, screens=None):
                                       "why": "mutating probe disabled: backend not verified as staging/local"})
                     continue
                 cells.append(_cell(p, sid, "default", probe))
+    for j in config.get("journeys", []):
+        if mode == "quick" and not set(j.get("screens", [])) & set(chosen):
+            continue
+        for p in ok:
+            if j.get("mutating") and not preflight.get("mutating_allowed"):
+                unchecked.append({"what": "%s/journey/%s" % (p, j["id"]),
+                                  "why": "mutating journey disabled: backend not verified as staging/local"})
+                continue
+            cells.append({"id": "%s/journey/%s/journey" % (p, j["id"]), "platform": p, "screen": "journey",
+                          "state": j["id"], "probe": "journey", "mutating": bool(j.get("mutating")),
+                          "status": "todo", "evidence": [], "note": j.get("steps", "")})
     return {"run_id": time.strftime("%Y%m%d-%H%M") + "-" + mode, "mode": mode, "cells": cells,
             "unchecked": unchecked}
 
