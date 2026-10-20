@@ -102,6 +102,15 @@ class PreflightTest(unittest.TestCase):
         with mock.patch.object(preflight, "_bundle_text", lambda platform, artifact: "x " + STAGING):
             self.assertTrue(preflight.check(cfg, "quick", fix=False)["env"]["verified"])
 
+    def test_bundle_check_matches_host_without_scheme(self):
+        # Hermes keeps the scheme and host in separate string-table entries
+        self.fake_devices()
+        with mock.patch.object(preflight, "_bundle_text", lambda platform, artifact: "\x00api-staging.example.com\x00"):
+            self.assertTrue(preflight.check(config(), "full", fix=False)["env"]["verified"])
+        with mock.patch.object(preflight, "_bundle_text",
+                               lambda platform, artifact: "api-staging.example.com api.example.com"):
+            self.assertFalse(preflight.check(config(), "full", fix=False)["env"]["verified"])
+
     def test_brief_exit_zero_on_problems(self):
         self.fake_devices(listed=())
         with tmpdir() as d:

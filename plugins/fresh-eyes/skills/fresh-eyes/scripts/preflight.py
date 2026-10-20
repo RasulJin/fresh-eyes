@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+from urllib.parse import urlparse
 
 import devices
 from fe_common import FEError, read_json, write_json
@@ -36,6 +37,10 @@ def _maestro_path():
         if cand and os.path.exists(cand):
             return cand
     return None
+
+
+def _host(url):
+    return urlparse(url).netloc or url
 
 
 def _bundle_text(platform, artifact):
@@ -116,7 +121,8 @@ def _env(config, mode, ok_platforms, project="."):
             except (OSError, subprocess.SubprocessError) as e:
                 text = ""
                 res["problems"].append("%s: cannot read bundle of %s: %s" % (p, build.get("artifact"), e))
-            good = expected in text and not any(f in text for f in forbidden)
+            # match hosts: bundlers may store the scheme and the host as separate strings
+            good = _host(expected) in text and not any(_host(f) in text for f in forbidden)
             if not good and text:
                 res["problems"].append("%s bundle does not point only at %s" % (p, expected))
         verified = verified and good
