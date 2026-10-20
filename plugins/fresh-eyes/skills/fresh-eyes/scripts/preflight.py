@@ -4,7 +4,7 @@
 Writes preflight.json: {ok, platforms:{p:{ok, device, name, owned, small_device, app_installed, soft_keyboard,
 animations, problems}}, env:{name, verified, api_host}, mutating_allowed, tools:{...}, unchecked:[...]}
 
-CLI: preflight.py --project DIR --mode quick|full [--fix] [--brief] --out preflight.json
+CLI: preflight.py --project DIR --mode quick|full [--fix] [--brief] [--platforms android,ios] --out preflight.json
 """
 import argparse
 import json
@@ -131,10 +131,15 @@ def _env(config, mode, ok_platforms, project="."):
     return res
 
 
-def check(config, mode, fix=False, project="."):
+def check(config, mode, fix=False, project=".", only=None):
     wants_small = any("small-screen" in s.get("states", []) for s in config.get("screens", []))
     platforms = {}
     for p in config.get("platforms", ["android", "ios"]):
+        if only and p not in only:
+            platforms[p] = {"ok": False, "device": None, "name": None, "owned": False, "small_device": False,
+                            "app_installed": False, "soft_keyboard": True, "animations": True,
+                            "problems": ["not requested in this run (--platforms)"]}
+            continue
         platforms[p] = _platform_state(config, p, wants_small, fix)
     ok_platforms = [p for p, s in platforms.items() if s["ok"]]
     env = _env(config, mode, ok_platforms, project)
@@ -170,9 +175,11 @@ def cli_main():
     ap.add_argument("--fix", action="store_true")
     ap.add_argument("--brief", action="store_true")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--platforms", help="comma list to check now, e.g. android")
     a = ap.parse_args()
     try:
-        res = check(read_json(os.path.join(a.project, ".fresh-eyes", "config.json")), a.mode, a.fix, a.project)
+        res = check(read_json(os.path.join(a.project, ".fresh-eyes", "config.json")), a.mode, a.fix, a.project,
+                    a.platforms.split(",") if a.platforms else None)
     except (FEError, OSError, ValueError) as e:
         res = {"ok": False, "mode": a.mode, "platforms": {}, "env": {"name": None, "verified": False,
                                                                      "api_host": None},

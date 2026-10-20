@@ -111,6 +111,14 @@ class PreflightTest(unittest.TestCase):
                                lambda platform, artifact: "api-staging.example.com api.example.com"):
             self.assertFalse(preflight.check(config(), "full", fix=False)["env"]["verified"])
 
+    def test_platform_filter_reports_others_unchecked(self):
+        self.fake_devices()
+        cfg = dict(config(), platforms=["android", "ios"])
+        res = preflight.check(cfg, "quick", fix=False, only=["android"])
+        self.assertTrue(res["platforms"]["android"]["ok"])
+        self.assertFalse(res["platforms"]["ios"]["ok"])
+        self.assertIn("not requested", " ".join(res["unchecked"]))
+
     def test_brief_exit_zero_on_problems(self):
         self.fake_devices(listed=())
         with tmpdir() as d:
