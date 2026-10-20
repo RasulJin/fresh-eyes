@@ -40,6 +40,8 @@ class PreflightTest(unittest.TestCase):
             "set_soft_keyboard": lambda dev: calls.append("set_soft_keyboard"),
             "animations_enabled": lambda dev: True,
             "enable_animations": lambda dev: calls.append("enable_animations"),
+            "stylus_handwriting_on": lambda dev: state.get("stylus", False),
+            "disable_stylus_handwriting": lambda dev: (calls.append("disable_stylus"), state.update(stylus=False)),
         }
         for name, fn in patches.items():
             p = mock.patch.object(devices, name, fn)
@@ -58,6 +60,17 @@ class PreflightTest(unittest.TestCase):
         res = preflight.check(config(), "quick", fix=True)
         self.assertIn("set_soft_keyboard", calls)
         self.assertTrue(res["platforms"]["android"]["soft_keyboard"])
+        self.assertTrue(res["platforms"]["android"]["ok"])
+
+    def test_stylus_mode_is_reported_and_fixed(self):
+        calls = self.fake_devices()
+        devices.stylus_handwriting_on  # patched in fake_devices
+        with mock.patch.object(devices, "stylus_handwriting_on", lambda dev: "disable_stylus" not in calls):
+            res = preflight.check(config(), "quick", fix=False)
+            self.assertFalse(res["platforms"]["android"]["ok"])
+            self.assertIn("stylus", " ".join(res["platforms"]["android"]["problems"]))
+            res = preflight.check(config(), "quick", fix=True)
+        self.assertIn("disable_stylus", calls)
         self.assertTrue(res["platforms"]["android"]["ok"])
 
     def test_foreign_device_is_not_used(self):

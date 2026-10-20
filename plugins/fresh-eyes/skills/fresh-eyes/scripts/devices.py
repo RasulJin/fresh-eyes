@@ -255,7 +255,12 @@ def back(dev, count=1, interval_ms=0):
 
 def launch(dev, app_id):
     if dev.platform == "android":
-        _shell(dev, "monkey -p %s -c android.intent.category.LAUNCHER 1" % app_id)
+        lines = _shell(dev, "cmd package resolve-activity --brief %s" % app_id, check=False).strip().splitlines()
+        component = lines[-1].strip() if lines and "/" in lines[-1] else ""
+        if component:
+            _shell(dev, "am start -n %s" % component)
+        else:  # monkey exits non-zero on some images even when it launched the app
+            _shell(dev, "monkey -p %s -c android.intent.category.LAUNCHER 1" % app_id, check=False)
     else:
         _simctl("launch", dev.id, app_id)
 
@@ -355,8 +360,27 @@ def keyboard_top(dev):
         return None
     if "mInputShown=true" not in _shell(dev, "dumpsys input_method", check=False):
         return None
-    m = re.search(r"mFrame=\[\d+,(\d+)\]\[\d+,\d+\]", _shell(dev, "dumpsys window InputMethod", check=False))
+    win = _shell(dev, "dumpsys window InputMethod", check=False)
+    m = re.search(r"touchable region=SkRegion\(\(\d+,(\d+),\d+,\d+\)", win) or \
+        re.search(r"mFrame=\[\d+,(\d+)\]\[\d+,\d+\]", win)
     return int(m.group(1)) if m else None
+
+
+GBOARD = "com.google.android.inputmethod.latin"
+
+
+def stylus_handwriting_on(dev):
+    """Emulators report a STYLUS input source; with handwriting on, Gboard shows a stylus onboarding and a small
+    toolbar instead of the keyboard, which hides every keyboard bug."""
+    if dev.platform != "android":
+        return False
+    return _shell(dev, "settings get secure stylus_handwriting_enabled", check=False).strip() != "0"
+
+
+def disable_stylus_handwriting(dev):
+    _require_owned(dev, "change stylus settings")
+    _shell(dev, "settings put secure stylus_handwriting_enabled 0")
+    _shell(dev, "am force-stop %s" % GBOARD, check=False)
 
 
 def px_per_dp(dev):

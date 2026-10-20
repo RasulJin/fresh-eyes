@@ -20,6 +20,9 @@
 - **Hardware keyboard mode** hides the soft keyboard and with it a whole class of bugs. Our AVDs use
   `hw.keyboard=no`; preflight sets `show_ime_with_hard_keyboard=1`. On iOS Simulator turn off
   "Connect Hardware Keyboard" (I/O → Keyboard) so the soft keyboard appears.
+- **Stylus mode on emulators**: the emulator's touchscreen reports a STYLUS source, so Gboard shows a "Try out
+  your stylus" onboarding and then a small handwriting toolbar instead of the keyboard. Keyboard bugs vanish and
+  taps near the field can be swallowed. Preflight sets `stylus_handwriting_enabled 0` and restarts Gboard.
 - **Animations disabled** (`animator_duration_scale=0`, Maestro `disableAnimations`) hides motion bugs.
   Preflight restores scale 1 on own devices.
 - **Maestro waits for the screen to settle** before every step and after taps. That masks races; fire fast

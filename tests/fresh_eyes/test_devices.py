@@ -114,6 +114,27 @@ class DevicesTest(unittest.TestCase):
         with self.assertRaises(FEError):
             devices.apply_setting(Device("android", "emulator-5554", ""), "dark")
 
+    def test_keyboard_top_android16_touchable_region(self):
+        self.patch({"input_method": "mInputShown=true\n",
+                    "window InputMethod": "    mGivenContentInsets=[0,1454][0,0]\n    touchable region=SkRegion((0,1517,1080,2400))\n"})
+        self.assertEqual(devices.keyboard_top(Device("android", "emulator-5560", "x")), 1517)
+
+    def test_launch_resolves_launcher_activity(self):
+        fake = self.patch({"resolve-activity": "priority=0 preferredOrder=0\ncom.voiova.app/.MainActivity\n"})
+        devices.launch(Device("android", "emulator-5560", "fresh-eyes-pixel"), "com.voiova.app")
+        self.assertIn("am start -n com.voiova.app/.MainActivity", " | ".join(c[-1] for c in fake.calls))
+
+    def test_disable_stylus_handwriting(self):
+        fake = self.patch({})
+        devices.disable_stylus_handwriting(Device("android", "emulator-5560", "fresh-eyes-pixel"))
+        shells = " | ".join(c[-1] for c in fake.calls)
+        self.assertIn("settings put secure stylus_handwriting_enabled 0", shells)
+        self.assertIn("am force-stop com.google.android.inputmethod.latin", shells)
+
+    def test_stylus_handwriting_on_when_unset(self):
+        self.patch({"stylus_handwriting_enabled": "null\n"})
+        self.assertTrue(devices.stylus_handwriting_on(Device("android", "emulator-5560", "x")))
+
     def test_animations_disabled_detected(self):
         self.patch({"window_animation_scale": "0.0\n", "transition_animation_scale": "1.0\n",
                     "animator_duration_scale": "1.0\n"})

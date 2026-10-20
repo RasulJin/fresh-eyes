@@ -92,7 +92,13 @@ def _platform_state(config, platform, kind_needed_small, fix):
         state["animations"] = devices.animations_enabled(main)
         if not state["animations"]:
             state["problems"].append("animations are disabled: motion bugs would be hidden")
-    state["ok"] = state["app_installed"] and state["soft_keyboard"] and state["animations"]
+        if devices.stylus_handwriting_on(main) and fix:
+            devices.disable_stylus_handwriting(main)
+        state["stylus_off"] = not devices.stylus_handwriting_on(main)
+        if not state["stylus_off"]:
+            state["problems"].append("stylus handwriting is on: Gboard shows a stylus toolbar instead of the keyboard")
+    state["ok"] = state["app_installed"] and state["soft_keyboard"] and state["animations"] and \
+        state.get("stylus_off", True)
     return state
 
 
