@@ -27,7 +27,8 @@ How a picky QA engineer + product designer looks at one screen. Used by the revi
 - **Missing / broken media**: grey boxes, broken image icons, stretched or pixelated photos, wrong crop.
 - **Spacing and alignment**: unequal gutters between siblings, misaligned baselines, a lone element off-grid.
 - **Shape**: corner radii that differ from siblings or the design tokens (sharp where rounded is expected),
-  one-sided rounding, hairline seams between cells.
+  one-sided rounding, hairline seams between cells. A `sharp_corners` candidate on a floating surface (drawer,
+  sheet, dialog, card) is a finding when the app's other surfaces are rounded, even if a reference app is square.
 - **Consistency**: the same entity with two icons (header vs tab bar), two components for one meaning
   (system alert next to a branded dialog), different styles for the same control on sibling screens.
 - **Contrast / theme**: pale on pale, white on white, a dark map in a light app, colors that ignore the theme.

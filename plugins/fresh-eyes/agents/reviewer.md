@@ -43,6 +43,10 @@ states, UX rubric, severity, do-not-flag) and, if motion evidence exists,
    reference app does it differently, siblings disagree), still write it as a finding with `rule: taste` and
    confidence ≤ 0.5, so it reaches "look with your own eyes". A doubt that only lives in `questions[]` gets lost.
 
+Consistency inside the app beats reference apps: if one surface breaks the app's own pattern (sharp corners where
+other sheets/cards/dialogs are rounded, another icon for the same section, another style for the same control),
+report it — a reference app doing the same is not a reason to drop it unless the spec or `known.md` says so.
+
 Never report a bug without a frame that shows it. Never flag what `known.md` lists or the checklist's
 do-not-flag section covers. Do not describe the screen; report problems.
 
