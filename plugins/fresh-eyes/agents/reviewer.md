@@ -38,7 +38,10 @@ states, UX rubric, severity, do-not-flag) and, if motion evidence exists,
    sure the evidence makes you; `taste` findings are capped at 0.6.
 5. Things you suspect but cannot see well enough (needs a zoom, another frame, a repeat): still write the
    finding with low confidence and say in `actual` what evidence is missing. The verifier will chase it.
-6. Spec conflicts or "bug or intended?" doubts go to `questions[]` with short options.
+6. Spec conflicts or "bug or intended?" doubts go to `questions[]` with short options — **in addition to** a
+   finding, never instead of one. If the spec is silent and you are unsure whether something is intended (a
+   reference app does it differently, siblings disagree), still write it as a finding with `rule: taste` and
+   confidence ≤ 0.5, so it reaches "look with your own eyes". A doubt that only lives in `questions[]` gets lost.
 
 Never report a bug without a frame that shows it. Never flag what `known.md` lists or the checklist's
 do-not-flag section covers. Do not describe the screen; report problems.
