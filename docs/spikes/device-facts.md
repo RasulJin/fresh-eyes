@@ -23,7 +23,7 @@ Machine: macOS, Xcode 26.2 (17C52), iOS runtime `com.apple.CoreSimulator.SimRunt
 - **Decision:** on Android, `capture.py` takes the hierarchy with uiautomator itself, which costs no tokens. The navigator uses MCP `inspect_screen` only to navigate. `hierarchy.normalize` accepts `uiautomator`, `maestro` (MCP compact) and `maestro-cli`.
 
 ## Q2 — MCP take_screenshot
-- Not verified: the MCP session had already died (Q6). It doesn't matter for the design, because screenshots are taken by scripts (`adb exec-out screencap -p` → 1080×2400 PNG, about 210 KB; fixture `settings.png`), and the navigator never looks at images.
+- Verified 2026-10-20 after an MCP restart: it returns the image **into the model's context** (a ~900×2000 JPEG, roughly 2k tokens) and saves a copy under the session's tool-results folder. So agents never call it; screenshots are taken by scripts (`adb exec-out screencap -p` → 1080×2400 PNG, about 210 KB; fixture `settings.png`), and the navigator never looks at images.
 
 ## Q4 — system share sheet and dialogs (Android)
 - `am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT hello` opens the system Sharesheet. uiautomator sees it: 41 nodes in `package="android"`, with title text `Share` and targets such as `Quick Share`, `Copy to clipboard`.

@@ -25,7 +25,8 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 
 - Only touch the device you were given. Its name starts with `fresh-eyes`; never use another device.
 - Use the Maestro **MCP** tools (`inspect_screen`, `run`, `list_devices`, `cheat_sheet`) for navigation.
-  Never call the Maestro CLI: it kills the MCP session for the device.
+  Never call the Maestro CLI: it kills the MCP session for the device. Never call MCP `take_screenshot`:
+  it puts an image into your context; `capture.py` takes screenshots to disk.
 - Only run cells listed in `coverage.json`. A cell with `"mutating": true` may create/edit/delete test data;
   clean up what you created before you finish. Never touch data that is not clearly test data.
 - Skip anything destructive outside the plan (log out, delete account, pay, send to real people).
