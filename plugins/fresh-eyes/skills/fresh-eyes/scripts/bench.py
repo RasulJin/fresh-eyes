@@ -30,8 +30,9 @@ def match(case, findings):
     exp = case.get("expect") or {}
     checks = set(exp.get("checks") or [])
     words = [w.casefold() for w in exp.get("keywords") or []]
+    screens = {case["screen"]} | set(case.get("also_screens") or [])
     for fd in findings:
-        if fd.get("screen") != case["screen"] or fd.get("platform") != case["platform"]:
+        if fd.get("screen") not in screens or fd.get("platform") != case["platform"]:
             continue
         if fd.get("verdict") not in COUNTED:
             continue
@@ -78,12 +79,12 @@ def summary(cases, scores, fps, confirmed=0, rejected=0):
 
 
 def load_run_findings(run, cases):
-    """Map case id -> findings of the case's screen/platform in one run folder."""
-    by_screen = {}
+    """Map case id -> all findings of the case's platform in one run (match() filters by screen; journey
+    findings carry the real screen they concern)."""
+    by_platform = {}
     for p in glob.glob(os.path.join(run, "*", "*", "findings.json")):
-        platform, screen = p.split(os.sep)[-3], p.split(os.sep)[-2]
-        by_screen[(platform, screen)] = read_json(p).get("findings", [])
-    return {c["id"]: by_screen.get((c["platform"], c["screen"]), []) for c in cases}
+        by_platform.setdefault(p.split(os.sep)[-3], []).extend(read_json(p).get("findings", []))
+    return {c["id"]: by_platform.get(c["platform"], []) for c in cases}
 
 
 def _verdict_counts(runs):

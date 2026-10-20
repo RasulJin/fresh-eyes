@@ -66,12 +66,17 @@ class ScoreTest(unittest.TestCase):
 
 
 class RunLoadTest(unittest.TestCase):
-    def test_load_run_findings_by_screen(self):
+    def test_journey_findings_count_for_their_real_screen(self):
         with tmpdir() as d:
-            write_json(os.path.join(d, "android", "side-menu", "findings.json"), {"findings": [f(check="truncation")]})
+            write_json(os.path.join(d, "android", "journey", "findings.json"),
+                       {"findings": [f(check="truncation", screen="side-menu")]})
             write_json(os.path.join(d, "android", "feed", "findings.json"), {"findings": [f(screen="feed")]})
             got = load_run_findings(d, [CASE])
-        self.assertEqual(len(got["KDD-357"]), 1)
+        self.assertTrue(match(CASE, got["KDD-357"]))
+
+    def test_also_screens(self):
+        case = dict(CASE, screen="post-detail", also_screens=["thread"])
+        self.assertTrue(match(case, [f(check="truncation", screen="thread")]))
 
 
 if __name__ == "__main__":

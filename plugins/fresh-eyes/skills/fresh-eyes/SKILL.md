@@ -87,7 +87,8 @@ words / nothing (= the current diff).
    the cell ids.
 8. Review: one `fresh-eyes:reviewer` per screen × platform with done cells (up to 4 in parallel). Prompt: the
    pack folders, `.fresh-eyes/spec.md` + the screen id and its `neighbors` ids (their rules often apply), `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the
-   `references` from config.
+   `references` from config. Journey cells get one reviewer per platform over `<run>/<platform>/journey/`;
+   its findings carry the real screen they concern.
 9. Verify: `fresh-eyes:verifier` with all `findings.json` paths. If it answers `needs: requests`, run the
    navigator in requests mode with `$RUN/requests.json`, then the verifier again (second pass).
 10. `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings.json> --language <config>`
