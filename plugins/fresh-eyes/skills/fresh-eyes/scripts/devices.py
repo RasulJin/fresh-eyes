@@ -28,6 +28,8 @@ ANDROID_OWNED = {"default": ("fresh-eyes-pixel", 5560, 1080, 2400, 420),
                  "small": ("fresh-eyes-small", 5562, 720, 1280, 320)}
 IOS_OWNED = {"default": ("fresh-eyes iPhone 17", "com.apple.CoreSimulator.SimDeviceType.iPhone-17"),
              "small": ("fresh-eyes iPhone 16e", "com.apple.CoreSimulator.SimDeviceType.iPhone-16e")}
+ANDROID_DATA_BYTES = {"default": 4 * 1024 ** 3, "small": 2 * 1024 ** 3}  # sparse, but the emulator wants it free
+AVD_DIR = os.path.expanduser("~/.android/avd")
 ANDROID_IMAGE = "system-images/android-36.1/google_apis_playstore/arm64-v8a/"
 ANDROID_TARGET = "android-36.1"
 
@@ -91,14 +93,14 @@ def list_devices():
     return found
 
 
-def _write_avd(name, w, h, dens):
-    avd_dir = os.path.expanduser("~/.android/avd")
+def _write_avd(name, w, h, dens, data_bytes):
+    avd_dir = AVD_DIR
     os.makedirs(os.path.join(avd_dir, name + ".avd"), exist_ok=True)
     with open(os.path.join(avd_dir, name + ".ini"), "w") as f:
         f.write("avd.ini.encoding=UTF-8\npath=%s/%s.avd\npath.rel=avd/%s.avd\ntarget=%s\n"
                 % (avd_dir, name, name, ANDROID_TARGET))
     cfg = {"AvdId": name, "avd.ini.displayname": name, "PlayStore.enabled": "true", "abi.type": "arm64-v8a",
-           "disk.dataPartition.size": "6442450944", "fastboot.forceColdBoot": "no", "hw.cpu.arch": "arm64",
+           "disk.dataPartition.size": str(data_bytes), "fastboot.forceColdBoot": "no", "hw.cpu.arch": "arm64",
            "hw.cpu.ncore": "4", "hw.ramSize": "3072", "hw.keyboard": "no", "hw.mainKeys": "no", "hw.dPad": "no",
            "hw.trackBall": "no", "hw.gpu.enabled": "yes", "hw.gpu.mode": "auto", "hw.lcd.width": str(w),
            "hw.lcd.height": str(h), "hw.lcd.density": str(dens), "hw.initialOrientation": "portrait",
@@ -109,19 +111,37 @@ def _write_avd(name, w, h, dens):
         f.write("".join("%s=%s\n" % kv for kv in cfg.items()))
 
 
+def _open_log(name):
+    return open(os.path.join(AVD_DIR, name + ".fresh-eyes.log"), "w")
+
+
+def _log_tail(name):
+    try:
+        with open(os.path.join(AVD_DIR, name + ".fresh-eyes.log"), errors="replace") as f:
+            lines = [l.strip() for l in f if l.strip()]
+    except OSError:
+        return "no log"
+    fatal = [l for l in lines if "FATAL" in l or "ERROR" in l]
+    return (fatal or lines or ["no output"])[-1][:300]
+
+
 def ensure_owned(platform, kind="default", boot_timeout=240):
     """Create (if missing) and boot one of our own devices; return it."""
     if platform == "android":
         name, port, w, h, dens = ANDROID_OWNED[kind]
         serial = "emulator-%d" % port
+        proc = None
         if not any(d.id == serial for d in list_devices()):
-            if not os.path.exists(os.path.expanduser("~/.android/avd/%s.ini" % name)):
-                _write_avd(name, w, h, dens)
-            log = open(os.path.join(os.path.expanduser("~/.android/avd"), name + ".fresh-eyes.log"), "w")
-            subprocess.Popen([os.path.join(sdk_root(), "emulator", "emulator"), "-avd", name, "-no-boot-anim",
-                              "-no-audio", "-port", str(port)], stdout=log, stderr=log, start_new_session=True)
+            if not os.path.exists(os.path.join(AVD_DIR, name + ".ini")):
+                _write_avd(name, w, h, dens, ANDROID_DATA_BYTES[kind])
+            log = _open_log(name)
+            proc = subprocess.Popen([os.path.join(sdk_root(), "emulator", "emulator"), "-avd", name,
+                                     "-no-boot-anim", "-no-audio", "-port", str(port)],
+                                    stdout=log, stderr=log, start_new_session=True)
         deadline = time.time() + boot_timeout
         while time.time() < deadline:
+            if proc is not None and proc.poll() is not None:
+                raise FEError("%s exited while booting: %s" % (name, _log_tail(name)))
             if _adb(serial, "shell", "getprop", "sys.boot_completed", check=False).strip() == "1":
                 return Device("android", serial, name)
             time.sleep(3)

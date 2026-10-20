@@ -122,3 +122,39 @@ class DevicesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AvdTest(unittest.TestCase):
+    def test_small_avd_gets_small_data_partition(self):
+        from tests.fresh_eyes.helpers import tmpdir
+        import os
+        with tmpdir() as d, mock.patch.object(devices, "AVD_DIR", d):
+            devices._write_avd("fresh-eyes-small", 720, 1280, 320, devices.ANDROID_DATA_BYTES["small"])
+            cfg = open(os.path.join(d, "fresh-eyes-small.avd", "config.ini")).read()
+        self.assertIn("disk.dataPartition.size=2147483648", cfg)
+        self.assertIn("hw.keyboard=no", cfg)
+
+    def test_ensure_owned_fails_fast_when_emulator_exits(self):
+        from tests.fresh_eyes.helpers import tmpdir
+        import os
+
+        class DeadProc(object):
+            def poll(self):
+                return 1
+
+        with tmpdir() as d:
+            open(os.path.join(d, "fresh-eyes-small.ini"), "w").close()
+            with open(os.path.join(d, "fresh-eyes-small.fresh-eyes.log"), "w") as f:
+                f.write("INFO ok\nFATAL | Not enough space to create userdata partition.\n")
+
+            def fake_popen(*a, **k):
+                return DeadProc()
+
+            with mock.patch.object(devices, "AVD_DIR", d), \
+                    mock.patch.object(devices, "list_devices", lambda: []), \
+                    mock.patch.object(devices.subprocess, "Popen", fake_popen), \
+                    mock.patch.object(devices, "_open_log", lambda name: None), \
+                    mock.patch.object(devices.time, "sleep", lambda s: None):
+                with self.assertRaises(FEError) as e:
+                    devices.ensure_owned("android", "small", boot_timeout=30)
+        self.assertIn("Not enough space", str(e.exception))
