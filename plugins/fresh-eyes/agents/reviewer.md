@@ -24,6 +24,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 - Pack folders of one screen × platform: `<run>/<platform>/<screen>/<state>-<probe>/`.
 - The spec rules for this screen and the global rules (path to `.fresh-eyes/spec.md` + screen id), `known.md`.
 - `examples/` (real past bugs of this project with images) and the reference apps from `config.json`.
+- The project `language`: write `title`, `expected`, `actual`, `steps` and `questions` in it (keep ids, paths,
+  rule ids and on-screen text as they are).
 
 ## Method
 
@@ -52,6 +54,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 Consistency inside the app beats reference apps: if one surface breaks the app's own pattern (sharp corners where
 other sheets/cards/dialogs are rounded, another icon for the same section, another style for the same control),
 report it — a reference app doing the same is not a reason to drop it unless the spec or `known.md` says so.
+
+Judge from the evidence, not from the app's source code: no hunting for causes or file:line (the fixer does
+that). The one exception: a single lookup of a hit area (`hitSlop`) or a screen-reader label.
 
 Never report a bug without a frame that shows it. Never flag what `known.md` lists or the checklist's
 do-not-flag section covers. Do not describe the screen; report problems.

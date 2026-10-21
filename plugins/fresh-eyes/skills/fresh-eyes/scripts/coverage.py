@@ -213,6 +213,8 @@ def verdict(cov, findings, language="en", reviewed=()):
     """reviewed: pack paths some reviewer listed in reviewed_packs. A done cell none of whose packs was reviewed
     is not checked; a finding still pending was never verified. Neither can end in CLEAN."""
     labels = LABELS.get(language, LABELS["en"])
+    merged = [f for f in findings if _merged(f, findings)]
+    findings = [f for f in findings if not any(f is m for m in merged)]
     bugs = [f for f in findings if f.get("verdict") == "confirmed" and f.get("kind", "BUG") == "BUG"]
     high = [f for f in bugs if f.get("severity") == "high"]
     medium = [f for f in bugs if f.get("severity") == "medium"]
@@ -239,6 +241,8 @@ def verdict(cov, findings, language="en", reviewed=()):
                        % (len(unreviewed), ", ".join(c["id"] for c in unreviewed[:5])))
     if pending:
         reasons.append("%d findings not verified" % len(pending))
+    if merged:
+        reasons.append("%d duplicate findings merged" % len(merged))
     if cov.get("unchecked"):
         reasons.append("%d items not checked" % len(cov["unchecked"]))
     complete = bool(cov["cells"]) and not open_cells and not unreviewed and not pending and not cov.get("unchecked")
@@ -250,7 +254,26 @@ def verdict(cov, findings, language="en", reviewed=()):
         code = "INCOMPLETE"
     else:
         code = "CLEAN"
-    return {"code": code, "label": labels[code], "reasons": reasons}
+    return {"code": code, "label": labels[code], "reasons": reasons,
+            "merged": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in merged]}
+
+
+_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
+def _merged(f, findings):
+    """A finding marked same_as another is left out of the counts only when that one already counts at least as
+    much: confirmed, same kind, not lower severity, not itself a duplicate. Otherwise it counts on its own."""
+    ref = f.get("same_as")
+    if not ref or f.get("verdict", "pending") == "pending":  # never verified: it still keeps CLEAN away
+        return False
+    file, _, fid = ref.partition("#")
+    for t in findings:
+        if t is not f and t.get("id") == fid and os.path.normpath(t.get("_file", "")) == os.path.normpath(file):
+            return (not t.get("same_as") and t.get("verdict") == "confirmed"
+                    and t.get("kind", "BUG") == f.get("kind", "BUG")
+                    and _RANK.get(t.get("severity"), 0) >= _RANK.get(f.get("severity"), 0))
+    return False
 
 
 _SYMBOL = {"done": "✓", "failed": "✗", "na": "—", "todo": "?", "blocked": "?"}
@@ -336,15 +359,18 @@ def screens_from_diff(repo, base, config):
     return {"screens": sorted(hits, key=lambda s: (-hits[s], s)), "unmapped": unmapped}
 
 
-def _load_findings(paths):
-    """All findings and all reviewed pack paths from findings.json files."""
+def _load_findings(paths, run="."):
+    """All findings (each tagged with its file relative to the run, for same_as) and all reviewed pack paths."""
     findings, reviewed = [], []
     for p in paths:
         try:
             data = read_json(p)
         except (OSError, ValueError) as e:
             raise FEError("cannot read findings file %s: %s" % (p, e))
-        findings += data.get("findings", []) if isinstance(data, dict) else data
+        items = data.get("findings", []) if isinstance(data, dict) else data
+        for f in items:
+            f["_file"] = os.path.relpath(p, run)
+        findings += items
         reviewed += data.get("reviewed_packs", []) if isinstance(data, dict) else []
     return findings, reviewed
 
@@ -390,7 +416,7 @@ def main():
             write_json(a.cov, cov)
         print(json.dumps([c["id"] for c in cells], ensure_ascii=False))
     elif a.cmd == "verdict":
-        findings, reviewed = _load_findings(a.findings)
+        findings, reviewed = _load_findings(a.findings, os.path.dirname(a.cov) or ".")
         print(json.dumps(verdict(read_json(a.cov), findings, a.language, reviewed), ensure_ascii=False))
     elif a.cmd == "map":
         print(coverage_map(read_json(a.cov), a.language))

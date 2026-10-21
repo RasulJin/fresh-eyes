@@ -1,4 +1,5 @@
 import copy
+import json
 import os
 import shutil
 import subprocess
@@ -7,7 +8,7 @@ import unittest
 
 from tests.fresh_eyes.helpers import tmpdir
 from fe_common import FEError, write_json
-from coverage import PROBES, STATES, coverage_map, next_cells, plan, screens_from_diff, set_status, verdict
+from coverage import PROBES, STATES, _load_findings, coverage_map, next_cells, plan, screens_from_diff, set_status, verdict
 
 ONE_SCREEN = {"language": "ru", "app": {"expo_root": "apps/mobile"}, "hooks": {},
               "screens": [{"id": "profile-trips", "route": "app/(tabs)/profile.tsx", "states": ["default", "dark"],
@@ -229,6 +230,38 @@ class VerdictTest(unittest.TestCase):
         self.assertEqual(verdict(self.cov, [], "ru", packs)["label"], "ЧИСТО")
         set_status(self.cov, self.cov["cells"][0]["id"], "todo")
         self.assertEqual(verdict(self.cov, [], "ru", packs)["code"], "INCOMPLETE")
+
+    def test_duplicates_count_once_and_only_onto_an_equal_finding(self):
+        packs = done_all(self.cov, self.root)
+
+        def f(fid, sev, verdict_, file="android/a/findings.json", **kw):
+            return dict(id=fid, kind="BUG", severity=sev, verdict=verdict_, title=fid, _file=file, **kw)
+        dup = f("f2", "high", "confirmed", same_as="android/a/findings.json#f1")
+        v = verdict(self.cov, [f("f1", "high", "confirmed"), dup], "en", packs)
+        self.assertIn("1 confirmed high: f1", v["reasons"])
+        self.assertIn("1 duplicate findings merged", v["reasons"])
+        for target in (f("f1", "high", "rejected"), f("f1", "low", "confirmed"), f("f1", "high", "confirmed",
+                                                                                       file="android/b/findings.json")):
+            reasons = " | ".join(verdict(self.cov, [target, dup], "en", packs)["reasons"])
+            self.assertIn("f2", reasons)  # the duplicate counts on its own
+            self.assertNotIn("merged", reasons)
+        self.assertEqual(v["merged"], ["android/a/findings.json#f2"])
+        pending_dup = f("f2", "low", "pending", same_as="android/a/findings.json#f1")
+        self.assertEqual(verdict(self.cov, [f("f1", "low", "confirmed"), pending_dup], "en", packs)["code"],
+                         "INCOMPLETE")
+        a = f("f1", "high", "confirmed", same_as="android/a/findings.json#f2")
+        b = f("f2", "high", "confirmed", same_as="android/a/findings.json#f1")
+        c = f("f3", "high", "confirmed", same_as="android/a/findings.json#f1")
+        for group in ([a, b], [a, b, c], [dup]):  # each other, a chain, a target not passed
+            self.assertEqual(verdict(self.cov, group, "en", packs)["merged"], [])
+
+    def test_load_findings_tags_files_relative_to_the_run(self):
+        os.makedirs(os.path.join(self.root, "android", "a"))
+        path = os.path.join(self.root, "android", "a", "findings-2.json")
+        with open(path, "w") as fh:
+            json.dump({"findings": [{"id": "f1"}], "reviewed_packs": []}, fh)
+        findings, _ = _load_findings([path], self.root)
+        self.assertEqual(findings[0]["_file"], os.path.join("android", "a", "findings-2.json"))
 
     def test_unreviewed_evidence_blocks_clean(self):
         packs = done_all(self.cov, self.root)

@@ -18,7 +18,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 
 ## Input (from the orchestrator)
 
-- One screen folder `<run>/<platform>/<screen>/` (its `findings*.json`), `.fresh-eyes/spec.md`, `known.md`.
+- One screen folder `<run>/<platform>/<screen>/` (its `findings*.json`), `.fresh-eyes/spec.md`, `known.md`, the
+  project `language`; for the journey folder also the findings files of the screens its findings concern.
 - The prompt says `first pass` or `second pass`. On the second pass the folder's `requests.json` entries are
   marked `done` (or `failed`) and point to `<pack>-recheck` folders. Only look at the findings still pending.
 
@@ -37,6 +38,15 @@ For each finding with `verdict: "pending"`:
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
    "probe": "<probe id>", "bbox": [x, y, w, h]}` and leave it pending.
+
+Duplicates: when two findings (in this folder's files, or one here and one in a file you were given) report
+the same defect, set `same_as` on the one with weaker evidence, pointing at the other with its file relative
+to the run, e.g. `"same_as": "android/post-detail/findings-2.json#f3"`, and still rule on both. Files from
+other folders are read-only: set `same_as` and rule only on findings in your own folder. Write `verify_note` in the project language.
+
+Judge from the evidence, not from the app's source code: no hunting for causes or file:line (whoever fixes the
+bug does that). The one exception: a single lookup of a hit area (`hitSlop`) or a screen-reader label, which a
+frame cannot show.
 
 Write each updated findings file back in place.
 

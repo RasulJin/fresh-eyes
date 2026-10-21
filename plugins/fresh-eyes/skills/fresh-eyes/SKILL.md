@@ -24,6 +24,9 @@ the heavy work runs in subagents that exchange files with you.
 5. Subagents get paths and return ≤10 lines. Keep screenshots and videos out of this conversation.
 6. Never write secrets (passwords, tokens, test credentials) into files, prompts or reports.
 7. Questions to the user come from you (subagents cannot ask): spec conflicts, "bug or intended?", go-aheads.
+8. You orchestrate, you do not test or judge. Run only the steps below: no reading the app's source code, no
+   extra agents for a lead you find interesting, no ruling on findings yourself. A doubt about a finding goes
+   to the verifier or into the report's questions. Every extra turn of yours re-reads this whole conversation.
 
 ## Setup
 
@@ -98,12 +101,13 @@ words / nothing (= the current diff).
    `coverage.py next` is empty. Prompt: run folder, config path, platform, device id and name from preflight,
    the cell ids.
 8. Review: one `fresh-eyes:reviewer` per screen × platform with done cells (up to 4 in parallel). Prompt: the
-   pack folders, `.fresh-eyes/spec.md` + the screen id and its `neighbors` ids (their rules often apply), `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the
-   `references` from config. Journey cells get one reviewer per platform over `<run>/<platform>/journey/`;
+   pack folders, `.fresh-eyes/spec.md` + the screen id and its `neighbors` ids (their rules often apply),
+   `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the `references` and `language` from config. Journey cells get one reviewer per platform over `<run>/<platform>/journey/`;
    its findings carry the real screen they concern. More than ~8 packs for one screen: split them between
    reviewers, each writing its own `findings-<k>.json` in the screen folder.
 9. Verify: one `fresh-eyes:verifier` per screen folder that has pending findings (up to 4 in parallel); the
-   prompt is `first pass`, that folder, `.fresh-eyes/spec.md`, `.fresh-eyes/known.md`. Folders whose verifier
+   prompt is `first pass`, that folder, `.fresh-eyes/spec.md`, `.fresh-eyes/known.md`, `language`. The journey
+   folder's verifier also gets the findings files of the screens its findings concern (to mark duplicates). Folders whose verifier
    answered `needs: requests`: one navigator per platform in requests mode with their `requests.json` paths;
    when every entry has `done` or `failed`, a fresh verifier per such folder with `second pass`.
 10. `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`
@@ -136,7 +140,8 @@ the plugin README for the benchmark procedure.
 
 `report.md` in the project language: the verdict line and reasons (verbatim from `coverage.py verdict`),
 build/backend/devices, the coverage map, "not checked and why" (preflight `unchecked`, plan `unchecked`,
-blocked cells with notes, unmapped files, platform gaps from `$R/platforms.md`), confirmed bugs, improvements,
+blocked cells with notes, unmapped files, platform gaps from `$R/platforms.md`), confirmed bugs (a finding the verdict lists
+in `merged` goes under the one its `same_as` points to; any other finding is its own item), improvements,
 "look with your own eyes" (unsure), questions. Link evidence crops by path. Keep it scannable.
 
 ## After the report

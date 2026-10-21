@@ -107,7 +107,7 @@ def false_clean(runs, cases):
         if not os.path.exists(cov_path):
             continue
         files = glob.glob(os.path.join(run, "*", "*", "findings*.json"))
-        findings, reviewed = coverage._load_findings(files)
+        findings, reviewed = coverage._load_findings(files, run)
         if coverage.verdict(read_json(cov_path), findings, "en", reviewed)["code"] != "CLEAN":
             continue
         planned = {(c["platform"], c["screen"]) for c in read_json(cov_path)["cells"]}

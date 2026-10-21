@@ -22,10 +22,17 @@
   "check": "<geometry check | motion flag | spec rule id | taste>",
   "som": [3], "bbox": [0, 0, 0, 0], "expected": "", "actual": "", "steps": [""],
   "rule": "spec:<id> | taste", "evidence": ["crops/clipped-1.png"],
-  "verdict": "pending|confirmed|unsure|rejected", "verify_note": ""}],
+  "verdict": "pending|confirmed|unsure|rejected", "verify_note": "",
+  "same_as": "<findings file relative to the run>#<id> (optional)"}],
  "questions": [{"text": "", "options": [""]}]}
 ```
 
+- Text fields (`title`, `expected`, `actual`, `steps`, `verify_note`, `questions`) are in the config's
+  `language`; ids, paths, rule ids and on-screen text stay as they are.
+- `same_as`: the verifier marks a finding that reports the same defect as another one (split reviewers, a
+  journey adding evidence). The verdict leaves it out of the counts only when the finding it points to is
+  confirmed, of the same kind and not lower in severity, and it was itself ruled on (never while pending); it
+then returns it in `merged`, and the report lists it under that finding.
 - `reviewed_packs`: every pack whose `som.png` the reviewer actually opened, and only those. A done cell whose
   packs no reviewer listed keeps the verdict INCOMPLETE.
 - `rule: taste` (no spec rule behind it) caps `confidence` at 0.6.
