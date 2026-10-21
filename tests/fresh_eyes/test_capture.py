@@ -156,3 +156,25 @@ class StaleCropsTest(unittest.TestCase):
             open(os.path.join(pack, "crops", "truncation-7.png"), "w").close()
             capture.snap("android", "emulator-5560", pack)
             self.assertFalse(os.path.exists(os.path.join(pack, "crops", "truncation-7.png")))
+
+
+class OrderTest(unittest.TestCase):
+    def test_screenshot_taken_after_hierarchy_settles(self):
+        order = []
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as fh:
+            xml = fh.read()
+
+        def shot(dev, dst):
+            order.append("screenshot")
+            return fake_screenshot(dev, dst)
+
+        def dump(dev):
+            order.append("hierarchy")
+            return xml
+
+        with tmpdir() as d, mock.patch.object(devices, "screenshot", shot), \
+                mock.patch.object(devices, "px_per_dp", lambda dv: 2.625), \
+                mock.patch.object(devices, "keyboard_top", lambda dv: None), \
+                mock.patch.object(capture, "_dump_uiautomator", dump):
+            capture.snap("android", "emulator-5560", os.path.join(d, "p"))
+        self.assertEqual(order[:2], ["hierarchy", "screenshot"])

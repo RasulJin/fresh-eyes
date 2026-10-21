@@ -81,20 +81,25 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
          expect_differs=None):
     dev = Device(platform, device_id, "")
     os.makedirs(out, exist_ok=True)
+    # Hierarchy first: uiautomator returns once the UI is idle, so the screenshot taken right after shows the
+    # same settled screen (screenshot-first caught mid-transition frames that disagreed with the hierarchy).
+    try:
+        nodes, source = _hierarchy(dev, hierarchy_file, hierarchy_source)
+        hierarchy_error = None
+    except FEError as e:
+        nodes, source, hierarchy_error = None, None, e
     shot = devices.screenshot(dev, os.path.join(out, "screen.png"))
     w, h = image_size(shot)
     meta = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "platform": platform, "device": device_id,
             "screen_wh": [w, h]}
+    if hierarchy_error is not None:
+        meta["blocked"] = "hierarchy unavailable: %s" % hierarchy_error
+        write_json(os.path.join(out, "meta.json"), meta)
+        return 3
     if expect_differs and _same_file(shot, os.path.join(expect_differs, "screen.png")):
         meta["blocked"] = "screen identical to %s: the state did not apply, wait and snap again" % expect_differs
         write_json(os.path.join(out, "meta.json"), meta)
         return 4
-    try:
-        nodes, source = _hierarchy(dev, hierarchy_file, hierarchy_source)
-    except FEError as e:
-        meta["blocked"] = "hierarchy unavailable: %s" % e
-        write_json(os.path.join(out, "meta.json"), meta)
-        return 3
     write_json(os.path.join(out, "nodes.json"), nodes)
     with open(os.path.join(out, "hierarchy.txt"), "w", encoding="utf-8") as f:
         f.write(compress(nodes))
