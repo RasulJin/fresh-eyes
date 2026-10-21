@@ -52,13 +52,13 @@ noted. Example (generic values):
 - `language`: report and backlog language (`ru`, `en`).
 - `app.*_id`: bundle id / package; `app.expo_root`: where `app/` (Expo Router) lives; screen routes are
   relative to it, and the `@/` import alias resolves to it.
-- `env`: the backend the run must use. `api_expected` must be found in the build (quick: `metro_env`, full:
-  inside the built bundle) and no `api_forbidden` URL may be present, otherwise mutating probes are disabled.
-  Only `name` `staging` or `local` can enable mutation.
+- `env`: the backend the run must use. Preflight reads the JS bundle the app really runs (inside the app
+  installed on the device, or the one Metro serves it): `api_expected`'s host must be in it and no
+  `api_forbidden` host may be, otherwise mutating probes are disabled. Full mode needs a release build (bundle
+  inside the app). Only `name` `staging` or `local` can enable mutation.
 - `accounts`: names of environment variables holding test credentials. Values never go into files or reports.
 - `builds.quick|full.<platform>`: `build` (command, run in `cwd`), `install` (optional), `start` (Metro),
-  `metro_env` (env for Metro), `artifact` (built file). A build with `artifact` (e.g. a release APK, no Metro)
-  is checked by reading the backend URL inside its bundle, in quick mode too.
+  `metro_env` (env for Metro), `artifact` (built file to install).
 - `hooks`: optional project commands: `seed` creates data for states like `empty`/`long-text`, `cleanup`
   removes what the run created, `new_account` creates a fresh test account. Without `seed` those states are
   reported as not checked.

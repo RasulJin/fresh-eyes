@@ -9,9 +9,12 @@ CLI: preflight.py --project DIR --mode quick|full [--fix] [--brief] [--platforms
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from urllib.parse import urlparse
 
 import devices
@@ -43,15 +46,60 @@ def _host(url):
     return urlparse(url).netloc or url
 
 
-def _bundle_text(platform, artifact):
-    """JS bundle text of a built artifact (APK or .app), to see which API it talks to."""
+def _installed_bundle(platform, dev_id, app_id, cache_dir):
+    """JS bundle inside the app installed on the device (release builds); None when Metro serves it."""
     if platform == "android":
-        out = subprocess.run(["unzip", "-p", artifact, "assets/index.android.bundle"], stdout=subprocess.PIPE,
-                             stderr=subprocess.DEVNULL, timeout=120).stdout
-        return out.decode("utf-8", "replace")
-    path = os.path.join(artifact, "main.jsbundle")
+        out = devices._adb(dev_id, "shell", "pm path %s" % devices._app_id(app_id), check=False)
+        apk = next((l[8:].strip() for l in out.splitlines() if l.startswith("package:") and l.strip()
+                    .endswith("base.apk")), None)
+        if not apk:
+            return None
+        os.makedirs(cache_dir, exist_ok=True)
+        local = os.path.join(cache_dir, "installed-android.apk")
+        try:
+            devices._adb(dev_id, "pull", apk, local, timeout=300)
+            out = subprocess.run(["unzip", "-p", local, "assets/index.android.bundle"], stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL, timeout=120).stdout
+        finally:
+            if os.path.exists(local):
+                os.remove(local)  # ~100 MB per run otherwise
+        return out.decode("utf-8", "replace") or None
+    app = devices._simctl("get_app_container", dev_id, devices._app_id(app_id), "app", check=False).strip()
+    path = os.path.join(app, "main.jsbundle") if app else ""
+    if not path or not os.path.exists(path):
+        return None
     with open(path, encoding="utf-8", errors="replace") as f:
         return f.read()
+
+
+def _metro_port(platform, dev_id):
+    if platform == "android":
+        m = re.search(r"tcp:\d+ tcp:(\d+)", devices._adb(dev_id, "reverse", "--list", check=False))
+        if m:
+            return int(m.group(1))
+    return 8081
+
+
+def _metro_bundle(platform, port):
+    """The bundle Metro serves this platform: the Expo manifest's launchAsset, else the plain RN entry.
+    Expo inlines EXPO_PUBLIC_* values here, whatever .env or the shell said."""
+    base = "http://127.0.0.1:%d" % port
+    url = "%s/index.bundle?platform=%s&dev=true" % (base, platform)
+    try:
+        req = urllib.request.Request(base + "/", headers={"expo-platform": platform,
+                                                          "Accept": "application/expo+json,application/json"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            launch = (json.loads(r.read().decode("utf-8")).get("launchAsset") or {}).get("url")
+        if launch:
+            u = urlparse(launch)
+            url = base + u.path + ("?" + u.query if u.query else "")
+    except (urllib.error.URLError, OSError, ValueError):
+        pass
+    try:
+        with urllib.request.urlopen(url, timeout=600) as r:
+            return r.read().decode("utf-8", "replace")
+    except (urllib.error.URLError, OSError) as e:
+        raise FEError("no Metro bundle on port %d: %s" % (port, e))
 
 
 def _platform_state(config, platform, kind_needed_small, fix):
@@ -109,35 +157,37 @@ def _platform_state(config, platform, kind_needed_small, fix):
     return state
 
 
-def _env(config, mode, ok_platforms, project="."):
+def _env(config, mode, states, project="."):
+    """Which backend the app on each ready device really talks to: the URL inside the installed bundle
+    (release builds) or inside the bundle Metro serves it (dev builds). Config values alone prove nothing."""
     env = config.get("env") or {}
     expected = env.get("api_expected")
     forbidden = env.get("api_forbidden") or []
     res = {"name": env.get("name"), "verified": False, "api_host": None, "problems": []}
-    if not expected or not ok_platforms:
+    ok = [p for p, st in states.items() if st["ok"]]
+    if not expected or not ok:
         res["problems"].append("no api_expected in config or no ready platform")
         return res
     verified = True
-    for p in ok_platforms:
-        build = ((config.get("builds") or {}).get(mode) or {}).get(p) or {}
-        if not build.get("artifact"):
-            url = (build.get("metro_env") or {}).get("EXPO_PUBLIC_API_URL")
-            good = url == expected and url not in forbidden
-            if not good:
-                res["problems"].append("%s quick build points at %s, expected %s" % (p, url, expected))
-        else:
-            artifact = build.get("artifact", "")
-            if artifact and not os.path.isabs(artifact):
-                artifact = os.path.join(project, artifact)
-            try:
-                text = _bundle_text(p, artifact)
-            except (OSError, subprocess.SubprocessError) as e:
-                text = ""
-                res["problems"].append("%s: cannot read bundle of %s: %s" % (p, build.get("artifact"), e))
-            # match hosts: bundlers may store the scheme and the host as separate strings
-            good = _host(expected) in text and not any(_host(f) in text for f in forbidden)
-            if not good and text:
-                res["problems"].append("%s bundle does not point only at %s" % (p, expected))
+    for p in ok:
+        app_id = (config.get("app") or {}).get("%s_id" % p)
+        try:
+            text = _installed_bundle(p, states[p]["device"], app_id, os.path.join(project, ".fresh-eyes", "cache"))
+            source = "installed app"
+            if text is None:
+                if mode == "full":
+                    raise FEError("full mode needs a release build (the bundle inside the app); this one loads "
+                                  "from Metro")
+                port = _metro_port(p, states[p]["device"])
+                text, source = _metro_bundle(p, port), "Metro :%d" % port
+        except (FEError, OSError, subprocess.SubprocessError) as e:
+            res["problems"].append("%s: cannot read the bundle the app runs: %s" % (p, e))
+            verified = False
+            continue
+        # match hosts: bundlers may store the scheme and the host as separate strings
+        good = _host(expected) in text and not any(_host(f) in text for f in forbidden)
+        if not good:
+            res["problems"].append("%s: the bundle from %s does not point only at %s" % (p, source, expected))
         verified = verified and good
     res["verified"] = verified
     res["api_host"] = expected if verified else None
@@ -155,7 +205,7 @@ def check(config, mode, fix=False, project=".", only=None):
             continue
         platforms[p] = _platform_state(config, p, wants_small, fix)
     ok_platforms = [p for p, s in platforms.items() if s["ok"]]
-    env = _env(config, mode, ok_platforms, project)
+    env = _env(config, mode, platforms, project)
     unchecked = ["%s: %s" % (p, "; ".join(s["problems"])) for p, s in platforms.items() if not s["ok"]]
     unchecked += env["problems"]
     tools = {"ffmpeg": bool(shutil.which("ffmpeg")), "ffprobe": bool(shutil.which("ffprobe")),

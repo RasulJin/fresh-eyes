@@ -37,8 +37,9 @@
   probes with `taps.py` / adb instead.
 - **Stock emulators keep sockets alive in background**; real phones from aggressive OEMs kill them. Toggle the
   network during background probes to imitate them.
-- **Wrong backend**: local builds often read a production URL from `.env`. Preflight verifies the URL the
-  installed build really uses; without that, mutating probes are off.
+- **Wrong backend**: local builds often read a production URL from `.env`, and a Metro started without the
+  override serves it. Preflight reads the bundle the app really runs (inside the installed app, or the one Metro
+  serves it) and looks for the API host there; without a match, mutating probes are off.
 - **Stale build**: the installed app must be the build under test (rebuild or reload Metro after changes).
 - **First minutes after install** behave differently (caches, permissions, onboarding). Run part of the
   probes right after a fresh install.

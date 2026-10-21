@@ -100,7 +100,7 @@ words / nothing (= the current diff).
 ## full
 
 Goal: before a release, everything from a fresh install. Same as quick, with these differences:
-- `--mode full`: release builds from `builds.full`; preflight checks the API inside the built bundle.
+- `--mode full`: release builds from `builds.full`; preflight checks the API inside the installed app's bundle.
 - Screens: all of `config.screens`; also walk every `journeys[]` entry end to end (mutating journeys only
   when preflight allowed mutation).
 - Start from a fresh install on the owned devices (`devices.py app --do clear` then launch); sign-in must

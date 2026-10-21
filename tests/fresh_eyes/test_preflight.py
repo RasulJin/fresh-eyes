@@ -47,7 +47,20 @@ class PreflightTest(unittest.TestCase):
             p = mock.patch.object(devices, name, fn)
             p.start()
             self.addCleanup(p.stop)
+        self.bundle(metro="x " + STAGING + " y")
         return calls
+
+    def bundle(self, installed=None, metro=None):
+        """What the app on the device runs: a release bundle inside the app, or the one Metro serves."""
+        def from_metro(platform, port):
+            if metro is None:
+                raise preflight.FEError("no Metro bundle on port %d" % port)
+            return metro
+        for name, fn in {"_installed_bundle": lambda p, dev, app, cache: installed,
+                         "_metro_port": lambda p, dev: 8081, "_metro_bundle": from_metro}.items():
+            patch = mock.patch.object(preflight, name, fn)
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def test_soft_keyboard_off_is_reported(self):
         self.fake_devices(soft_keyboard=(False,))
@@ -78,11 +91,13 @@ class PreflightTest(unittest.TestCase):
         res = preflight.check(config(), "quick", fix=False)
         self.assertFalse(res["platforms"]["android"]["ok"])
 
-    def test_mutating_disallowed_when_api_unverified(self):
-        self.fake_devices()
-        res = preflight.check(config(url=PROD), "quick", fix=False)
+    def test_config_alone_proves_nothing_metro_serving_prod_blocks_mutation(self):
+        self.fake_devices()  # config says staging...
+        self.bundle(metro="x " + PROD)  # ...but Metro started without the override serves .env's production URL
+        res = preflight.check(config(), "quick", fix=False)
         self.assertFalse(res["env"]["verified"])
         self.assertFalse(res["mutating_allowed"])
+        self.assertIn("Metro", " ".join(res["unchecked"]))
 
     def test_mutating_allowed_staging_verified(self):
         self.fake_devices()
@@ -91,38 +106,35 @@ class PreflightTest(unittest.TestCase):
         self.assertTrue(res["mutating_allowed"])
         self.assertEqual(res["env"]["api_host"], STAGING)
 
+    def test_no_metro_no_release_bundle_is_unverified(self):
+        self.fake_devices()
+        self.bundle()
+        self.assertFalse(preflight.check(config(), "quick", fix=False)["env"]["verified"])
+
     def test_prod_env_name_never_mutates(self):
         self.fake_devices()
         self.assertFalse(preflight.check(config(name="prod"), "quick", fix=False)["mutating_allowed"])
 
-    def test_full_mode_rejects_bundle_with_prod(self):
+    def test_installed_release_bundle_is_what_counts(self):
         self.fake_devices()
-        with mock.patch.object(preflight, "_bundle_text", lambda platform, artifact: STAGING + " " + PROD):
-            res = preflight.check(config(), "full", fix=False)
+        self.bundle(installed="x " + STAGING, metro="x " + PROD)
+        self.assertTrue(preflight.check(config(), "quick", fix=False)["env"]["verified"])
+        self.bundle(installed="x " + STAGING + " " + PROD)
+        self.assertFalse(preflight.check(config(), "full", fix=False)["env"]["verified"])
+
+    def test_full_mode_needs_a_release_build(self):
+        self.fake_devices()
+        res = preflight.check(config(), "full", fix=False)
         self.assertFalse(res["env"]["verified"])
-
-    def test_full_mode_accepts_staging_bundle(self):
-        self.fake_devices()
-        with mock.patch.object(preflight, "_bundle_text", lambda platform, artifact: "x " + STAGING + " y"):
-            self.assertTrue(preflight.check(config(), "full", fix=False)["env"]["verified"])
-
-    def test_quick_with_artifact_checks_bundle(self):
-        self.fake_devices()
-        cfg = config()
-        cfg["builds"]["quick"]["android"] = {"artifact": "build/app.apk"}
-        with mock.patch.object(preflight, "_bundle_text", lambda platform, artifact: "x " + PROD):
-            self.assertFalse(preflight.check(cfg, "quick", fix=False)["env"]["verified"])
-        with mock.patch.object(preflight, "_bundle_text", lambda platform, artifact: "x " + STAGING):
-            self.assertTrue(preflight.check(cfg, "quick", fix=False)["env"]["verified"])
+        self.assertIn("release build", " ".join(res["unchecked"]))
 
     def test_bundle_check_matches_host_without_scheme(self):
         # Hermes keeps the scheme and host in separate string-table entries
         self.fake_devices()
-        with mock.patch.object(preflight, "_bundle_text", lambda platform, artifact: "\x00api-staging.example.com\x00"):
-            self.assertTrue(preflight.check(config(), "full", fix=False)["env"]["verified"])
-        with mock.patch.object(preflight, "_bundle_text",
-                               lambda platform, artifact: "api-staging.example.com api.example.com"):
-            self.assertFalse(preflight.check(config(), "full", fix=False)["env"]["verified"])
+        self.bundle(installed="\x00api-staging.example.com\x00")
+        self.assertTrue(preflight.check(config(), "full", fix=False)["env"]["verified"])
+        self.bundle(installed="api-staging.example.com api.example.com")
+        self.assertFalse(preflight.check(config(), "full", fix=False)["env"]["verified"])
 
     def test_ios_needs_the_maestro_driver(self):
         sim = Device("ios", "1EB9BE1B", "fresh-eyes iPhone 17")
