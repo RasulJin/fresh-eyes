@@ -12,7 +12,6 @@ CLI:
   capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms 500] -- CMD ...
 """
 import argparse
-import hashlib
 import json
 import os
 import shutil
@@ -28,11 +27,12 @@ from fe_common import FEError, image_size, read_json, write_json
 from geometry import run_all
 from hierarchy import HierarchyError, compress, normalize
 from motion import DEFAULT_CEILING_MS, analyze
-from pixels import corner_candidates, crop, downscale, som_overlay
+from pixels import changed_fraction, corner_candidates, crop, downscale, som_overlay
 
 MIN_DP = {"android": 48, "ios": 44}
 MAX_CROPS = 12
 MAX_MARKS = 60
+STATE_MIN_CHANGE = 0.03  # share of the app area a dark/font state must change
 CORNER_CROP = 96  # px around a corner, zoomed x2 for the reviewer
 
 
@@ -72,14 +72,6 @@ def _crop_order(candidates):
     return order
 
 
-def _same_file(a, b):
-    try:
-        with open(a, "rb") as fa, open(b, "rb") as fb:
-            return hashlib.md5(fa.read()).digest() == hashlib.md5(fb.read()).digest()
-    except OSError:
-        return False
-
-
 def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, before=None, keyboard=False,
          expect_differs=None):
     dev = Device(platform, device_id, "")
@@ -99,8 +91,8 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
         meta["blocked"] = "hierarchy unavailable: %s" % hierarchy_error
         write_json(os.path.join(out, "meta.json"), meta)
         return 3
-    if expect_differs and _same_file(shot, os.path.join(expect_differs, "screen.png")):
-        meta["blocked"] = "screen identical to %s: the state did not apply, wait and snap again" % expect_differs
+    if expect_differs and changed_fraction(shot, os.path.join(expect_differs, "screen.png")) < STATE_MIN_CHANGE:
+        meta["blocked"] = "screen same as %s: the state did not apply, wait and snap again" % expect_differs
         write_json(os.path.join(out, "meta.json"), meta)
         return 4
     write_json(os.path.join(out, "nodes.json"), nodes)
@@ -150,8 +142,8 @@ def around(platform, device_id, out, action, settle=2.5, ceiling_ms=DEFAULT_CEIL
     t_action = time.time()
     code = subprocess.run(action).returncode
     time.sleep(settle)
+    record_s = round(time.time() - (rec.started or t_action), 3)  # before stopping: the pull is not recording
     devices.stop_recording(rec)
-    record_s = round(time.time() - (rec.started or t_action), 3)
     report = analyze(os.path.join(out, "video.mp4"), out, ceiling_ms, record_s if rec.started else None)
     write_json(os.path.join(out, "around.json"), {"action": action, "action_exit": code, "record_s": record_s,
                                                   "flags": [f["type"] for f in report["flags"]]})

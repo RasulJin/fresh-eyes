@@ -6,6 +6,7 @@ CLI:
   taps.py rapid   --platform P --device ID --x X --y Y [--count 3] [--interval-ms 30] --coverage C --cell ID
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
+  taps.py tap-back --platform P --device ID --x X --y Y [--delay-ms 100] --coverage C --cell ID
 """
 import argparse
 import json
@@ -32,7 +33,7 @@ def guard(coverage_path, cell_id):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("rapid", "outside", "back"):
+    for name in ("rapid", "outside", "back", "tap-back"):
         p = sub.add_parser(name)
         p.add_argument("--platform", required=True, choices=["android", "ios"])
         p.add_argument("--device", required=True)
@@ -41,9 +42,11 @@ def main():
         if name != "back":
             p.add_argument("--x", type=int, required=True)
             p.add_argument("--y", type=int, required=True)
-        if name != "outside":
+        if name in ("rapid", "back"):
             p.add_argument("--count", type=int, default=3 if name == "rapid" else 1)
             p.add_argument("--interval-ms", type=int, default=30 if name == "rapid" else 0)
+        if name == "tap-back":
+            p.add_argument("--delay-ms", type=int, default=100)
     a = ap.parse_args()
     guard(a.coverage, a.cell)
     dev = Device(a.platform, a.device, "")
@@ -51,6 +54,8 @@ def main():
         devices.rapid_taps(dev, a.x, a.y, a.count, a.interval_ms)
     elif a.cmd == "outside":
         devices.tap(dev, a.x, a.y)
+    elif a.cmd == "tap-back":
+        devices.tap_then_back(dev, a.x, a.y, a.delay_ms)
     else:
         devices.back(dev, a.count, a.interval_ms)
     print(json.dumps({"probe": a.cmd, "cell": a.cell, "ok": True}))

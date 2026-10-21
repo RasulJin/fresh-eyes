@@ -265,9 +265,9 @@ def _strip_ext(path):
 def screens_from_diff(repo, base, config):
     expo_root = (config.get("app") or {}).get("expo_root", ".")
     changed = set()
-    for cmd in (["diff", "--name-only", "%s...HEAD" % base], ["diff", "--name-only"],
-                ["ls-files", "--others", "--exclude-standard"]):
-        out = run(["git", "-C", repo] + cmd, check=False).stdout.decode()
+    for i, cmd in enumerate((["diff", "--name-only", "%s...HEAD" % base], ["diff", "--name-only"],
+                             ["ls-files", "--others", "--exclude-standard"])):
+        out = run(["git", "-C", repo] + cmd, check=i == 0).stdout.decode()  # a bad base must not look like "no change"
         changed.update(line.strip() for line in out.splitlines() if line.strip())
     routes = defaultdict(list)
     for s in config.get("screens", []):
@@ -293,7 +293,7 @@ def screens_from_diff(repo, base, config):
                 else:
                     continue
                 importers[_strip_ext(target)].add(rel)
-    screens, unmapped = set(), []
+    screens, unmapped, root = set(), [], os.path.normpath(expo_root)
     for f in sorted(changed):
         if not f.endswith(CODE_EXT):
             continue
@@ -310,7 +310,7 @@ def screens_from_diff(repo, base, config):
                     queue.append((imp, depth + 1))
         if found:
             screens.update(found)
-        elif os.path.normpath(f).startswith(os.path.normpath(expo_root)):
+        elif root in (".", "") or os.path.normpath(f).startswith(root + os.sep):
             unmapped.append(f)
     return {"screens": sorted(screens), "unmapped": unmapped}
 

@@ -103,6 +103,12 @@ class DevicesTest(unittest.TestCase):
         self.assertIn("sleep 0.03", shell)
         self.assertTrue(shell.endswith("wait"))
 
+    def test_tap_then_back_in_one_shell(self):
+        fake = self.patch({})
+        devices.tap_then_back(Device("android", "emulator-5560", "fresh-eyes-pixel"), 10, 20, 100)
+        shells = [c[-1] for c in fake.calls if "input" in c[-1]]
+        self.assertEqual(shells, ["input tap 10 20; sleep 0.1; input keyevent 4"])
+
     def test_rapid_taps_zero_interval_has_no_sleep(self):
         fake = self.patch({})
         devices.rapid_taps(Device("android", "emulator-5560", "x"), 1, 2, 2, 0)

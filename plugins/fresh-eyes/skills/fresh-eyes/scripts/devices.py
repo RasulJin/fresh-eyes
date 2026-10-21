@@ -323,6 +323,21 @@ def rapid_taps(dev, x, y, count, interval_ms):
         ios_call(dev, "touch", {"x": x / s, "y": y / s, "duration": 0}, base=base)
 
 
+def tap_then_back(dev, x, y, delay_ms=100):
+    """Start a transition with a tap and press Back while it is still running, without a round-trip between."""
+    _require_owned(dev, "send input")
+    if dev.platform == "android":
+        _shell(dev, "input tap %d %d; sleep %g; input keyevent 4" % (x, y, delay_ms / 1000.0))
+        return
+    base = ios_driver(dev)
+    info = ios_info(dev, base)
+    s = info["widthPixels"] / float(info["widthPoints"])
+    ios_call(dev, "touch", {"x": x / s, "y": y / s, "duration": 0}, base=base)  # returns ~225 ms after the tap
+    time.sleep(max(0, delay_ms - 225) / 1000.0)
+    ios_call(dev, "swipeV2", {"startX": 2, "startY": info["heightPoints"] / 2, "endX": info["widthPoints"] * 0.8,
+                              "endY": info["heightPoints"] / 2, "duration": 0.25, "appIds": []}, base=base)
+
+
 def swipe(dev, x1, y1, x2, y2, ms=300):
     _require_owned(dev, "send input")
     if dev.platform == "android":

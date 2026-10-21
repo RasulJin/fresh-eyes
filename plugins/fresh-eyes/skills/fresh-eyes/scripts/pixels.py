@@ -27,6 +27,18 @@ def _parent(dst):
     return dst
 
 
+def changed_fraction(a, b, top=0.06, bottom=0.04, w=90, h=200):
+    """Share of the app area (status and navigation bars cut off) that differs between two screenshots.
+    A clock tick or a blinking cursor stays near 0; a theme or font change moves most of the screen."""
+    def gray(path):
+        return run(FFMPEG + ["-i", path, "-vf", "scale=%d:%d,format=gray" % (w, h), "-f", "rawvideo",
+                             "-frames:v", "1", "-"]).stdout
+    ga, gb = gray(a), gray(b)
+    rows = range(int(h * top), h - int(h * bottom))
+    idx = [r * w + c for r in rows for c in range(w)]
+    return sum(1 for i in idx if abs(ga[i] - gb[i]) > 24) / float(len(idx))
+
+
 def downscale(src, dst, long_side=1000):
     _parent(dst)
     w, h = image_size(src)

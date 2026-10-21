@@ -264,6 +264,26 @@ class DiffScreensTest(unittest.TestCase):
             self.assertEqual(out["screens"], ["profile-trips"])
             self.assertEqual(out["unmapped"], ["apps/mobile/components/Unused.tsx"])
 
+    def test_bad_base_is_an_error_not_an_empty_diff(self):
+        with tmpdir() as repo:
+            self._git(repo, "init", "-q")
+            self._write(repo, "app/index.tsx", "export default 1;\n")
+            self._git(repo, "add", "-A")
+            self._git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base")
+            with self.assertRaises(FEError):
+                screens_from_diff(repo, "no-such-ref^", ONE_SCREEN)
+
+    def test_unmapped_with_expo_root_dot(self):
+        with tmpdir() as repo:
+            self._git(repo, "init", "-q")
+            self._write(repo, "app/index.tsx", "export default 1;\n")
+            self._write(repo, "components/Lonely.tsx", "export const L = 1;\n")
+            self._git(repo, "add", "-A")
+            self._git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base")
+            self._write(repo, "components/Lonely.tsx", "export const L = 2;\n")
+            cfg = dict(ONE_SCREEN, app={"expo_root": "."})
+            self.assertEqual(screens_from_diff(repo, "HEAD", cfg)["unmapped"], ["components/Lonely.tsx"])
+
 
 if __name__ == "__main__":
     unittest.main()

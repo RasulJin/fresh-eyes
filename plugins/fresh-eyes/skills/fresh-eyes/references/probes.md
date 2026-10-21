@@ -28,8 +28,10 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 
 ### back-during-animation
 - Reveals: half-open states, invisible windows that eat taps, jumps.
-- Start the transition in the background (`nav.py tap ... &` or `nav.py swipe ... &`), 50–150 ms later
-  `taps.py back` (iOS: the left-edge swipe); then tap the content behind to check it responds.
+- `taps.py tap-back --x X --y Y --delay-ms 100` (x, y: the control that opens the sheet/menu/screen, from a
+  fresh `nav.py screen`): the tap and Back go out in one command, Back lands mid-transition (iOS: the
+  edge swipe, no sooner than ~225 ms). Repeat with `--delay-ms 50` and `150`. Then tap the content behind to
+  check it responds.
 - Evidence: `capture.py around` around the whole sequence. Optional: widen the window with
   `settings put global animator_duration_scale 5` on own Android devices only (restore to 1 afterwards).
 
@@ -45,7 +47,7 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 
 ### background-foreground
 - Reveals: lost drafts/replies/results, a request that dies in background, double charges on resume.
-- Android: `devices.background_foreground` (Home, wait, relaunch). Stock emulators keep sockets alive in the
+- Android: `devices.py app --do background` (Home, wait, relaunch). Stock emulators keep sockets alive in the
   background; to imitate aggressive OEMs also toggle the network off while in background (own devices only).
 - iOS: the same call (opens Settings, waits, relaunches the app).
 - Best done during a long request (send, then background immediately).
@@ -80,7 +82,7 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 
 ### offline
 - Reveals: offline shown as "empty"/"not found", zero counters, lying banners.
-- Android: `devices.set_network(dev, False)`, snap the screen, restore with `set_network(dev, True)`.
+- Android: `devices.py set --what offline`, snap the screen, restore with `--what online`.
 - Note: after airplane mode an emulator can lose DNS until restarted; prefer wifi/data toggles.
 
 ### replay

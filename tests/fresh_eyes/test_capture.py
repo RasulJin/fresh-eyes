@@ -175,7 +175,20 @@ class ExpectDiffersTest(unittest.TestCase):
             self.assertEqual(capture.snap("android", "emulator-5560", base), 0)
             dark = os.path.join(d, "dark-none")
             self.assertEqual(capture.snap("android", "emulator-5560", dark, expect_differs=base), 4)
-            self.assertIn("identical", read_json(os.path.join(dark, "meta.json"))["blocked"])
+            self.assertIn("did not apply", read_json(os.path.join(dark, "meta.json"))["blocked"])
+
+    def test_clock_tick_is_not_a_state_change_theme_is(self):
+        from pixels import changed_fraction
+        with tmpdir() as d:
+            light = os.path.join(d, "light.png")
+            make_png(light, 360, 800, rects=[(0, 0, 360, 40, (240, 240, 240), 0), (20, 100, 320, 60, (30, 30, 30), 8)])
+            tick = os.path.join(d, "tick.png")  # only the status bar clock changed
+            make_png(tick, 360, 800, rects=[(0, 0, 360, 40, (240, 240, 240), 0), (10, 10, 40, 20, (0, 0, 0), 0),
+                                            (20, 100, 320, 60, (30, 30, 30), 8)])
+            dark = os.path.join(d, "dark.png")
+            make_png(dark, 360, 800, bg=(18, 18, 18), rects=[(20, 100, 320, 60, (230, 230, 230), 8)])
+            self.assertLess(changed_fraction(light, tick), 0.03)
+            self.assertGreater(changed_fraction(light, dark), 0.5)
 
 
 class StaleCropsTest(unittest.TestCase):
