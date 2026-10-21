@@ -3,7 +3,7 @@ import os
 import unittest
 
 from tests.fresh_eyes.helpers import FIXTURES
-from hierarchy import HierarchyError, compress, match_key, normalize
+from hierarchy import XCUI_TYPES, HierarchyError, compress, match_key, normalize
 
 FIX_XML = os.path.join(FIXTURES, "settings_uiautomator.xml")
 FIX_CLI = os.path.join(FIXTURES, "settings_maestro_cli.json")
@@ -22,6 +22,28 @@ MCP_COMPACT = {
             {"b": "[221,352][354,409]", "txt": "Импорт мест", "a11y": "import", "cls": "android.widget.TextView"},
         ]}]}],
 }
+
+
+# Shape copied from a real Maestro iOS driver /viewHierarchy reply (Settings app), trimmed. Frames are in points.
+XCTEST = {"depth": 9, "axElement": {"children": [
+    {"elementType": 2, "label": "Настройки", "frame": {"X": 0, "Y": 0, "Width": 402, "Height": 874}, "children": [
+        {"elementType": 1, "frame": {"X": 16, "Y": 600, "Width": 370, "Height": 52}},
+        {"elementType": 1, "frame": {"X": 16, "Y": 600, "Width": 370, "Height": 52}, "children": [
+            {"elementType": 9, "label": "Основные", "frame": {"X": 16, "Y": 600, "Width": 370, "Height": 52}}]},
+        {"elementType": 25, "frame": {"X": 0, "Y": 0, "Width": 402, "Height": 54}, "children": [
+            {"elementType": 1, "label": "Заряд аккумулятора 100 %",
+             "frame": {"X": 339.33, "Y": 26, "Width": 27.33, "Height": 13}}]},
+        {"elementType": 9, "label": "Камера", "identifier": "com.apple.settings.camera", "enabled": True,
+         "frame": {"X": 16, "Y": 433.3333, "Width": 370, "Height": 52}, "children": [
+             {"elementType": 48, "label": "Камера", "frame": {"X": 29.67, "Y": 445, "Width": 103, "Height": 29}}]},
+        {"elementType": 9, "label": "Камера", "identifier": "com.apple.settings.camera", "enabled": True,
+         "frame": {"X": 16, "Y": 433.3333, "Width": 370, "Height": 52}},
+        {"elementType": 49, "label": "Поиск", "value": "Ист", "placeholderValue": "Город", "hasFocus": True,
+         "frame": {"X": 16, "Y": 500, "Width": 370, "Height": 36}},
+        {"elementType": 40, "label": "Тёмная тема", "value": 1,
+         "frame": {"X": 300, "Y": 560, "Width": 51, "Height": 31}},
+        {"elementType": 19, "frame": {"X": 0, "Y": 538, "Width": 402, "Height": 336}, "children": [
+            {"elementType": 20, "label": "й", "frame": {"X": 3, "Y": 550, "Width": 33, "Height": 42}}]}]}]}}
 
 
 def _read(p):
@@ -88,6 +110,43 @@ class HierarchyTest(unittest.TestCase):
         out = compress(nodes, max_chars=300)
         self.assertLessEqual(len(out), 340)
         self.assertTrue(out.rstrip().splitlines()[-1].startswith("…"))
+
+
+
+class XctestTest(unittest.TestCase):
+    def setUp(self):
+        self.nodes = normalize(json.dumps(XCTEST), "xctest", 3.0)
+        self.by_cls = {}
+        for n in self.nodes:
+            self.by_cls.setdefault(n["cls"], []).append(n)
+
+    def test_type_table_matches_xcui_raw_values(self):
+        self.assertEqual(len(XCUI_TYPES), 83)
+        self.assertEqual((XCUI_TYPES[9], XCUI_TYPES[19], XCUI_TYPES[48], XCUI_TYPES[75]),
+                         ("Button", "Keyboard", "StaticText", "Cell"))
+
+    def test_points_scaled_to_pixels(self):
+        cam = next(n for n in self.by_cls["Button"] if n["label"] == "Камера")
+        self.assertEqual(cam["bounds"], [48, 1300, 1110, 156])
+
+    def test_status_bar_and_keys_dropped_keyboard_kept(self):
+        self.assertNotIn("StatusBar", self.by_cls)
+        self.assertNotIn("Key", self.by_cls)
+        self.assertEqual(self.by_cls["Keyboard"][0]["bounds"][1], 1614)
+
+    def test_fields(self):
+        b = next(n for n in self.by_cls["Button"] if n["label"] == "Камера")
+        self.assertEqual((b["text"], b["label"], b["rid"], b["clickable"]),
+                         ("", "Камера", "com.apple.settings.camera", True))
+        self.assertEqual(self.by_cls["StaticText"][0]["text"], "Камера")
+        self.assertFalse(self.by_cls["StaticText"][0]["clickable"])
+        self.assertEqual(self.by_cls["StaticText"][0]["parent"], b["id"])
+        f = self.by_cls["TextField"][0]
+        self.assertEqual((f["text"], f["label"], f["focused"]), ("Ист", "Поиск", True))
+        self.assertEqual(self.by_cls["Switch"][0]["text"], "")  # a control's label is not drawn text
+
+    def test_duplicate_siblings_dropped(self):
+        self.assertEqual(sorted(b["label"] for b in self.by_cls["Button"]), ["Камера", "Основные"])
 
 
 if __name__ == "__main__":

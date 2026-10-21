@@ -3,7 +3,7 @@
 
 Candidate: {check, node_ids, bbox:[x,y,w,h], detail, hint: high|medium|low}
 CLI: geometry.py --nodes nodes.json --ctx ctx.json [--before nodes_before.json] --out candidates.json
-  ctx: {"screen_wh": [w,h], "px_per_dp": f, "min_dp": 48|44, "keyboard_top": int|null}
+  ctx: {"screen_wh": [w,h], "px_per_dp": f, "min_dp": 48|44, "keyboard_top": int|null, "keyboard": bool}
 """
 import argparse
 import json
@@ -14,6 +14,9 @@ from fe_common import cli, read_json, write_json
 from hierarchy import match_key
 
 SYSTEM_PREFIXES = ("com.android.systemui",)
+# iOS native bars are translucent and content scrolls under them by design; a RN header drawn as a View is not
+# one of these and is still checked.
+NATIVE_BARS = {"NavigationBar", "Toolbar", "TabBar"}
 
 
 def _area(b):
@@ -114,10 +117,11 @@ def overlaps(nodes, min_ratio=0.2):
     by_id = {n["id"]: n for n in nodes}
     texty = [n for n in nodes if (n["text"] or n["label"]) and _area(n["bounds"]) > 0]
     anc = {n["id"]: set(_ancestors(n, by_id)) for n in texty}
+    bar = {nid: next((i for i in [nid] + list(a) if by_id[i]["cls"] in NATIVE_BARS), None) for nid, a in anc.items()}
     result = []
     for i, a in enumerate(texty):
         for b in texty[i + 1:]:
-            if a["id"] in anc[b["id"]] or b["id"] in anc[a["id"]]:
+            if a["id"] in anc[b["id"]] or b["id"] in anc[a["id"]] or bar[a["id"]] != bar[b["id"]]:
                 continue
             inter = _intersect(a["bounds"], b["bounds"])
             smaller = min(_area(a["bounds"]), _area(b["bounds"]))
@@ -130,6 +134,13 @@ def overlaps(nodes, min_ratio=0.2):
 
 TYPICAL_CHAR_PER_H = 0.42  # avg glyph width / line-box height when no peers are available
 NARROW_RATIO = 0.8          # flag when px-per-char is below this share of what peers of the same height get
+_NARROW = set("iljtfrI.,:;!|'\"()[] \u00a0\u00b7-")
+_WIDE = set("mwMWШЩЖМЮФшщжмюф@%")
+
+
+def _ems(text):
+    """Text length in average-glyph units, so Latin 'Intelligence' is not mistaken for a squeezed Cyrillic word."""
+    return sum(0.45 if c in _NARROW else 1.4 if c in _WIDE else 1.15 if c.isupper() else 1.0 for c in text)
 
 
 def truncation_candidates(nodes):
@@ -145,10 +156,10 @@ def truncation_candidates(nodes):
         w, h = n["bounds"][2], n["bounds"][3]
         if len(n["text"]) < 8:
             continue
-        peers = [p["bounds"][2] / float(len(p["text"])) for p in single
+        peers = [p["bounds"][2] / _ems(p["text"]) for p in single
                  if p is not n and abs(p["bounds"][3] - h) <= 0.25 * h and len(p["text"]) >= 4]
         typical = statistics.median(peers) if len(peers) >= 3 else TYPICAL_CHAR_PER_H * h
-        per_char = w / float(len(n["text"]))
+        per_char = w / _ems(n["text"])
         if per_char < NARROW_RATIO * typical:
             result.append(_cand("truncation", [n["id"]], n["bounds"],
                                 "%r: %.1f px/char vs ~%.1f for same-height text" % (n["text"], per_char, typical),
@@ -200,6 +211,16 @@ def under_keyboard(after, keyboard_top, before=None):
     return result
 
 
+def keyboard_missing(nodes, screen_wh):
+    """The navigator focused an input (--keyboard) but no soft keyboard is up: focus without keyboard, or on iOS
+    the one-time slide-to-type intro / a connected hardware keyboard."""
+    focused = [n for n in nodes if n["focused"]]
+    w, h = screen_wh
+    bbox = focused[0]["bounds"] if focused else [0, h // 2, w, h - h // 2]  # where the keyboard should be
+    return [_cand("keyboard_missing", [n["id"] for n in focused[:1]], bbox,
+                  "an input was focused but no soft keyboard is shown", "medium")]
+
+
 def _app_only(nodes):
     return [n for n in nodes if not n["rid"].startswith(SYSTEM_PREFIXES)]
 
@@ -214,6 +235,8 @@ def run_all(nodes, ctx, before=None):
         result += small_targets(nodes, ctx["px_per_dp"], ctx["min_dp"])
     if ctx.get("keyboard_top") is not None:
         result += under_keyboard(nodes, ctx["keyboard_top"], before)
+    elif ctx.get("keyboard"):
+        result += keyboard_missing(nodes, screen)
     if before is not None:
         result += still_clipped(before, nodes, screen)
     return result

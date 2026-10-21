@@ -24,12 +24,13 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 ## Hard rules
 
 - Only touch the device you were given. Its name starts with `fresh-eyes`; never use another device.
-- **Android: navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`,
-  `swipe`, `back`, `wait`). It prints the screen as compact text after each action. Never use the Maestro MCP
-  on Android: its driver holds UiAutomation, which kills `uiautomator dump` and with it every capture.
-  Non-ASCII typing: a Maestro **CLI** flow with `inputText` (slow, ~35 s; fine on Android since no MCP runs there).
-- **iOS: navigate with the Maestro MCP** (`inspect_screen`, `run`, `cheat_sheet`). Never call the Maestro CLI on
-  a device the MCP drives, and never call MCP `take_screenshot` (it puts an image into your context).
+- **Navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`, `swipe`,
+  `back`, `wait`; add `--platform ios` on iOS). It prints the screen as compact text after each action.
+- Android: never use the Maestro MCP (its driver holds UiAutomation, which kills `uiautomator dump` and with it
+  every capture). Non-ASCII typing: a Maestro **CLI** flow with `inputText` (slow, ~35 s; no MCP runs there).
+- iOS: `nav.py` talks to the Maestro driver that one MCP `inspect_screen` starts. If `nav.py` says "no Maestro
+  iOS driver", call MCP `inspect_screen` once on that device and retry. Use the MCP for nothing else (except
+  `setOrientation`); never call the Maestro CLI there, and never MCP `take_screenshot` (an image in your context).
 - Only run cells listed in `coverage.json`. A cell with `"mutating": true` may create/edit/delete test data;
   clean up what you created before you finish. Never touch data that is not clearly test data.
 - Skip anything destructive outside the plan (log out, delete account, pay, send to real people).
@@ -39,10 +40,9 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 
 ## For each cell `<platform>/<screen>/<state>/<probe>`
 
-1. **Reach the screen.** Read the screen's `reach` in `config.json`. Android: `nav.py tap` step by step,
-   copying texts verbatim from the printed screen. iOS: inline YAML through MCP `run` (`appId`, `launchApp`,
-   taps by `text`/`id` copied verbatim from `inspect_screen`) or existing flows in `config.maestro_dir`.
-   Confirm arrival on the printed screen / `inspect_screen`.
+1. **Reach the screen.** Read the screen's `reach` in `config.json`. `nav.py tap` step by step, copying texts
+   verbatim from the printed screen; confirm arrival on the printed screen. iOS labels often sit on the
+   container (`(label)` in the printed line): match them with `--label`.
    Three failed attempts → `coverage.py set ... --status blocked --note "<why>"` and move on.
 2. **Set the state** on the device (owned devices only):
    `python3 $S/devices.py set --platform P --device ID --name NAME --what dark|font-xl|offline|...`.
@@ -54,7 +54,6 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
    (add `--keyboard` when an input is focused, `--before <pack>` for before/after probes like
    `swipe-inside` and `keyboard-open`; `--expect-differs <default pack>` for state cells like dark/font-xl —
    exit code 4 means the state had not applied yet: wait 2 s and snap again). Exit code 3 means blocked (no hierarchy): retry once, then mark blocked.
-   On iOS pass `--hierarchy-file`: save the `inspect_screen` result to a file in the pack first.
 5. **Record**: `python3 $S/coverage.py set --cov <run>/coverage.json --cell <id> --status done --evidence <pack>`.
 6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell.
 

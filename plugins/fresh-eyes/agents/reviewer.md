@@ -28,7 +28,8 @@ states, UX rubric, severity, do-not-flag) and, if motion evidence exists,
    `candidates.json`, `meta.json`, `hierarchy.txt`, `motion.json`, `taps.json`. Keep within ~20 images in total:
    crops of candidates and contact sheets before full screenshots.
 2. Decide every script candidate explicitly. A `partially_visible` item that a `swipe-inside` pack shows fully
-   is fine; `clipped`, `under_keyboard` and `overlap` deserve a careful look at the crop.
+   is fine; `clipped`, `under_keyboard` and `overlap` deserve a careful look at the crop. `keyboard_missing`:
+   an input was focused but no keyboard is up; a real bug unless the crop shows a keyboard intro/onboarding.
 3. Go beyond the candidates through the checklist sections and the UX rubric. Compare with the spec rules and
    with the examples. Check consistency against sibling packs (header vs tab bar icon, the same control in two
    states, light vs dark).

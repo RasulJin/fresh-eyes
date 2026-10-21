@@ -7,7 +7,12 @@
   and boots them. Other devices (the user's emulator, a phone) are read-only to us.
 - **Android: one UiAutomation at a time.** While the Maestro MCP driver runs on a device, `uiautomator dump` is
   killed; force-stopping the driver kills the MCP session (it does not recover). So on Android fresh-eyes
-  navigates with `nav.py` (uiautomator + adb) and never uses the Maestro MCP; iOS uses the Maestro MCP.
+  navigates with `nav.py` (uiautomator + adb) and never uses the Maestro MCP.
+- **iOS: the Maestro XCTest driver.** One MCP `inspect_screen` on the simulator starts Maestro's driver app, an
+  HTTP server on localhost (found by the simulator's UDID in its process path). `nav.py --platform ios` and
+  `capture.py` use it for the hierarchy (in points; scripts scale to screenshot pixels), taps, swipes and typing
+  (any language) — no screen JSON passes through the model. If the MCP server restarts, the driver dies with it:
+  call `inspect_screen` once more. The driver serializes touches (~225 ms each).
 - Never run the Maestro CLI on a device the Maestro MCP is driving: the CLI uninstalls the MCP's driver on exit
   and every later MCP call fails with `DeviceServerDiedException` until a new device serial is used.
   Recovery: restart the owned emulator on another port (`emulator -avd fresh-eyes-pixel -port 5564`, ownership
@@ -23,6 +28,9 @@
 - **Stylus mode on emulators**: the emulator's touchscreen reports a STYLUS source, so Gboard shows a "Try out
   your stylus" onboarding and then a small handwriting toolbar instead of the keyboard. Keyboard bugs vanish and
   taps near the field can be swallowed. Preflight sets `stylus_handwriting_enabled 0` and restarts Gboard.
+- **iOS slide-to-type intro**: the first keyboard on a fresh simulator shows "Набирайте быстрее…/Type faster…"
+  with a Continue button instead of keys (no Keyboard node in the hierarchy, so `keyboard_missing` fires). Tap
+  Continue once (bottom center of the keyboard area), then redo the keyboard cell.
 - **Animations disabled** (`animator_duration_scale=0`, Maestro `disableAnimations`) hides motion bugs.
   Preflight restores scale 1 on own devices.
 - **Maestro waits for the screen to settle** before every step and after taps. That masks races; fire fast
@@ -52,5 +60,8 @@
 
 - Smoothness numbers from simulators/emulators are a regression signal only, not real-device performance.
 - iOS offline is not automated (no CLI toggle); report it as not checked.
-- Pinch and multi-finger gestures are not available through adb.
+- Pinch and multi-finger gestures are not available through adb or the iOS driver.
+- iOS rapid taps are ~225 ms apart (driver), so sub-100 ms races are only probed on Android.
+- iOS has no "clickable" flag: a RN Pressable without `accessibilityRole` is "Other" in the hierarchy and
+  escapes the small-target check; give interactive views a role (it also fixes VoiceOver).
 - Push notifications and OEM background killing need a real device.

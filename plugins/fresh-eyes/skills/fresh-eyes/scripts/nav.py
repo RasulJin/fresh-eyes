@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Android navigation without Maestro: find elements in the uiautomator hierarchy and drive them with adb.
+"""Navigation by the view hierarchy, printed as compact text (~1.5k chars a screen instead of ~15k of MCP JSON).
 
-Why: on Android only one process may hold UiAutomation. While the Maestro MCP driver runs, `uiautomator dump`
-is killed, and stopping the driver kills the MCP session. So on Android the navigator uses this script for both
-navigation and capture; Maestro stays for iOS. Matching follows Maestro: text/label are full-string,
-case-insensitive regexes; ids match by suffix.
+Android: uiautomator + adb. Only one process may hold UiAutomation, and the Maestro MCP driver holds it, so the
+MCP is never used on Android. iOS: the HTTP API of the Maestro XCTest driver that the MCP started (one MCP
+inspect_screen on the simulator starts it). Coordinates are screenshot pixels on both platforms. Matching follows
+Maestro: text/label are full-string, case-insensitive regexes; ids match by suffix.
 
-CLI (all print the compressed screen after acting):
-  nav.py screen --device ID
+CLI (all print the compressed screen after acting; --platform defaults to android):
+  nav.py screen --device ID [--platform android|ios]
   nav.py tap    --device ID (--text RE | --label RE | --id SUFFIX | --point X,Y) [--index N]
-  nav.py type   --device ID --text "ascii text"
+  nav.py type   --device ID --text "text"        (Android: ASCII only)
   nav.py swipe  --device ID --from X,Y --to X,Y [--ms 300]
-  nav.py back   --device ID
+  nav.py back   --device ID                      (iOS: edge swipe)
   nav.py wait   --device ID (--text RE | --label RE | --id SUFFIX) [--timeout 15]
 """
 import argparse
@@ -28,13 +28,20 @@ from hierarchy import compress, normalize
 SETTLE_S = 1.0
 
 
+def _dump_uiautomator(dev):
+    return fe_common.run([devices.adb_path(), "-s", dev.id, "exec-out", "uiautomator", "dump", "/dev/tty"],
+                         timeout=40).stdout.decode("utf-8", "replace")
+
+
 def screen_nodes(dev):
+    if dev.platform == "ios":
+        base = devices.ios_driver(dev)
+        raw = devices.ios_call(dev, "viewHierarchy", {"appIds": [], "excludeKeyboardElements": False}, base=base)
+        return normalize(raw, "xctest", devices.ios_scale(dev, base))
     last = None
     for _ in range(3):
         try:
-            raw = fe_common.run([devices.adb_path(), "-s", dev.id, "exec-out", "uiautomator", "dump", "/dev/tty"],
-                                timeout=40).stdout.decode("utf-8", "replace")
-            return normalize(raw, "uiautomator")
+            return normalize(_dump_uiautomator(dev), "uiautomator")
         except FEError as e:
             last = e
             time.sleep(0.7)
@@ -105,6 +112,7 @@ def main():
     for name in ("screen", "tap", "type", "swipe", "back", "wait"):
         p = sub.add_parser(name)
         p.add_argument("--device", required=True)
+        p.add_argument("--platform", choices=["android", "ios"], default="android")
         p.add_argument("--max-chars", type=int, default=3000)
         if name in ("tap", "wait"):
             p.add_argument("--text"); p.add_argument("--label"); p.add_argument("--id")
@@ -119,16 +127,18 @@ def main():
             p.add_argument("--to", type=_xy, required=True)
             p.add_argument("--ms", type=int, default=300)
     a = ap.parse_args()
-    dev = Device("android", a.device, "")
+    dev = Device(a.platform, a.device, "")
     if a.cmd == "tap":
         node = tap(dev, a.text, a.label, a.id, a.point, a.index)
         print("tapped %s %r" % (node.get("id"), node.get("text") or node.get("label", "")))
     elif a.cmd == "type":
-        fe_common.run([devices.adb_path(), "-s", dev.id, "shell", "input", "text", adb_text_arg(a.text)])
+        if dev.platform == "ios":
+            devices.ios_type(dev, a.text)
+        else:
+            fe_common.run([devices.adb_path(), "-s", dev.id, "shell", "input", "text", adb_text_arg(a.text)])
         time.sleep(0.5)
     elif a.cmd == "swipe":
-        fe_common.run([devices.adb_path(), "-s", dev.id, "shell", "input", "swipe", str(a.src[0]), str(a.src[1]),
-                       str(a.to[0]), str(a.to[1]), str(a.ms)])
+        devices.swipe(dev, a.src[0], a.src[1], a.to[0], a.to[1], a.ms)
         time.sleep(SETTLE_S)
     elif a.cmd == "back":
         devices.back(dev)

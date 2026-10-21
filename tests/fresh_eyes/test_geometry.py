@@ -97,6 +97,24 @@ class TextChecksTest(unittest.TestCase):
         self.assertEqual(sorted(c[0]["node_ids"]), ["a", "b"])
         self.assertEqual(c[0]["bbox"], [150, 100, 150, 50])
 
+    def test_keyboard_missing_only_when_flag_set_and_no_keyboard(self):
+        field = node("f", [40, 600, 1000, 120], text="Город", focused=True, cls="android.widget.EditText")
+        ctx = {"screen_wh": SCREEN, "px_per_dp": 2.625, "min_dp": 48, "keyboard_top": None, "keyboard": True}
+        got = [c for c in run_all([ROOT, field], ctx) if c["check"] == "keyboard_missing"]
+        self.assertEqual([c["node_ids"] for c in got], [["f"]])
+        self.assertEqual([c for c in run_all([ROOT, field], dict(ctx, keyboard_top=1500))
+                          if c["check"] == "keyboard_missing"], [])
+        self.assertEqual([c for c in run_all([ROOT, field], dict(ctx, keyboard=False))
+                          if c["check"] == "keyboard_missing"], [])
+
+    def test_content_under_ios_native_bar_ignored_header_view_checked(self):
+        bar = node("bar", [0, 2300, 1080, 100], cls="Toolbar", label="Панель инструментов")
+        field = node("f", [40, 2310, 900, 80], parent="bar", cls="SearchField", label="Поиск")
+        row = node("row", [0, 2280, 1080, 120], text="Экранное время", cls="StaticText")
+        self.assertEqual(overlaps([ROOT, bar, field, row]), [])
+        header = node("h", [0, 2300, 1080, 100], cls="Other", label="Шапка")
+        self.assertEqual(len(overlaps([ROOT, header, row])), 1)
+
     def test_overlap_parent_child_ignored(self):
         a = node("a", [100, 100, 200, 50], label="card")
         b = node("b", [110, 100, 150, 50], parent="a", text="Title")

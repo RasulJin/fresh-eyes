@@ -124,6 +124,20 @@ class PreflightTest(unittest.TestCase):
                                lambda platform, artifact: "api-staging.example.com api.example.com"):
             self.assertFalse(preflight.check(config(), "full", fix=False)["env"]["verified"])
 
+    def test_ios_needs_the_maestro_driver(self):
+        sim = Device("ios", "1EB9BE1B", "fresh-eyes iPhone 17")
+        self.fake_devices(listed=(sim,))
+        cfg = dict(config(), platforms=["ios"])
+
+        def no_driver(dev):
+            raise devices.FEError("no Maestro iOS driver for fresh-eyes iPhone 17: call the Maestro MCP inspect_screen")
+        with mock.patch.object(devices, "ios_driver", no_driver):
+            ios = preflight.check(cfg, "quick", fix=False)["platforms"]["ios"]
+        self.assertFalse(ios["ok"])
+        self.assertIn("inspect_screen", " ".join(ios["problems"]))
+        with mock.patch.object(devices, "ios_driver", lambda dev: "http://127.0.0.1:22087"):
+            self.assertTrue(preflight.check(cfg, "quick", fix=False)["platforms"]["ios"]["ok"])
+
     def test_platform_filter_reports_others_unchecked(self):
         self.fake_devices()
         cfg = dict(config(), platforms=["android", "ios"])

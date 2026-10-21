@@ -44,8 +44,32 @@ Machine: macOS, Xcode 26.2 (17C52), iOS runtime `com.apple.CoreSimulator.SimRunt
 
 ## Q8 — iOS (basics; details in Task 16)
 - Created `fresh-eyes iPhone 17` (`1EB9BE1B-BF5B-44BD-B1D4-CE6CCCD69C4D`) and `fresh-eyes iPhone 16e` (`B5D11571-5DD9-45C0-80AE-160584346287`) with `xcrun simctl create "<name>" com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-26-2`.
-- `idb` is not installed. The iOS tap mechanism and the hierarchy source are decided in Task 16 (the Maestro CLI cannot be used next to the MCP, see Q6).
 - The Maestro MCP lists simulators by UDID as `device_id`.
+
+## Q11 — iOS hierarchy and input (Task 16, 2026-10-21)
+- `idb` is not installed, and copying MCP `inspect_screen` JSON (~5k tokens a screen) into files through the
+  model is too expensive. **Decision:** reuse the Maestro XCTest driver that the MCP starts on the simulator. It
+  is the `maestro-driver-iosUITests-Runner` process (its path contains the simulator UDID) serving HTTP on
+  `127.0.0.1:22087`; `lsof -c maestro -iTCP -sTCP:LISTEN` + `ps` find the port for a UDID.
+- Routes used (JSON bodies, coordinates in points): `GET /deviceInfo` → `{widthPoints, heightPoints, widthPixels,
+  heightPixels}` (iPhone 17: 402×874 pt, 1206×2622 px); `POST /viewHierarchy {"appIds": [],
+  "excludeKeyboardElements": false}` → `{"axElement": {...}, "depth"}` with `frame {X,Y,Width,Height}`,
+  `elementType` (XCUIElement.ElementType raw value), `label`, `value`, `title`, `placeholderValue`,
+  `identifier`, `hasFocus`, `enabled` (~48 KB, 160 nodes for Settings, 0.37 s); `POST /touch {x, y, duration}`;
+  `POST /swipeV2 {startX, startY, endX, endY, duration, appIds}` (a swipe from x=2 is the back gesture);
+  `POST /inputText {text, appIds}` (Cyrillic works); `POST /keyboard` (said `false` while a keyboard was up —
+  not used; the Keyboard node in the hierarchy is).
+- The driver serializes touches: each `/touch` takes ~225 ms, and concurrent requests fail with HTTP 500. So
+  iOS rapid taps are ~225 ms apart.
+- The AX tree lists some labeled elements twice (same parent, type, label, frame) and wraps rows in unlabeled
+  same-frame siblings; only labeled duplicates are dropped. Single-line `StaticText` frames are padded (29 pt for
+  a 17 pt font; two lines are 42 pt). Native NavigationBar/Toolbar/TabBar are translucent and content scrolls
+  under them by design (iOS 26 floating toolbar).
+- `simctl io recordVideo --codec=h264` gave 119 frames over 2.9 s for a push transition; `simctl ui appearance`
+  and `content_size` apply within a second (`--expect-differs` confirmed both).
+- Trap: the first keyboard on a fresh simulator shows the slide-to-type intro with a Continue button instead of
+  keys; `DidShowContinuousPathIntroduction = 1` in `com.apple.keyboard.preferences` was already set and did not
+  prevent it. One tap on Continue fixes it for good.
 
 ## Q10 — UiAutomation conflict (found 2026-10-20 while connecting the first app)
 - With the Maestro MCP driver running on an emulator (`dev.mobile.maestro` process), `adb exec-out uiautomator dump`

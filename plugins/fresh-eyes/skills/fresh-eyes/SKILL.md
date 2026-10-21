@@ -70,8 +70,9 @@ words / nothing (= the current diff).
 2. Make the build current: for each platform, if Metro is not running with the config's `metro_env`, start
    `builds.quick.<p>.start` in the background with that env; if the app is missing, run `builds.quick.<p>.build`
    (background; minutes).
-3. `python3 $S/preflight.py --project . --mode quick --fix --brief --out $RUN/preflight.json`. If no platform is
-   ready, stop: tell the user what is missing; the verdict is INCOMPLETE.
+3. `python3 $S/preflight.py --project . --mode quick --fix --brief --out $RUN/preflight.json`. If iOS reports
+   "no Maestro iOS driver", call the Maestro MCP `inspect_screen` on that simulator once and run preflight
+   again. If no platform is ready, stop: tell the user what is missing; the verdict is INCOMPLETE.
 4. Screens:
    - `BUG-N`: read the entry in the backlog (heading + its fields). Ask the navigator to replay its steps into
      `$RUN/<platform>/recheck-BUG-N/` (on the entry's platform, or both if none) and the reviewer to compare

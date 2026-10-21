@@ -97,8 +97,15 @@ def _platform_state(config, platform, kind_needed_small, fix):
         state["stylus_off"] = not devices.stylus_handwriting_on(main)
         if not state["stylus_off"]:
             state["problems"].append("stylus handwriting is on: Gboard shows a stylus toolbar instead of the keyboard")
+    if platform == "ios":
+        try:
+            devices.ios_driver(main)
+            state["driver"] = True
+        except FEError as e:
+            state["driver"] = False
+            state["problems"].append(str(e))
     state["ok"] = state["app_installed"] and state["soft_keyboard"] and state["animations"] and \
-        state.get("stylus_off", True)
+        state.get("stylus_off", True) and state.get("driver", True)
     return state
 
 

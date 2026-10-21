@@ -145,6 +145,55 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class IosDriverTest(unittest.TestCase):
+    DEV = Device("ios", "1EB9BE1B", "fresh-eyes iPhone 17")
+    INFO = json.dumps({"widthPoints": 402, "heightPoints": 874, "widthPixels": 1206, "heightPixels": 2622})
+
+    def fake_call(self):
+        sent = []
+
+        def call(dev, route, body=None, timeout=20, base=None):
+            sent.append((route, body))
+            return self.INFO if route == "deviceInfo" else "{}"
+        return sent, call
+
+    def test_driver_url_found_by_udid_in_process_command(self):
+        fake = FakeRun({"lsof": "p111\nn127.0.0.1:22087\np222\nn127.0.0.1:22088\n",
+                        "ps -p 111": "/Devices/OTHER-UDID/maestro-driver-iosUITests-Runner",
+                        "ps -p 222": "/Devices/1EB9BE1B/data/maestro-driver-iosUITests-Runner"})
+        with mock.patch.object(fe_common, "run", fake):
+            self.assertEqual(devices.ios_driver(self.DEV), "http://127.0.0.1:22088")
+
+    def test_no_driver_says_how_to_start_it(self):
+        with mock.patch.object(fe_common, "run", FakeRun({})):
+            with self.assertRaises(FEError) as e:
+                devices.ios_driver(self.DEV)
+        self.assertIn("inspect_screen", str(e.exception))
+
+    def test_tap_converts_pixels_to_points(self):
+        sent, call = self.fake_call()
+        with mock.patch.object(devices, "ios_call", call):
+            devices.tap(self.DEV, 603, 1065)
+        self.assertEqual(sent[-1], ("touch", {"x": 201.0, "y": 355.0, "duration": 0}))
+
+    def test_rapid_taps_send_count_touches(self):
+        sent, call = self.fake_call()
+        with mock.patch.object(devices, "ios_call", call), \
+                mock.patch.object(devices, "ios_driver", lambda dev: "http://x"):
+            devices.rapid_taps(self.DEV, 603, 1065, 3, 0)
+        self.assertEqual([r for r, _ in sent].count("touch"), 3)
+
+    def test_back_is_edge_swipe(self):
+        sent, call = self.fake_call()
+        with mock.patch.object(devices, "ios_call", call), \
+                mock.patch.object(devices, "ios_driver", lambda dev: "http://x"):
+            devices.back(self.DEV)
+        route, body = sent[-1]
+        self.assertEqual(route, "swipeV2")
+        self.assertLess(body["startX"], 5)
+        self.assertGreater(body["endX"], 300)
+
+
 class AvdTest(unittest.TestCase):
     def test_small_avd_gets_small_data_partition(self):
         from tests.fresh_eyes.helpers import tmpdir

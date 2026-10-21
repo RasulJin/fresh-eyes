@@ -17,6 +17,8 @@ import shutil
 import signal
 import subprocess
 import time
+import urllib.error
+import urllib.request
 from collections import namedtuple
 
 import fe_common
@@ -228,29 +230,97 @@ def stop_recording(rec):
     return rec.dst
 
 
-def _ios_input_unsupported(what):
-    raise FEError("%s on iOS goes through Maestro flows (see docs/spikes/device-facts.md)" % what)
+def ios_driver(dev):
+    """URL of the Maestro XCTest driver serving this simulator. The Maestro MCP starts it on the first command
+    (inspect_screen); we reuse its HTTP API for hierarchy and input. Coordinates there are in points."""
+    out = fe_common.run(["lsof", "-nP", "-a", "-iTCP", "-sTCP:LISTEN", "-c", "maestro", "-F", "pn"],
+                        check=False).stdout.decode("utf-8", "replace")
+    pid = None
+    for line in out.splitlines():
+        if line.startswith("p"):
+            pid = line[1:]
+        elif line.startswith("n") and pid:
+            cmd = fe_common.run(["ps", "-p", pid, "-o", "command="], check=False).stdout.decode("utf-8", "replace")
+            if dev.id in cmd:
+                return "http://127.0.0.1:%s" % line.rsplit(":", 1)[1]
+    raise FEError("no Maestro iOS driver for %s: call the Maestro MCP inspect_screen on it once (that starts "
+                  "the driver), then retry" % (dev.name or dev.id))
+
+
+def ios_call(dev, route, body=None, timeout=20, base=None):
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request((base or ios_driver(dev)) + "/" + route, data=data,
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.read().decode("utf-8", "replace")
+    except (urllib.error.URLError, OSError) as e:
+        raise FEError("iOS driver /%s failed: %s" % (route, e))
+
+
+def ios_info(dev, base=None):
+    """{widthPoints, heightPoints, widthPixels, heightPixels}; scripts work in screenshot pixels."""
+    return json.loads(ios_call(dev, "deviceInfo", base=base))
+
+
+def ios_scale(dev, base=None):
+    info = ios_info(dev, base)
+    return info["widthPixels"] / float(info["widthPoints"])
 
 
 def tap(dev, x, y):
-    if dev.platform != "android":
-        _ios_input_unsupported("tap")
-    _shell(dev, "input tap %d %d" % (x, y))
+    """x, y in screenshot pixels on both platforms."""
+    if dev.platform == "android":
+        _shell(dev, "input tap %d %d" % (x, y))
+        return
+    s = ios_scale(dev)
+    ios_call(dev, "touch", {"x": x / s, "y": y / s, "duration": 0})
 
 
 def rapid_taps(dev, x, y, count, interval_ms):
-    """All taps in one adb shell, backgrounded so they land nearly at once (sequential taps are ~200 ms apart)."""
-    if dev.platform != "android":
-        _ios_input_unsupported("rapid taps")
-    sep = " sleep %g; " % (interval_ms / 1000.0) if interval_ms > 0 else " "
-    _shell(dev, sep.join(["input tap %d %d &" % (x, y)] * count) + " wait")
+    """Taps that land nearly at once on Android (sequential adb taps are ~200 ms apart); ~225 ms apart on iOS."""
+    if dev.platform == "android":
+        sep = " sleep %g; " % (interval_ms / 1000.0) if interval_ms > 0 else " "
+        _shell(dev, sep.join(["input tap %d %d &" % (x, y)] * count) + " wait")
+        return
+    base = ios_driver(dev)
+    s = ios_scale(dev, base)
+    # ponytail: the driver serializes touches (~225 ms each; parallel ones fail with HTTP 500), so iOS taps land
+    # ~225 ms apart: enough for double-submit windows, not for a sub-100 ms race. idb HID taps would be faster.
+    for i in range(count):
+        if i and interval_ms:
+            time.sleep(interval_ms / 1000.0)
+        ios_call(dev, "touch", {"x": x / s, "y": y / s, "duration": 0}, base=base)
+
+
+def swipe(dev, x1, y1, x2, y2, ms=300):
+    if dev.platform == "android":
+        _shell(dev, "input swipe %d %d %d %d %d" % (x1, y1, x2, y2, ms))
+        return
+    s = ios_scale(dev)
+    ios_call(dev, "swipeV2", {"startX": x1 / s, "startY": y1 / s, "endX": x2 / s, "endY": y2 / s,
+                              "duration": ms / 1000.0, "appIds": []})
+
+
+def ios_type(dev, text):
+    """Any text, into the focused field (Android types through nav.py: adb, ASCII only)."""
+    ios_call(dev, "inputText", {"text": text, "appIds": []})
 
 
 def back(dev, count=1, interval_ms=0):
-    if dev.platform != "android":
-        _ios_input_unsupported("back")
-    sep = " sleep %g; " % (interval_ms / 1000.0) if interval_ms > 0 else "; "
-    _shell(dev, sep.join(["input keyevent 4"] * count))
+    if dev.platform == "android":
+        sep = " sleep %g; " % (interval_ms / 1000.0) if interval_ms > 0 else "; "
+        _shell(dev, sep.join(["input keyevent 4"] * count))
+        return
+    # iOS has no back key: the interactive edge swipe is what "back" means there (modals close by swipe down).
+    base = ios_driver(dev)
+    info = ios_info(dev, base)
+    w, h = info["widthPoints"], info["heightPoints"]
+    for i in range(count):
+        if i and interval_ms:
+            time.sleep(interval_ms / 1000.0)
+        ios_call(dev, "swipeV2", {"startX": 2, "startY": h / 2, "endX": w * 0.8, "endY": h / 2, "duration": 0.25,
+                                  "appIds": []}, base=base)
 
 
 def launch(dev, app_id):
@@ -355,9 +425,10 @@ def enable_animations(dev):
     _shell(dev, "; ".join("settings put global %s 1" % k for k in _SCALES))
 
 
-def keyboard_top(dev):
+def keyboard_top(dev, nodes=()):
+    """Top edge of the soft keyboard in screenshot pixels, None when hidden. iOS: from the hierarchy nodes."""
     if dev.platform != "android":
-        return None
+        return next((n["bounds"][1] for n in nodes if n["cls"] == "Keyboard"), None)
     if "mInputShown=true" not in _shell(dev, "dumpsys input_method", check=False):
         return None
     win = _shell(dev, "dumpsys window InputMethod", check=False)
@@ -385,7 +456,7 @@ def disable_stylus_handwriting(dev):
 
 def px_per_dp(dev):
     if dev.platform != "android":
-        return 3.0
+        return ios_scale(dev)
     out = _shell(dev, "wm density", check=False)
     m = re.search(r"Override density: (\d+)", out) or re.search(r"Physical density: (\d+)", out)
     return int(m.group(1)) / 160.0 if m else 2.625

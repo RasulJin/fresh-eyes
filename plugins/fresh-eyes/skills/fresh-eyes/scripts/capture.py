@@ -7,8 +7,8 @@ around: records the screen around an action command, then motion analysis: video
         sheet_*.png, around.json.
 
 CLI:
-  capture.py snap --platform P --device ID --out PACK [--hierarchy-file F --hierarchy-source maestro|uiautomator]
-                  [--before PACK] [--keyboard]
+  capture.py snap --platform P --device ID --out PACK [--before PACK] [--keyboard] [--expect-differs PACK]
+                  [--hierarchy-file F --hierarchy-source maestro|uiautomator|xctest]  (default: read the device)
   capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms 500] -- CMD ...
 """
 import argparse
@@ -22,6 +22,7 @@ import time
 
 import devices
 import fe_common
+import nav
 from devices import Device
 from fe_common import FEError, image_size, read_json, write_json
 from geometry import run_all
@@ -35,26 +36,15 @@ MAX_MARKS = 60
 CORNER_CROP = 96  # px around a corner, zoomed x2 for the reviewer
 
 
-def _dump_uiautomator(dev):
-    out = fe_common.run([devices.adb_path(), "-s", dev.id, "exec-out", "uiautomator", "dump", "/dev/tty"],
-                        timeout=40).stdout.decode("utf-8", "replace")
-    return out
-
-
 def _hierarchy(dev, hierarchy_file, source):
-    if hierarchy_file:
+    if hierarchy_file:  # iOS sources are in points
+        scale = devices.ios_scale(dev) if dev.platform == "ios" else 1.0
         with open(hierarchy_file, encoding="utf-8") as f:
-            return normalize(f.read(), source or "maestro"), source or "maestro"
-    if dev.platform != "android":
-        raise HierarchyError("iOS needs --hierarchy-file (Maestro inspect_screen output)")
-    last = None
-    for _ in range(3):
-        try:
-            return normalize(_dump_uiautomator(dev), "uiautomator"), "uiautomator"
-        except FEError as e:  # HierarchyError is an FEError; adb failures too
-            last = e
-            time.sleep(0.7)
-    raise HierarchyError(str(last))
+            return normalize(f.read(), source or "maestro", scale), source or "maestro"
+    try:
+        return nav.screen_nodes(dev), "xctest" if dev.platform == "ios" else "uiautomator"
+    except FEError as e:  # HierarchyError is an FEError; adb and driver failures too
+        raise HierarchyError(str(e))
 
 
 def _marks(nodes, candidates):
@@ -104,7 +94,7 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
     with open(os.path.join(out, "hierarchy.txt"), "w", encoding="utf-8") as f:
         f.write(compress(nodes))
     ctx = {"screen_wh": [w, h], "px_per_dp": devices.px_per_dp(dev), "min_dp": MIN_DP.get(platform, 48),
-           "keyboard_top": devices.keyboard_top(dev) if keyboard else None}
+           "keyboard_top": devices.keyboard_top(dev, nodes) if keyboard else None, "keyboard": keyboard}
     before_nodes = read_json(os.path.join(before, "nodes.json")) if before else None
     candidates = run_all(nodes, ctx, before_nodes)
     app_nodes = [n for n in nodes if not n["rid"].startswith("com.android.systemui")]

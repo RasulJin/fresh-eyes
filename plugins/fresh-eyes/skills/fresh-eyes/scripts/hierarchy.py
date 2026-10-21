@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Normalize a view hierarchy (uiautomator XML, Maestro MCP compact JSON, Maestro CLI JSON) into flat nodes.
+"""Normalize a view hierarchy (uiautomator XML, Maestro MCP compact JSON, Maestro CLI JSON, Maestro iOS driver JSON)
+into flat nodes. Bounds are multiplied by `scale` (iOS sources are in points, screenshots in pixels).
 
 Node: {id, parent, depth, cls, text, label, rid, bounds:[x,y,w,h], clickable, focused, enabled}
 CLI:
-  hierarchy.py normalize --source uiautomator|maestro|maestro-cli --in FILE --out nodes.json
+  hierarchy.py normalize --source uiautomator|maestro|maestro-cli|xctest --in FILE --out nodes.json [--scale S]
   hierarchy.py compress --in nodes.json [--max-chars N]
 """
 import argparse
@@ -38,11 +39,12 @@ def _truthy(v, default=False):
 
 
 class _Builder:
-    def __init__(self):
-        self.nodes = []
+    def __init__(self, scale=1.0):
+        self.nodes, self.scale = [], scale
 
     def add(self, parent, depth, bounds, cls="", text="", label="", rid="", clickable=False, focused=False,
             enabled=True):
+        bounds = [int(round(v * self.scale)) for v in bounds]
         node = {"id": "n%d" % len(self.nodes), "parent": parent, "depth": depth, "cls": cls or "",
                 "text": text or "", "label": label or "", "rid": rid or "", "bounds": bounds,
                 "clickable": clickable, "focused": focused, "enabled": enabled}
@@ -50,7 +52,7 @@ class _Builder:
         return node["id"]
 
 
-def _from_uiautomator(raw):
+def _from_uiautomator(raw, scale):
     end = raw.rfind("</hierarchy>")
     if end < 0:
         raise HierarchyError("uiautomator dump has no </hierarchy>")
@@ -58,7 +60,7 @@ def _from_uiautomator(raw):
         root = ET.fromstring(raw[:end + len("</hierarchy>")])
     except ET.ParseError as e:
         raise HierarchyError("uiautomator dump is not valid XML: %s" % e)
-    b = _Builder()
+    b = _Builder(scale)
 
     def walk(el, parent, depth):
         for child in el.findall("node"):
@@ -74,12 +76,12 @@ def _from_uiautomator(raw):
     return b.nodes
 
 
-def _from_maestro_compact(raw):
+def _from_maestro_compact(raw, scale):
     data = json.loads(raw)
     if not isinstance(data, dict) or "elements" not in data:
         raise HierarchyError("maestro JSON has no 'elements'")
     defaults = (data.get("ui_schema") or {}).get("defaults") or {}
-    b = _Builder()
+    b = _Builder(scale)
 
     def flag(el, key, fallback):
         return _truthy(el.get(key), _truthy(defaults.get(key), fallback))
@@ -97,11 +99,11 @@ def _from_maestro_compact(raw):
     return b.nodes
 
 
-def _from_maestro_cli(raw):
+def _from_maestro_cli(raw, scale):
     data = json.loads(raw)
     if not isinstance(data, dict) or "children" not in data:
         raise HierarchyError("maestro CLI JSON has no 'children'")
-    b = _Builder()
+    b = _Builder(scale)
 
     def walk(el, parent, depth):
         a = el.get("attributes") or {}
@@ -118,16 +120,68 @@ def _from_maestro_cli(raw):
     return b.nodes
 
 
-_PARSERS = {"uiautomator": _from_uiautomator, "maestro": _from_maestro_compact, "maestro-cli": _from_maestro_cli}
+# XCUIElement.ElementType raw values 0..82, in order.
+XCUI_TYPES = ("Any Other Application Group Window Sheet Drawer Alert Dialog Button RadioButton RadioGroup CheckBox "
+              "DisclosureTriangle PopUpButton ComboBox MenuButton ToolbarButton Popover Keyboard Key NavigationBar "
+              "TabBar TabGroup Toolbar StatusBar Table TableRow TableColumn Outline OutlineRow Browser CollectionView "
+              "Slider PageIndicator ProgressIndicator ActivityIndicator SegmentedControl Picker PickerWheel Switch "
+              "Toggle Link Image Icon SearchField ScrollView ScrollBar StaticText TextField SecureTextField DatePicker "
+              "TextView Menu MenuItem MenuBar MenuBarItem Map WebView IncrementArrow DecrementArrow Timeline "
+              "RatingIndicator ValueIndicator SplitGroup Splitter RelevanceIndicator ColorWell HelpTag Matte DockItem "
+              "Ruler RulerMarker Grid LevelIndicator Cell LayoutArea LayoutItem Handle Stepper Tab TouchBar "
+              "StatusItem").split()
+# ponytail: iOS has no "clickable" flag; a RN Pressable without accessibilityRole is "Other" and is not seen here.
+XCUI_TAPPABLE = {"Button", "Cell", "Link", "Switch", "Toggle", "TextField", "SecureTextField", "SearchField",
+                 "TextView", "Tab", "SegmentedControl", "Slider", "PopUpButton", "ToolbarButton", "CheckBox",
+                 "RadioButton", "Stepper", "PickerWheel", "MenuItem"}
+XCUI_TEXT_INPUTS = {"TextField", "SecureTextField", "SearchField", "TextView"}
 
 
-def normalize(raw, source):
+def _from_xctest(raw, scale):
+    data = json.loads(raw)
+    if not isinstance(data, dict) or "axElement" not in data:
+        raise HierarchyError("iOS driver JSON has no 'axElement'")
+    b = _Builder(scale)
+    seen = set()
+
+    def walk(el, parent, depth):
+        t = el.get("elementType", 0)
+        cls = XCUI_TYPES[t] if 0 <= t < len(XCUI_TYPES) else "Type%d" % t
+        if cls == "StatusBar":  # OS chrome, like com.android.systemui
+            return
+        f, pid = el.get("frame"), parent
+        if f:
+            bounds = [f["X"], f["Y"], f["Width"], f["Height"]]
+            key = (parent, t, el.get("label"), tuple(bounds))
+            if el.get("label") and key in seen:  # the AX tree lists some labeled elements twice;
+                return                             # unlabeled same-frame siblings are distinct wrappers
+            seen.add(key)
+            # text = what is drawn (as uiautomator's text); a container's label is only its accessibility label
+            value = el.get("value") if isinstance(el.get("value"), str) else ""
+            text = el.get("label") if cls == "StaticText" else \
+                (value or el.get("placeholderValue")) if cls in XCUI_TEXT_INPUTS else ""
+            pid = b.add(parent, depth, bounds, cls, text, el.get("label"), el.get("identifier"),
+                        cls in XCUI_TAPPABLE, bool(el.get("hasFocus")), el.get("enabled", True))
+        if cls == "Keyboard":  # keep its frame (keyboard top), drop the keys: Android dumps no IME either
+            return
+        for child in el.get("children") or []:
+            walk(child, pid, depth + 1)
+
+    walk(data["axElement"], None, 0)
+    return b.nodes
+
+
+_PARSERS = {"uiautomator": _from_uiautomator, "maestro": _from_maestro_compact, "maestro-cli": _from_maestro_cli,
+            "xctest": _from_xctest}
+
+
+def normalize(raw, source, scale=1.0):
     if source not in _PARSERS:
         raise HierarchyError("unknown hierarchy source: %s" % source)
     if not raw or not raw.strip():
         raise HierarchyError("empty hierarchy")
     try:
-        nodes = _PARSERS[source](raw)
+        nodes = _PARSERS[source](raw, scale)
     except ValueError as e:  # json.JSONDecodeError
         raise HierarchyError("hierarchy is not valid JSON: %s" % e)
     if not nodes:
@@ -174,13 +228,14 @@ def main():
     n.add_argument("--source", required=True, choices=sorted(_PARSERS))
     n.add_argument("--in", dest="src", required=True)
     n.add_argument("--out", required=True)
+    n.add_argument("--scale", type=float, default=1.0)
     c = sub.add_parser("compress")
     c.add_argument("--in", dest="src", required=True)
     c.add_argument("--max-chars", type=int, default=6000)
     args = ap.parse_args()
     if args.cmd == "normalize":
         with open(args.src, encoding="utf-8") as f:
-            nodes = normalize(f.read(), args.source)
+            nodes = normalize(f.read(), args.source, args.scale)
         write_json(args.out, nodes)
         print(json.dumps({"nodes": len(nodes), "out": args.out}))
     else:
