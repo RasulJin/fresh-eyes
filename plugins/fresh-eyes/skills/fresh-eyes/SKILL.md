@@ -52,6 +52,7 @@ Goal: a working `.fresh-eyes/` for this project, confirmed by the user.
    - `screens[]` from route files (skip `_layout`, `+not-found`, redirects). Default states
      `["default", "dark", "font-xl", "small-screen"]`, plus `keyboard` for screens with inputs. Probes by kind:
      lists/grids → `swipe-inside`, `tap-everything`; forms → `keyboard-open`, `hardware-back-keyboard`;
+     search/autocomplete fields with a read-only button (search, filter) → `search`;
      overlays/maps/menus → `tap-outside`, `back-during-animation`; share/send buttons → `rapid-tap`;
      long requests → `background-foreground`. Fill `reach` in plain words and `neighbors`.
 3. Build `.fresh-eyes/spec.md` by `$R/spec-format.md`. Delegate the reading to a general-purpose subagent

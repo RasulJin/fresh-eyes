@@ -31,9 +31,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 
 1. For each pack, look first, read second: `som.png`, then `crops/*.png`, then `sheet_*.png`; then read
    `candidates.json`, `meta.json`, `hierarchy.txt`, `motion.json`, `taps.json`, `around.json`. The `som.png` of
-   every pack is mandatory, and a pack's sub-folders with a `meta.json` (`afterback/`, `typed/`, `results/`,
-   `form-after/`, `return/`, journey `step-N/`) are packs too; keep within ~30 images in total (crops and
-   contact sheets before full screenshots).
+   every pack is mandatory, and a pack's sub-folders with a `meta.json` (`afterback/`, `return/`, `typed/`,
+   `form-after/`, journey `step-N/`) are packs too; keep within ~30 images in total (crops and contact sheets
+   before full screenshots).
    If the budget runs out, stop: list only the packs you opened in `reviewed_packs` — the orchestrator sends the
    rest to another reviewer. Never list a pack you did not look at.
 2. Decide every script candidate explicitly. A `partially_visible` item that a `swipe-inside` pack shows fully

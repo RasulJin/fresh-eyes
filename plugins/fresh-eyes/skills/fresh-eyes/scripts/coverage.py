@@ -34,6 +34,7 @@ PROBES = {
     "background-foreground": {"mutating": False, "platforms": BOTH},
     "kill-relaunch": {"mutating": False, "platforms": BOTH},
     "keyboard-open": {"mutating": False, "platforms": BOTH},
+    "search": {"mutating": False, "platforms": BOTH},  # type a query, run a read-only search, look at the results
     "swipe-inside": {"mutating": False, "platforms": BOTH},
     "tap-everything": {"mutating": False, "platforms": BOTH},
     "rotate": {"mutating": False, "platforms": BOTH},
@@ -42,6 +43,8 @@ PROBES = {
     "edit-delete-restore": {"mutating": True, "platforms": BOTH},
     "double-submit": {"mutating": True, "platforms": BOTH},
 }
+# snaps inside the pack a done cell needs: a navigator skips a probe's extra steps unless the cell depends on them
+REQUIRED_SUBPACKS = {"rapid-tap": "afterback", "keyboard-open": "return", "search": "typed"}
 STATES = ["default", "empty", "loading", "error", "offline", "long-text", "dark", "font-xl", "small-screen",
           "keyboard"]
 STATE_PLATFORMS = {"offline": ["android"]}
@@ -181,6 +184,9 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         problems = [pr for pr in (_evidence_problem(e) for e in packs) if pr] or \
             ([] if packs else ["no evidence pack given"])
         problems += ["%s is not under <run>/<platform>/<screen>/" % e for e in packs if pack_key(e) is None]
+        need = REQUIRED_SUBPACKS.get(c["probe"])
+        if need and packs and not any(os.path.isfile(os.path.join(e, need, "meta.json")) for e in packs):
+            problems.append("a %s cell needs the snap <pack>/%s (see probes.md)" % (c["probe"], need))
         if problems:
             raise FEError("cell %s cannot be done: %s. Retry, or mark it failed/blocked with --note"
                           % (cell_id, "; ".join(problems)))

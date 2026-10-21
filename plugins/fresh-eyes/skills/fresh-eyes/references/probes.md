@@ -20,7 +20,7 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
   `capture.py around` to record (x, y in screenshot pixels: the center of the node in a fresh `nav.py screen`
   taken right before; rows move after state changes, so never reuse coordinates from an earlier screen).
 - Oracle: one Back/dismiss later nothing of it is left on screen: `taps.py back` once, then
-  `capture.py snap --out <pack>/afterback`.
+  `capture.py snap --out <pack>/afterback` (`coverage.py set` refuses the cell without it).
 - Mutating: no (but if the button sends something, the probe belongs to a mutating cell).
 
 ### tap-outside
@@ -62,15 +62,21 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 - Reveals: fields, counters, suggestions and CTAs under the keyboard; focus without keyboard.
 - Steps: tap each input; `capture.py snap --keyboard --before <pack before focus>` so new suggestion nodes
   hidden under the keyboard are caught (no keyboard at all → a `keyboard_missing` candidate); type a few chars with real key taps when the bug may be in the IME.
-- Search and autocomplete fields: always type 3–4 chars of a real name (`nav.py type`, Latin: non-ASCII is
-  slow on Android) and snap the suggestions into `<pack>/typed`; an empty field only shows the defaults.
-- A primary button that only reads (Search, Find, Show, Filter; not Send, Save, Pay): fill the form, tap it,
-  wait for the results and snap `<pack>/results`; if they opened another screen, Back and snap the form into
-  `<pack>/form-after` (labels and screen-reader names after a request). Buttons that write data are
-  `double-submit`.
-- With the keyboard up, leave the screen (a link, avatar or tab, not Back) and return; snap `<pack>/return`:
-  a bar or gap left at keyboard height is a stale inset.
+- Then, with the keyboard up, leave the screen (a link, avatar or tab, not Back; a sheet or modal with no way
+  out: close and reopen it), return and
+  `capture.py snap --out <pack>/return`: a bar or gap left at keyboard height is a stale inset
+  (`coverage.py set` refuses the cell without it).
 - Also open/close the keyboard 3–4 times and compare the bottom of the form (layout creep).
+
+### search
+- Reveals: suggestions in mixed languages, wrong or duplicate matches, results that contradict the form or each
+  other (prices, counts), labels and screen-reader names stuck after the request ("busy").
+- Steps: type 3–4 chars of a real name into the search field (`nav.py type`, Latin: non-ASCII is slow on
+  Android) and `capture.py snap --keyboard --out <pack>/typed` (`coverage.py set` refuses the cell without
+  it). Pick a suggestion, fill the rest, tap the primary button that only reads (Search, Find, Show, Filter),
+  wait for the results and snap the pack itself. Results on another screen: also Back and snap the form into
+  `<pack>/form-after`.
+- Mutating: no. A button that writes data (Send, Save, Pay) is `double-submit`, never this probe.
 
 ### swipe-inside
 - Reveals: content clipped by its container (a grid that cannot scroll to its last row), pagers that snap back,

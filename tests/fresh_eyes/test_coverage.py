@@ -8,7 +8,8 @@ import unittest
 
 from tests.fresh_eyes.helpers import tmpdir
 from fe_common import FEError, write_json
-from coverage import PROBES, STATES, _load_findings, coverage_map, next_cells, plan, screens_from_diff, set_status, verdict
+from coverage import (PROBES, REQUIRED_SUBPACKS, STATES, _load_findings, coverage_map, next_cells, plan,
+                      screens_from_diff, set_status, verdict)
 
 ONE_SCREEN = {"language": "ru", "app": {"expo_root": "apps/mobile"}, "hooks": {},
               "screens": [{"id": "profile-trips", "route": "app/(tabs)/profile.tsx", "states": ["default", "dark"],
@@ -19,9 +20,11 @@ MUT_SCREEN = copy.deepcopy(ONE_SCREEN)
 MUT_SCREEN["screens"][0]["probes"] = ["edit-delete-restore"]
 
 
-def make_pack(root, cell, **meta):
+def make_pack(root, cell, sub=True, **meta):
     path = os.path.join(root, cell["platform"], cell["screen"], "%s-%s" % (cell["state"], cell["probe"]))
     write_json(os.path.join(path, "meta.json"), dict({"platform": cell["platform"]}, **meta))
+    if sub and cell["probe"] in REQUIRED_SUBPACKS:
+        write_json(os.path.join(path, REQUIRED_SUBPACKS[cell["probe"]], "meta.json"), {"platform": cell["platform"]})
     return path
 
 
@@ -156,6 +159,19 @@ class StatusTest(unittest.TestCase):
             set_status(cov, cell["id"], "done", evidence=[failed])
         self.assertEqual(cell["status"], "todo")
         set_status(cov, cell["id"], "blocked", note="no hierarchy")  # other statuses need no evidence
+
+    def test_done_needs_the_probes_required_snap(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["probes"] = ["rapid-tap", "keyboard-open", "search", "tap-outside"]
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        for cell in [c for c in cov["cells"] if c["platform"] == "android" and c["probe"] != "none"]:
+            if cell["probe"] in REQUIRED_SUBPACKS:
+                with self.assertRaisesRegex(FEError, REQUIRED_SUBPACKS[cell["probe"]]):
+                    set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell, sub=False)])
+            set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell)])
+            self.assertEqual(cell["status"], "done")
 
     def test_resume_blocks_mutating_cells_when_mutation_no_longer_allowed(self):
         cov = plan(MUT_SCREEN, BOTH_OK_MUT_ON, "full")
