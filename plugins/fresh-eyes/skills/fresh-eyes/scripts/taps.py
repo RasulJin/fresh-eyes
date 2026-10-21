@@ -18,7 +18,10 @@ from fe_common import FEError, cli, read_json
 
 
 def guard(coverage_path, cell_id):
-    cov = read_json(coverage_path)
+    try:
+        cov = read_json(coverage_path)
+    except (OSError, ValueError) as e:
+        raise FEError("cannot read coverage %s: %s" % (coverage_path, e))
     cell = next((c for c in cov.get("cells", []) if c["id"] == cell_id), None)
     if cell is None:
         raise FEError("cell %s is not in %s" % (cell_id, coverage_path))

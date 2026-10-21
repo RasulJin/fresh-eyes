@@ -10,7 +10,8 @@ How a picky QA engineer + product designer looks at one screen. Used by the revi
 3. Then look beyond the candidates, section by section below. Most real bugs are not in `candidates.json`.
 4. Point at elements by Set-of-Mark number and crop path, never by coordinates you estimated.
 5. Small details (corner radius, 1–2 px misalignment, truncation "…", icon glyph) are judged on crops, not on
-   the 1000 px overview. If no crop covers it, ask for one in `questions[]` / the verifier's requests.
+   the 1000 px overview. If no crop covers it, still write the finding with low confidence and say in
+   `actual` which crop is missing; the verifier requests it.
 6. A finding needs a frame. Never report a bug from code, a guess or a single hierarchy line.
 7. "Could not see it" is not "it is fine": say what evidence is missing.
 

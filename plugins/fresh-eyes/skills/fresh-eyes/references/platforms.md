@@ -9,7 +9,7 @@
   killed; force-stopping the driver kills the MCP session (it does not recover). So on Android fresh-eyes
   navigates with `nav.py` (uiautomator + adb) and never uses the Maestro MCP.
 - **iOS: the Maestro XCTest driver.** One MCP `inspect_screen` on the simulator starts Maestro's driver app, an
-  HTTP server on localhost (found by the simulator's UDID in its process path). `nav.py --platform ios` and
+  HTTP server on localhost (found by the simulator's UDID in its process path). `nav.py` (with `--platform ios`) and
   `capture.py` use it for the hierarchy (in points; scripts scale to screenshot pixels), taps, swipes and typing
   (any language) — no screen JSON passes through the model. If the MCP server restarts, the driver dies with it:
   call `inspect_screen` once more. The driver serializes touches (~225 ms each).

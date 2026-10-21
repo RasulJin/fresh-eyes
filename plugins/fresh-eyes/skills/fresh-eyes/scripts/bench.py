@@ -97,6 +97,26 @@ def _verdict_counts(runs):
     return confirmed, rejected
 
 
+def false_clean(runs, cases):
+    """Runs whose code verdict was CLEAN although a known bug of the benchmark was not caught in that run:
+    the one number that must stay 0."""
+    import coverage
+    bad = []
+    for run in runs:
+        cov_path = os.path.join(run, "coverage.json")
+        if not os.path.exists(cov_path):
+            continue
+        files = glob.glob(os.path.join(run, "*", "*", "findings*.json"))
+        findings, reviewed = coverage._load_findings(files)
+        if coverage.verdict(read_json(cov_path), findings, "en", reviewed)["code"] != "CLEAN":
+            continue
+        got = load_run_findings(run, cases)
+        missed = [c["id"] for c in cases if c.get("kind") == "bug" and not match(c, got.get(c["id"], []))]
+        if missed:
+            bad.append({"run": run, "missed": missed})
+    return bad
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -114,7 +134,8 @@ def main():
         fix[cid] = load_run_findings(run, cases).get(cid, [])
     scores = score(cases, attempts)
     fps = false_positives(cases, fix, {c["id"]: attempts[0].get(c["id"], []) for c in cases})
-    res = {"cases": scores, "summary": summary(cases, scores, fps, *_verdict_counts(a.runs))}
+    res = {"cases": scores, "summary": summary(cases, scores, fps, *_verdict_counts(a.runs)),
+           "false_clean": false_clean(a.runs, cases)}
     if a.out:
         write_json(a.out, res)
     print(json.dumps(res, ensure_ascii=False, indent=1))

@@ -10,7 +10,8 @@ class CommonTest(unittest.TestCase):
         with tmpdir() as d:
             p = os.path.join(d, "a", "x.json")
             write_json(p, {"t": "Импорт мест"})
-            self.assertIn("Импорт мест", open(p, encoding="utf-8").read())
+            with open(p, encoding="utf-8") as f:
+                self.assertIn("Импорт мест", f.read())
             self.assertEqual(read_json(p), {"t": "Импорт мест"})
 
     def test_run_raises_feerror_on_failure(self):

@@ -173,9 +173,6 @@ class DevicesTest(unittest.TestCase):
         self.assertFalse(devices.animations_enabled(Device("android", "emulator-5560", "x")))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class IosDriverTest(unittest.TestCase):
     DEV = Device("ios", "1EB9BE1B", "fresh-eyes iPhone 17")
@@ -284,3 +281,7 @@ class AvdTest(unittest.TestCase):
                 with self.assertRaises(FEError) as e:
                     devices.ensure_owned("android", "small", boot_timeout=30)
         self.assertIn("Not enough space", str(e.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

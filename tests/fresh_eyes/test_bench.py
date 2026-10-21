@@ -2,7 +2,7 @@ import os
 import unittest
 
 from tests.fresh_eyes.helpers import tmpdir
-from bench import false_positives, load_run_findings, match, score, summary
+from bench import false_clean, false_positives, load_run_findings, match, score, summary
 from fe_common import write_json
 
 CASE = {"id": "BUG-357", "screen": "side-menu", "platform": "android", "ref": "main", "kind": "bug", "pair": None,
@@ -77,6 +77,22 @@ class RunLoadTest(unittest.TestCase):
     def test_also_screens(self):
         case = dict(CASE, screen="post-detail", also_screens=["thread"])
         self.assertTrue(match(case, [f(check="truncation", screen="thread")]))
+
+
+class FalseCleanTest(unittest.TestCase):
+    def test_clean_run_that_missed_a_known_bug_is_counted(self):
+        with tmpdir() as run:
+            pack = os.path.join(run, "android", "side-menu", "default-none")
+            write_json(os.path.join(pack, "meta.json"), {})
+            write_json(os.path.join(run, "coverage.json"), {"cells": [
+                {"id": "android/side-menu/default/none", "platform": "android", "screen": "side-menu",
+                 "status": "done", "evidence": [pack]}], "unchecked": []})
+            write_json(os.path.join(run, "android", "side-menu", "findings.json"),
+                       {"reviewed_packs": [pack], "findings": []})
+            self.assertEqual([b["missed"] for b in false_clean([run], [CASE])], [["BUG-357"]])
+            write_json(os.path.join(run, "android", "side-menu", "findings.json"),
+                       {"reviewed_packs": [pack], "findings": [f(check="truncation", severity="low")]})
+            self.assertEqual(false_clean([run], [CASE]), [])
 
 
 if __name__ == "__main__":

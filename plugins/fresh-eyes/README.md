@@ -90,7 +90,8 @@ python3 <plugin>/skills/fresh-eyes/scripts/bench.py score --cases .fresh-eyes/be
 
 A case counts as caught when a confirmed or "unsure" finding on its screen names an expected check or
 keyword in at least two of three attempts. Keyword matching can over-credit: read the matched findings before
-trusting the number. `kind: "control"` cases (screens without known bugs) and `--fix-runs` (runs on the fixed
+trusting the number. `false_clean` lists runs whose verdict was CLEAN while a listed bug went uncaught; it must
+stay empty. `kind: "control"` cases (screens without known bugs) and `--fix-runs` (runs on the fixed
 commit) measure false positives.
 
 ## Limits
