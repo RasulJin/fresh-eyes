@@ -15,10 +15,12 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 
 ### rapid-tap
 - Reveals: double sheets/dialogs, double send, double navigation (stacked screens).
+- Target: the primary action that opens or sends something (Share, Send, Submit, Buy), never `⋯`, Back or Close.
 - `python3 $S/taps.py rapid --platform P --device ID --x X --y Y --count 3 --interval-ms 30 ...` wrapped in
   `capture.py around` to record (x, y in screenshot pixels: the center of the node in a fresh `nav.py screen`
   taken right before; rows move after state changes, so never reuse coordinates from an earlier screen).
-- Oracle: one Back/dismiss later nothing of it is left on screen (`capture.py snap`, then compare).
+- Oracle: one Back/dismiss later nothing of it is left on screen: `taps.py back` once, then
+  `capture.py snap --out <pack>/afterback`.
 - Mutating: no (but if the button sends something, the probe belongs to a mutating cell).
 
 ### tap-outside
@@ -60,6 +62,14 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 - Reveals: fields, counters, suggestions and CTAs under the keyboard; focus without keyboard.
 - Steps: tap each input; `capture.py snap --keyboard --before <pack before focus>` so new suggestion nodes
   hidden under the keyboard are caught (no keyboard at all → a `keyboard_missing` candidate); type a few chars with real key taps when the bug may be in the IME.
+- Search and autocomplete fields: always type 3–4 chars of a real name (`nav.py type`, Latin: non-ASCII is
+  slow on Android) and snap the suggestions into `<pack>/typed`; an empty field only shows the defaults.
+- A primary button that only reads (Search, Find, Show, Filter; not Send, Save, Pay): fill the form, tap it,
+  wait for the results and snap `<pack>/results`; if they opened another screen, Back and snap the form into
+  `<pack>/form-after` (labels and screen-reader names after a request). Buttons that write data are
+  `double-submit`.
+- With the keyboard up, leave the screen (a link, avatar or tab, not Back) and return; snap `<pack>/return`:
+  a bar or gap left at keyboard height is a stale inset.
 - Also open/close the keyboard 3–4 times and compare the bottom of the form (layout creep).
 
 ### swipe-inside
@@ -74,6 +84,8 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
   that look enabled.
 - Steps: for each clickable node in `nodes.json` (skip destructive labels: delete, remove, log out, pay, send),
   tap it, snap, go back. Record "tapped N → screen/state" in the pack's `taps.json`.
+- Reply/comment buttons and inputs only focus a field, they change no data: tap them too, and first, so the
+  later taps leave and return with the keyboard having been up.
 
 ### rotate
 - Reveals: layouts that break or lose state on rotation (only if the app supports landscape).

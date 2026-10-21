@@ -43,9 +43,11 @@ How a picky QA engineer + product designer looks at one screen. Used by the revi
 - **Interrupted animation**: Back / tap / drag during a transition leaves a half-open state, an invisible window
   that eats taps, or a jump.
 - **Focus and keyboard**: focus without keyboard, keyboard covering the field, Back with keyboard closes the
-  whole sheet and loses input, suggestions hidden under the keyboard, keyboard that cannot be dismissed.
+  whole sheet and loses input, suggestions hidden under the keyboard, keyboard that cannot be dismissed, a bar
+  or gap left at keyboard height after the keyboard closed.
 - **Lost state**: background/foreground or kill/relaunch loses a draft, a reply, a selection, a scroll position.
-- **Stale UI**: an indicator that stays after the data changed (a "✓" after editing), a restored item still grey.
+- **Stale UI**: an indicator that stays after the data changed (a "✓" after editing), a restored item still grey,
+  a label or screen-reader name still "busy"/"loading" after the request ended.
 - **Flow vs decision**: a flow that opens a new screen where the spec says inline (or the reverse).
 
 ## States
