@@ -27,6 +27,8 @@ For each finding with `verdict: "pending"`:
      `swipe-inside` pack; the "overlap" is an intended badge; the "flash" is a deliberate crossfade;
    - it is listed in `known.md`, is OS chrome, a dev overlay or test data shown correctly;
    - the spec rule does not say what the finding claims.
+   A finding that rests on a rule marked `⚠ конфликт` (or any conflict the user has not decided) is never
+   `rejected`: when the evidence shows the issue, it is `unsure` with a note that the owner decides.
 3. If the evidence decides it → set `verdict` to `confirmed` or `rejected` with a one-line `verify_note`.
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `<run>/requests.json`: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
