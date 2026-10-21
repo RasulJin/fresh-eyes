@@ -116,6 +116,14 @@ class HierarchyTest(unittest.TestCase):
 
 
 
+class PasswordTest(unittest.TestCase):
+    def test_password_field_text_is_blanked(self):
+        xml = ('<hierarchy><node bounds="[0,0][100,50]" text="hunter2" password="true" class="android.widget.'
+               'EditText" resource-id="" content-desc="Пароль" clickable="true"/></hierarchy>')
+        n = normalize(xml, "uiautomator")[0]
+        self.assertEqual((n["text"], n["label"]), ("", "Пароль"))
+
+
 class XctestTest(unittest.TestCase):
     def setUp(self):
         self.nodes = normalize(json.dumps(XCTEST), "xctest", 3.0)

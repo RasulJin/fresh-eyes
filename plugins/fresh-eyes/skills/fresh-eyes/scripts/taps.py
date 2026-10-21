@@ -17,7 +17,7 @@ from devices import Device
 from fe_common import FEError, cli, read_json
 
 
-def guard(coverage_path, cell_id):
+def guard(coverage_path, cell_id, platform=None):
     try:
         cov = read_json(coverage_path)
     except (OSError, ValueError) as e:
@@ -25,6 +25,8 @@ def guard(coverage_path, cell_id):
     cell = next((c for c in cov.get("cells", []) if c["id"] == cell_id), None)
     if cell is None:
         raise FEError("cell %s is not in %s" % (cell_id, coverage_path))
+    if platform and cell.get("platform") != platform:
+        raise FEError("cell %s is a %s cell, not %s" % (cell_id, cell.get("platform"), platform))
     if cell.get("mutating"):
         pf_path = os.path.join(os.path.dirname(coverage_path), "preflight.json")
         allowed = os.path.exists(pf_path) and read_json(pf_path).get("mutating_allowed") is True
@@ -51,7 +53,7 @@ def main():
         if name == "tap-back":
             p.add_argument("--delay-ms", type=int, default=100)
     a = ap.parse_args()
-    guard(a.coverage, a.cell)
+    guard(a.coverage, a.cell, a.platform)
     dev = Device(a.platform, a.device, "")
     if a.cmd == "rapid":
         devices.rapid_taps(dev, a.x, a.y, a.count, a.interval_ms)

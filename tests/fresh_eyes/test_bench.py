@@ -93,6 +93,8 @@ class FalseCleanTest(unittest.TestCase):
             write_json(os.path.join(run, "android", "side-menu", "findings.json"),
                        {"reviewed_packs": [pack], "findings": [f(check="truncation", severity="low")]})
             self.assertEqual(false_clean([run], [CASE]), [])
+            other = dict(CASE, id="BUG-9", screen="feed", expect=dict(CASE["expect"], checks=["zzz"]))
+            self.assertEqual(false_clean([run], [other]), [])  # feed was not in this run: not a miss
 
 
 if __name__ == "__main__":

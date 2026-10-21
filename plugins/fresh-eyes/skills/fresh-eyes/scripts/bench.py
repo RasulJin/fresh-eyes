@@ -110,8 +110,10 @@ def false_clean(runs, cases):
         findings, reviewed = coverage._load_findings(files)
         if coverage.verdict(read_json(cov_path), findings, "en", reviewed)["code"] != "CLEAN":
             continue
+        planned = {(c["platform"], c["screen"]) for c in read_json(cov_path)["cells"]}
         got = load_run_findings(run, cases)
-        missed = [c["id"] for c in cases if c.get("kind") == "bug" and not match(c, got.get(c["id"], []))]
+        missed = [c["id"] for c in cases if c.get("kind") == "bug" and not match(c, got.get(c["id"], []))
+                  and any((c["platform"], s) in planned for s in [c["screen"]] + c.get("also_screens", []))]
         if missed:
             bad.append({"run": run, "missed": missed})
     return bad

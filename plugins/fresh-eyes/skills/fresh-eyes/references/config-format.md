@@ -59,9 +59,11 @@ noted. Example (generic values):
 - `accounts`: names of environment variables holding test credentials. Values never go into files or reports.
 - `builds.quick|full.<platform>`: `build` (command, run in `cwd`), `install` (optional), `start` (Metro),
   `metro_env` (env for Metro), `artifact` (built file to install).
-- `hooks`: optional project commands: `seed` creates data for states like `empty`/`long-text`, `cleanup`
-  removes what the run created, `new_account` creates a fresh test account. Without `seed` those states are
-  reported as not checked.
+- `hooks`: optional project commands, run from the repo root: `seed` creates data for `empty`/`long-text`
+  and `cleanup` removes what the run created (the orchestrator runs both, only when preflight allowed
+  mutation); `loading` / `error` put the app into that state (e.g. a slow or failing mock), run by the
+  navigator right before snapping those cells; `new_account` creates a fresh test account. A state without its
+  hook is reported as not checked.
 - `backlog`: where confirmed findings go; `template` is `ru-backlog` or `en-backlog`; `images_dir` gets crops.
 - `maestro_dir`: existing flows (reused as setup steps) and where regression flows are written.
 - `references`: apps the user compares against; the UX rubric uses them.

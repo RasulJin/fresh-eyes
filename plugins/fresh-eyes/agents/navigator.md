@@ -28,7 +28,8 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
   `back`, `wait`; add `--platform ios` on iOS). It prints the screen as compact text after each action; when
   a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
 - Android: never use the Maestro MCP (its driver holds UiAutomation, which kills `uiautomator dump` and with it
-  every capture). Non-ASCII typing: a Maestro **CLI** flow with `inputText` (slow, ~35 s; no MCP runs there).
+  every capture). Non-ASCII typing: a Maestro **CLI** flow with `inputText`, always with `--device <your device id>` (slow,
+  ~35 s; no MCP runs there).
 - iOS: `nav.py` talks to the Maestro driver that one MCP `inspect_screen` starts. If `nav.py` says "no Maestro
   iOS driver", call MCP `inspect_screen` once on that device and retry. Use the MCP for nothing else (except
   `setOrientation`); never call the Maestro CLI there, and never MCP `take_screenshot` (an image in your context).
@@ -48,7 +49,8 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 2. **Set the state** on the device (owned devices only):
    `python3 $S/devices.py set --platform P --device ID --name NAME --what dark|font-xl|offline|...`.
    `keyboard`: focus the screen's main input. `small-screen`: use `platforms.<p>.small_device_id`.
-   `empty`/`long-text`/`loading`/`error`: use the data or hook the plan relies on.
+   `empty`/`long-text`: the seeded data. `loading`/`error`: run `hooks.loading` / `hooks.error` from
+   `config.json` (repo root) right before the snap, and undo it after if the hook says how.
 3. **Run the probe** exactly as `probes.md` says. Fast probes use `taps.py` (with `--coverage` and `--cell`).
    Wrap transitions and probes in `capture.py around ... -- <command>` so they are recorded.
 4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --out <run>/<platform>/<screen>/<state>-<probe>`

@@ -179,6 +179,30 @@ class StatusTest(unittest.TestCase):
         self.assertEqual(nxt[0]["id"], cov["cells"][1]["id"])
 
 
+class ConcurrentSetTest(unittest.TestCase):
+    def test_parallel_navigators_lose_no_update(self):
+        import json
+        import sys
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["states"] = ["default", "dark", "font-xl", "keyboard"]
+        cfg["screens"][0]["probes"] = ["rapid-tap", "tap-outside", "swipe-inside", "tap-everything"]
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        path = os.path.join(root, "coverage.json")
+        write_json(path, cov)
+        script = os.path.join(os.path.dirname(__file__), "..", "..", "plugins", "fresh-eyes", "skills",
+                              "fresh-eyes", "scripts", "coverage.py")
+        procs = [subprocess.Popen([sys.executable, script, "set", "--cov", path, "--cell", c["id"], "--status",
+                                   "done", "--evidence", make_pack(root, c)], stdout=subprocess.DEVNULL)
+                 for c in cov["cells"]]
+        for p in procs:
+            p.wait()
+        with open(path, encoding="utf-8") as f:
+            statuses = [c["status"] for c in json.load(f)["cells"]]
+        self.assertEqual(statuses, ["done"] * len(statuses))
+
+
 class VerdictTest(unittest.TestCase):
     def setUp(self):
         self.cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full")
@@ -201,6 +225,20 @@ class VerdictTest(unittest.TestCase):
         self.assertIn("no reviewer looked at", " ".join(v["reasons"]))
         relative = [os.path.relpath(p) for p in packs]  # the reviewer may list paths in another form
         self.assertEqual(verdict(self.cov, [], "en", relative)["code"], "CLEAN")
+
+    def test_na_empty_plan_and_platformless_paths_never_clean(self):
+        packs = done_all(self.cov, self.root)
+        with self.assertRaises(FEError):
+            set_status(self.cov, self.cov["cells"][0]["id"], "na")  # needs a reason
+        set_status(self.cov, self.cov["cells"][0]["id"], "na", note="no input on this screen")
+        v = verdict(self.cov, [], "en", packs)
+        self.assertEqual(v["code"], "INCOMPLETE")
+        self.assertIn("not applicable", " ".join(v["reasons"]))
+        self.assertEqual(verdict({"cells": [], "unchecked": []}, [], "en")["code"], "INCOMPLETE")
+        loose = os.path.join(self.root, "feed", "default-none")
+        write_json(os.path.join(loose, "meta.json"), {})
+        with self.assertRaises(FEError):
+            set_status(self.cov, self.cov["cells"][1]["id"], "done", evidence=[loose])
 
     def test_pending_findings_block_clean(self):
         packs = done_all(self.cov, self.root)
@@ -229,7 +267,7 @@ class VerdictTest(unittest.TestCase):
 
     def test_map_has_symbols(self):
         set_status(self.cov, self.cov["cells"][0]["id"], "done", evidence=[make_pack(self.root, self.cov["cells"][0])])
-        set_status(self.cov, self.cov["cells"][1]["id"], "failed")
+        set_status(self.cov, self.cov["cells"][1]["id"], "failed", note="crashed")
         m = coverage_map(self.cov, "en")
         self.assertIn("profile-trips", m)
         self.assertIn("✓", m)

@@ -42,6 +42,7 @@ class PreflightTest(unittest.TestCase):
             "enable_animations": lambda dev: calls.append("enable_animations"),
             "stylus_handwriting_on": lambda dev: state.get("stylus", False),
             "disable_stylus_handwriting": lambda dev: (calls.append("disable_stylus"), state.update(stylus=False)),
+            "terminate": lambda dev, app: calls.append("terminate"),
         }
         for name, fn in patches.items():
             p = mock.patch.object(devices, name, fn)
@@ -51,13 +52,12 @@ class PreflightTest(unittest.TestCase):
         return calls
 
     def bundle(self, installed=None, metro=None):
-        """What the app on the device runs: a release bundle inside the app, or the one Metro serves."""
-        def from_metro(platform, port):
-            if metro is None:
-                raise preflight.FEError("no Metro bundle on port %d" % port)
-            return metro
+        """What the app on the device runs: a release bundle inside the app, or what each running Metro serves
+        (metro: one bundle text, or {port: text} for several packagers)."""
+        served = metro if isinstance(metro, dict) else ({8081: metro} if metro is not None else {})
         for name, fn in {"_installed_bundle": lambda p, dev, app, cache: installed,
-                         "_metro_port": lambda p, dev: 8081, "_metro_bundle": from_metro}.items():
+                         "_metro_ports": lambda p, dev: sorted(served),
+                         "_metro_bundle": lambda p, port: served[port]}.items():
             patch = mock.patch.object(preflight, name, fn)
             patch.start()
             self.addCleanup(patch.stop)
@@ -99,12 +99,24 @@ class PreflightTest(unittest.TestCase):
         self.assertFalse(res["mutating_allowed"])
         self.assertIn("Metro", " ".join(res["unchecked"]))
 
-    def test_mutating_allowed_staging_verified(self):
-        self.fake_devices()
-        res = preflight.check(config(), "quick", fix=False)
+    def test_mutating_allowed_staging_verified_and_app_restarted(self):
+        calls = self.fake_devices()
+        res = preflight.check(config(), "quick", fix=True)
         self.assertTrue(res["env"]["verified"])
         self.assertTrue(res["mutating_allowed"])
         self.assertEqual(res["env"]["api_host"], STAGING)
+        self.assertIn("terminate", calls)  # so it reloads the verified bundle, not JS from an earlier Metro
+
+    def test_metro_path_without_fix_is_not_verified(self):
+        self.fake_devices()
+        self.assertFalse(preflight.check(config(), "quick", fix=False)["env"]["verified"])
+
+    def test_every_running_metro_must_serve_staging(self):
+        self.fake_devices()
+        self.bundle(metro={8081: "x " + PROD, 8082: "x " + STAGING})
+        res = preflight.check(config(), "quick", fix=True)
+        self.assertFalse(res["env"]["verified"])
+        self.assertIn("Metro :8081", " ".join(res["unchecked"]))
 
     def test_no_metro_no_release_bundle_is_unverified(self):
         self.fake_devices()
@@ -118,7 +130,7 @@ class PreflightTest(unittest.TestCase):
     def test_installed_release_bundle_is_what_counts(self):
         self.fake_devices()
         self.bundle(installed="x " + STAGING, metro="x " + PROD)
-        self.assertTrue(preflight.check(config(), "quick", fix=False)["env"]["verified"])
+        self.assertTrue(preflight.check(config(), "quick", fix=False)["env"]["verified"])  # release: no restart
         self.bundle(installed="x " + STAGING + " " + PROD)
         self.assertFalse(preflight.check(config(), "full", fix=False)["env"]["verified"])
 

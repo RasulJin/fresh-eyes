@@ -19,7 +19,7 @@ import re
 import time
 from collections import defaultdict, deque
 
-from fe_common import FEError, cli, read_json, run, write_json
+from fe_common import FEError, cli, locked, read_json, run, write_json
 
 PLATFORMS = ["android", "ios"]
 BOTH = ["android", "ios"]
@@ -163,10 +163,13 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
     if status not in STATUSES:
         raise FEError("status must be one of %s" % ", ".join(STATUSES))
     c = _find(cov, cell_id)
+    if status in ("na", "blocked", "failed") and not (note or c["note"]):
+        raise FEError("--status %s needs --note saying why" % status)
     if status == "done":
         packs = list(evidence or c["evidence"])
         problems = [pr for pr in (_evidence_problem(e) for e in packs) if pr] or \
             ([] if packs else ["no evidence pack given"])
+        problems += ["%s is not under <run>/<platform>/<screen>/" % e for e in packs if pack_key(e) is None]
         if problems:
             raise FEError("cell %s cannot be done: %s. Retry, or mark it failed/blocked with --note"
                           % (cell_id, "; ".join(problems)))
@@ -203,8 +206,10 @@ def verdict(cov, findings, language="en", reviewed=()):
     high = [f for f in bugs if f.get("severity") == "high"]
     medium = [f for f in bugs if f.get("severity") == "medium"]
     pending = [f for f in findings if f.get("verdict", "pending") == "pending"]
-    open_cells = [c for c in cov["cells"] if c["status"] not in ("done", "na")]
+    # "na" (not applicable) is reported, never counted as checked: the config should drop that probe instead
+    open_cells = [c for c in cov["cells"] if c["status"] != "done"]
     seen = {pack_key(p) for p in reviewed}
+    seen.discard(None)
     unreviewed = [c for c in cov["cells"] if c["status"] == "done"
                   and not any(pack_key(e) in seen for e in c["evidence"])]
     reasons = []
@@ -212,8 +217,12 @@ def verdict(cov, findings, language="en", reviewed=()):
         reasons.append("%d confirmed high: %s" % (len(high), "; ".join(f.get("title", "") for f in high[:5])))
     if medium:
         reasons.append("%d confirmed medium" % len(medium))
+    if not cov["cells"]:
+        reasons.append("no cells planned")
     if open_cells:
-        reasons.append("%d cells not done" % len(open_cells))
+        na = [c for c in open_cells if c["status"] == "na"]
+        reasons.append("%d cells not done%s" % (len(open_cells), " (%d marked not applicable)" % len(na) if na
+                                                else ""))
     if unreviewed:
         reasons.append("%d done cells whose evidence no reviewer looked at: %s"
                        % (len(unreviewed), ", ".join(c["id"] for c in unreviewed[:5])))
@@ -221,7 +230,7 @@ def verdict(cov, findings, language="en", reviewed=()):
         reasons.append("%d findings not verified" % len(pending))
     if cov.get("unchecked"):
         reasons.append("%d items not checked" % len(cov["unchecked"]))
-    complete = not open_cells and not unreviewed and not pending and not cov.get("unchecked")
+    complete = bool(cov["cells"]) and not open_cells and not unreviewed and not pending and not cov.get("unchecked")
     if high:
         code = "BLOCK"
     elif medium:
@@ -354,16 +363,18 @@ def main():
         write_json(a.out, cov)
         print(json.dumps({"cells": len(cov["cells"]), "unchecked": len(cov["unchecked"]), "out": a.out}))
     elif a.cmd == "set":
-        cov = read_json(a.cov)
-        set_status(cov, a.cell, a.status, a.evidence, a.note)
-        write_json(a.cov, cov)
+        with locked(a.cov):
+            cov = read_json(a.cov)
+            set_status(cov, a.cell, a.status, a.evidence, a.note)
+            write_json(a.cov, cov)
         print(json.dumps({"cell": a.cell, "status": a.status}))
     elif a.cmd == "next":
-        cov = read_json(a.cov)
         pf = os.path.join(os.path.dirname(os.path.abspath(a.cov)), "preflight.json")
         allowed = os.path.exists(pf) and read_json(pf).get("mutating_allowed") is True
-        cells = next_cells(cov, a.platform, a.limit, allowed)
-        write_json(a.cov, cov)
+        with locked(a.cov):
+            cov = read_json(a.cov)
+            cells = next_cells(cov, a.platform, a.limit, allowed)
+            write_json(a.cov, cov)
         print(json.dumps([c["id"] for c in cells], ensure_ascii=False))
     elif a.cmd == "verdict":
         findings, reviewed = _load_findings(a.findings)

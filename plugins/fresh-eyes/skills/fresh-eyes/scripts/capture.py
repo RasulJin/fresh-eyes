@@ -144,7 +144,8 @@ def around(platform, device_id, out, action, settle=2.5, ceiling_ms=DEFAULT_CEIL
     time.sleep(settle)
     record_s = round(time.time() - (rec.started or t_action), 3)  # before stopping: the pull is not recording
     devices.stop_recording(rec)
-    report = analyze(os.path.join(out, "video.mp4"), out, ceiling_ms, record_s if rec.started else None)
+    t0 = round(t_action - rec.started, 3) if platform == "android" and rec.started else 0.0  # first change ~ action
+    report = analyze(os.path.join(out, "video.mp4"), out, ceiling_ms, record_s if rec.started else None, t0)
     write_json(os.path.join(out, "around.json"), {"action": action, "action_exit": code, "record_s": record_s,
                                                   "flags": [f["type"] for f in report["flags"]]})
     return 0 if code == 0 else 2

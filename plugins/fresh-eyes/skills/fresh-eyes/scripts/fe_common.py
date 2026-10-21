@@ -1,4 +1,6 @@
 """Shared helpers for fresh-eyes scripts. Python 3.9 stdlib only."""
+import contextlib
+import fcntl
 import json
 import os
 import subprocess
@@ -36,12 +38,26 @@ def read_json(path):
 
 
 def write_json(path, obj):
+    """Atomic: readers see the old file or the new one, never half of it."""
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
         f.write("\n")
+    os.replace(tmp, path)
+
+
+@contextlib.contextmanager
+def locked(path):
+    """Exclusive lock for a read-modify-write of `path` (parallel navigators update one coverage.json)."""
+    with open(path + ".lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 FFMPEG = ["ffmpeg", "-y", "-loglevel", "error"]

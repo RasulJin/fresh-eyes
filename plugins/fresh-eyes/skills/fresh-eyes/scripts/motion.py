@@ -85,7 +85,7 @@ def _rest_after(i, d1, times):
     return times[m] - times[i + 1] if m > i + 1 else times[i + 2] - times[i + 1]
 
 
-def flags(d1, d2, times, ceiling_ms=DEFAULT_CEILING_MS, record_s=None):
+def flags(d1, d2, times, ceiling_ms=DEFAULT_CEILING_MS, record_s=None, t0_s=0.0):
     found = []
     n = len(times)
     for i in range(len(d2)):
@@ -110,7 +110,8 @@ def flags(d1, d2, times, ceiling_ms=DEFAULT_CEILING_MS, record_s=None):
             found.append({"type": "long_transition", "t": round(start, 3),
                           "frames": [i, j + 1], "ms": round((times[j + 1] - start) * 1000)})
         i = j + 1
-    if record_s is not None and n >= 2 and d1[-1] > REST_EPS and record_s - times[-1] < REST_S:
+    # t0_s: when the first frame was taken, in recording time (Android timestamps start at the first change)
+    if record_s is not None and n >= 2 and d1[-1] > REST_EPS and record_s - (times[-1] + t0_s) < REST_S:
         found.append({"type": "never_settles", "t": round(times[-1], 3), "frames": [n - 2, n - 1]})
     return sorted(found, key=lambda f: f["t"])
 
@@ -133,10 +134,10 @@ def extract_frames(video, out_dir, start=None, end=None, height=300, max_frames=
     return files
 
 
-def analyze(video, out_dir, ceiling_ms=DEFAULT_CEILING_MS, record_s=None):
+def analyze(video, out_dir, ceiling_ms=DEFAULT_CEILING_MS, record_s=None, t0_s=0.0):
     frames, times, _, _ = extract_gray(video)
     d1, d2 = diffs(frames)
-    found = flags(d1, d2, times, ceiling_ms, record_s)
+    found = flags(d1, d2, times, ceiling_ms, record_s, t0_s)
     sheets = []
     windows = [(f["t"] - 0.3, f["t"] + 0.3) for f in found[:4]]
     if not windows and len(frames) >= 2:

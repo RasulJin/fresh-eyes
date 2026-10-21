@@ -32,8 +32,8 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
   fresh `nav.py screen`): the tap and Back go out in one command, Back lands mid-transition (iOS: the
   edge swipe, no sooner than ~225 ms). Repeat with `--delay-ms 50` and `150`. Then tap the content behind to
   check it responds.
-- Evidence: `capture.py around` around the whole sequence. Optional: widen the window with
-  `settings put global animator_duration_scale 5` on own Android devices only (restore to 1 afterwards).
+- Evidence: `capture.py around` around the whole sequence. Optional on Android: widen the window with
+  `devices.py set --what slow-animations` (restore with `--what animations-on`).
 
 ### hardware-back
 - Reveals: Back closing the wrong layer, losing unsaved input silently, exiting from step 2 of a wizard.
@@ -77,7 +77,7 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 
 ### rotate
 - Reveals: layouts that break or lose state on rotation (only if the app supports landscape).
-- Android: `settings put system user_rotation 1` (own devices; accelerometer rotation off), back to 0 after.
+- Android: `devices.py set --what landscape`, back with `--what portrait`.
 - iOS: a Maestro MCP `run` with `setOrientation` (the only MCP use besides starting the driver).
 
 ### offline

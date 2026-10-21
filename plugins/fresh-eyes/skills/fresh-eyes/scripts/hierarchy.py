@@ -68,7 +68,8 @@ def _from_uiautomator(raw, scale):
             bounds = _bounds(child.get("bounds"))
             pid = parent
             if bounds is not None:
-                pid = b.add(parent, depth, bounds, child.get("class"), child.get("text"), child.get("content-desc"),
+                text = "" if _truthy(child.get("password")) else child.get("text")  # never print a typed secret
+                pid = b.add(parent, depth, bounds, child.get("class"), text, child.get("content-desc"),
                             child.get("resource-id"), _truthy(child.get("clickable")),
                             _truthy(child.get("focused")), _truthy(child.get("enabled"), True))
             walk(child, pid, depth + 1)

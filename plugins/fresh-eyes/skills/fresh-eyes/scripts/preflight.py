@@ -72,12 +72,22 @@ def _installed_bundle(platform, dev_id, app_id, cache_dir):
         return f.read()
 
 
-def _metro_port(platform, dev_id):
+def _metro_ports(platform, dev_id):
+    """Every packager the app could be loading from: adb-reversed ports and 8081-8090 (Expo moves to the next
+    free port), keeping those that answer /status."""
+    ports = set(range(8081, 8091))
     if platform == "android":
-        m = re.search(r"tcp:\d+ tcp:(\d+)", devices._adb(dev_id, "reverse", "--list", check=False))
-        if m:
-            return int(m.group(1))
-    return 8081
+        ports |= {int(p) for p in re.findall(r"tcp:\d+ tcp:(\d+)", devices._adb(dev_id, "reverse", "--list",
+                                                                                check=False))}
+    live = []
+    for port in sorted(ports):
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:%d/status" % port, timeout=2) as r:
+                if b"packager-status:running" in r.read():
+                    live.append(port)
+        except (urllib.error.URLError, OSError):
+            continue
+    return live
 
 
 def _metro_bundle(platform, port):
@@ -173,7 +183,7 @@ def _platform_state(config, platform, kind_needed_small, fix):
     return state
 
 
-def _env(config, mode, states, project="."):
+def _env(config, mode, states, project=".", fix=False):
     """Which backend the app on each ready device really talks to: the URL inside the installed bundle
     (release builds) or inside the bundle Metro serves it (dev builds). Config values alone prove nothing."""
     env = config.get("env") or {}
@@ -189,21 +199,32 @@ def _env(config, mode, states, project="."):
         app_id = (config.get("app") or {}).get("%s_id" % p)
         try:
             text = _installed_bundle(p, states[p]["device"], app_id, os.path.join(project, ".fresh-eyes", "cache"))
-            source = "installed app"
+            bundles = [("installed app", text)] if text is not None else []
             if text is None:
                 if mode == "full":
                     raise FEError("full mode needs a release build (the bundle inside the app); this one loads "
                                   "from Metro")
-                port = _metro_port(p, states[p]["device"])
-                text, source = _metro_bundle(p, port), "Metro :%d" % port
+                ports = _metro_ports(p, states[p]["device"])
+                if not ports:
+                    raise FEError("no running Metro and no bundle inside the app")
+                bundles = [("Metro :%d" % port, _metro_bundle(p, port)) for port in ports]
         except (FEError, OSError, subprocess.SubprocessError) as e:
             res["problems"].append("%s: cannot read the bundle the app runs: %s" % (p, e))
             verified = False
             continue
         # match hosts: bundlers may store the scheme and the host as separate strings
-        good = _host(expected) in text and not any(_host(f) in text for f in forbidden)
-        if not good:
-            res["problems"].append("%s: the bundle from %s does not point only at %s" % (p, source, expected))
+        bad = [src for src, text in bundles
+               if _host(expected) not in text or any(_host(f) in text for f in forbidden)]
+        for src in bad:
+            res["problems"].append("%s: the bundle from %s does not point only at %s" % (p, src, expected))
+        good = not bad
+        if good and text is None:  # a running app may still hold JS it loaded from another Metro before
+            if fix:
+                devices.terminate(devices.Device(p, states[p]["device"], states[p]["name"]), app_id)
+            else:
+                res["problems"].append("%s: run preflight with --fix so the app restarts on the verified bundle"
+                                       % p)
+                good = False
         verified = verified and good
     res["verified"] = verified
     res["api_host"] = expected if verified else None
@@ -221,7 +242,7 @@ def check(config, mode, fix=False, project=".", only=None):
             continue
         platforms[p] = _platform_state(config, p, wants_small, fix)
     ok_platforms = [p for p, s in platforms.items() if s["ok"]]
-    env = _env(config, mode, platforms, project)
+    env = _env(config, mode, platforms, project, fix)
     unchecked = ["%s: %s" % (p, "; ".join(s["problems"])) for p, s in platforms.items() if not s["ok"]]
     unchecked += env["problems"]
     tools = {"ffmpeg": bool(shutil.which("ffmpeg")), "ffprobe": bool(shutil.which("ffprobe")),

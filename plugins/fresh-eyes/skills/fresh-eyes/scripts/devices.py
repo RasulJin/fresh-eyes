@@ -236,6 +236,7 @@ class Recording(object):
 
 
 def start_recording(dev, dst, limit_s=60):
+    _require_owned(dev, "record the screen")
     if dev.platform == "android":
         remote = "/sdcard/fe_rec.mp4"
         proc = subprocess.Popen([adb_path(), "-s", dev.id, "shell", "screenrecord", "--bit-rate", "8000000",
@@ -555,8 +556,20 @@ def screen_size(dev):
     return None
 
 
+def _android_only(what, command):
+    def apply(dev):
+        if dev.platform != "android":
+            raise FEError("%s is Android only here (iOS: a Maestro MCP setOrientation)" % what)
+        _shell(dev, command)
+    return apply
+
+
 SETTINGS = {
     "dark": lambda d: set_dark(d, True), "light": lambda d: set_dark(d, False),
+    "landscape": _android_only("landscape", "settings put system accelerometer_rotation 0; "
+                                            "settings put system user_rotation 1"),
+    "portrait": _android_only("portrait", "settings put system user_rotation 0"),
+    "slow-animations": _android_only("slow-animations", "settings put global animator_duration_scale 5"),
     "font-xl": lambda d: set_font_scale(d, "xl"), "font-default": lambda d: set_font_scale(d, "default"),
     "offline": lambda d: set_network(d, False), "online": lambda d: set_network(d, True),
     "soft-keyboard": set_soft_keyboard, "animations-on": enable_animations,
