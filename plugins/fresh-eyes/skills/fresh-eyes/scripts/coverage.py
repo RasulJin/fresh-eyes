@@ -5,7 +5,7 @@ The verdict is computed here, never by a model. Mutating probes only enter the p
 confirmed a staging/local backend.
 
 CLI:
-  coverage.py plan --config C --preflight P --mode quick|full [--screens a,b] --out cov.json
+  coverage.py plan --config C --preflight P --mode quick|full [--screens a,b] [--recheck BUG-1,BUG-2] --out cov.json
   coverage.py set --cov cov.json --cell ID --status todo|done|failed|blocked|na [--evidence P ...] [--note T]
   coverage.py next --cov cov.json [--platform android|ios] [--limit 10]
   coverage.py verdict --cov cov.json --findings F [F ...] [--language ru|en]
@@ -37,13 +37,16 @@ PROBES = {
     "tap-everything": {"mutating": False, "platforms": BOTH},
     "rotate": {"mutating": False, "platforms": BOTH},
     "offline": {"mutating": False, "platforms": ["android"]},
+    "replay": {"mutating": False, "platforms": BOTH},  # quick BUG-N: replay the backlog entry's steps
     "edit-delete-restore": {"mutating": True, "platforms": BOTH},
     "double-submit": {"mutating": True, "platforms": BOTH},
 }
 STATES = ["default", "empty", "loading", "error", "offline", "long-text", "dark", "font-xl", "small-screen",
           "keyboard"]
 STATE_PLATFORMS = {"offline": ["android"]}
-STATE_NEEDS = {"empty": "seed", "long-text": "seed", "small-screen": "small_device"}
+NOT_AUTOMATED = {"offline"}  # on the other platform this is a gap to report, not "not applicable"
+STATE_NEEDS = {"empty": "seed", "long-text": "seed", "loading": "hook", "error": "hook",
+               "small-screen": "small_device"}
 STATUSES = ("todo", "done", "failed", "blocked", "na")
 LABELS = {
     "ru": {"BLOCK": "НЕ ВЫПУСКАТЬ", "ISSUES": "ЕСТЬ ПРОБЛЕМЫ", "INCOMPLETE": "НЕ ПРОВЕРЕНО ДО КОНЦА",
@@ -59,7 +62,7 @@ def _cell(platform, screen, state, probe):
             "evidence": [], "note": ""}
 
 
-def plan(config, preflight, mode, screens=None):
+def plan(config, preflight, mode, screens=None, recheck=()):
     by_id = {s["id"]: s for s in config.get("screens", [])}
     if screens:
         missing = [s for s in screens if s not in by_id]
@@ -76,9 +79,12 @@ def plan(config, preflight, mode, screens=None):
     ok = [p for p in targets if plats.get(p, {}).get("ok")]
     unchecked = [{"what": "%s: all screens" % p, "why": "no ready device or build (see preflight)"}
                  for p in targets if p not in ok]
-    has_seed = bool((config.get("hooks") or {}).get("seed"))
+    hooks = config.get("hooks") or {}
+    mutating = bool(preflight.get("mutating_allowed"))
     cells = []
     for p in ok:
+        for bug in recheck:
+            cells.append(_cell(p, "recheck-" + bug, "default", "replay"))
         small = bool(plats[p].get("small_device"))
         for sid in chosen:
             s = by_id[sid]
@@ -86,17 +92,27 @@ def plan(config, preflight, mode, screens=None):
                 if state not in STATES:
                     raise FEError("screen %s: unknown state %s" % (sid, state))
                 if p not in STATE_PLATFORMS.get(state, BOTH):
+                    if state in NOT_AUTOMATED:
+                        unchecked.append({"what": "%s/%s/%s" % (p, sid, state), "why": "not automated on %s" % p})
                     continue
                 need = STATE_NEEDS.get(state)
-                if (need == "seed" and not has_seed) or (need == "small_device" and not small):
-                    unchecked.append({"what": "%s/%s/%s" % (p, sid, state),
-                                      "why": "needs %s" % ("hooks.seed" if need == "seed" else "a small device")})
+                why = None
+                if need == "seed" and not (hooks.get("seed") and mutating):
+                    why = "needs hooks.seed and a verified staging/local backend (seeding writes data)"
+                elif need == "hook" and not hooks.get(state):
+                    why = "needs hooks.%s (nothing can produce this state otherwise)" % state
+                elif need == "small_device" and not small:
+                    why = "needs a small device"
+                if why:
+                    unchecked.append({"what": "%s/%s/%s" % (p, sid, state), "why": why})
                     continue
                 cells.append(_cell(p, sid, state, "none"))
             for probe in s.get("probes", []):
                 if probe not in PROBES:
                     raise FEError("screen %s: unknown probe %s" % (sid, probe))
                 if probe == "none" or p not in PROBES[probe]["platforms"]:
+                    if probe in NOT_AUTOMATED:
+                        unchecked.append({"what": "%s/%s/%s" % (p, sid, probe), "why": "not automated on %s" % p})
                     continue
                 if PROBES[probe]["mutating"] and not preflight.get("mutating_allowed"):
                     unchecked.append({"what": "%s/%s/%s" % (p, sid, probe),
@@ -125,10 +141,35 @@ def _find(cov, cell_id):
     raise FEError("unknown cell: %s" % cell_id)
 
 
+def _evidence_problem(path):
+    """Why a pack cannot prove a done cell, or None. Journey packs hold step-N packs."""
+    if not os.path.isdir(path):
+        return "%s does not exist" % path
+    packs = [path] + [os.path.join(path, d) for d in sorted(os.listdir(path))
+                      if os.path.isfile(os.path.join(path, d, "meta.json"))]
+    for pack in packs:
+        meta = os.path.join(pack, "meta.json")
+        if os.path.exists(meta) and read_json(meta).get("blocked"):
+            return "%s is blocked: %s" % (pack, read_json(meta)["blocked"])
+        around = os.path.join(pack, "around.json")
+        if os.path.exists(around) and read_json(around).get("action_exit", 0) != 0:
+            return "the recorded action failed in %s (exit %s)" % (pack, read_json(around)["action_exit"])
+    if not any(os.path.exists(os.path.join(pk, f)) for pk in packs for f in ("meta.json", "around.json")):
+        return "%s has no capture (meta.json / around.json)" % path
+    return None
+
+
 def set_status(cov, cell_id, status, evidence=None, note=""):
     if status not in STATUSES:
         raise FEError("status must be one of %s" % ", ".join(STATUSES))
     c = _find(cov, cell_id)
+    if status == "done":
+        packs = list(evidence or c["evidence"])
+        problems = [pr for pr in (_evidence_problem(e) for e in packs) if pr] or \
+            ([] if packs else ["no evidence pack given"])
+        if problems:
+            raise FEError("cell %s cannot be done: %s. Retry, or mark it failed/blocked with --note"
+                          % (cell_id, "; ".join(problems)))
     c["status"] = status
     if evidence:
         c["evidence"] = list(evidence)
@@ -137,16 +178,35 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
     return c
 
 
-def next_cells(cov, platform=None, limit=10):
+def next_cells(cov, platform=None, limit=10, mutating_allowed=True):
+    """Todo cells; mutating ones are blocked when the current preflight no longer allows mutation (resume)."""
+    for c in cov["cells"]:
+        if c["status"] == "todo" and c.get("mutating") and not mutating_allowed:
+            c["status"], c["note"] = "blocked", "mutation not allowed by the current preflight"
     return [c for c in cov["cells"] if c["status"] == "todo" and (platform is None or c["platform"] == platform)][:limit]
 
 
-def verdict(cov, findings, language="en"):
+def pack_key(path):
+    """(platform, screen, pack) from any path form of <run>/<platform>/<screen>/<pack>[/...]."""
+    parts = os.path.normpath(path).split(os.sep)
+    for i in range(len(parts) - 3, -1, -1):
+        if parts[i] in PLATFORMS:
+            return tuple(parts[i:i + 3])
+    return None
+
+
+def verdict(cov, findings, language="en", reviewed=()):
+    """reviewed: pack paths some reviewer listed in reviewed_packs. A done cell none of whose packs was reviewed
+    is not checked; a finding still pending was never verified. Neither can end in CLEAN."""
     labels = LABELS.get(language, LABELS["en"])
     bugs = [f for f in findings if f.get("verdict") == "confirmed" and f.get("kind", "BUG") == "BUG"]
     high = [f for f in bugs if f.get("severity") == "high"]
     medium = [f for f in bugs if f.get("severity") == "medium"]
+    pending = [f for f in findings if f.get("verdict", "pending") == "pending"]
     open_cells = [c for c in cov["cells"] if c["status"] not in ("done", "na")]
+    seen = {pack_key(p) for p in reviewed}
+    unreviewed = [c for c in cov["cells"] if c["status"] == "done"
+                  and not any(pack_key(e) in seen for e in c["evidence"])]
     reasons = []
     if high:
         reasons.append("%d confirmed high: %s" % (len(high), "; ".join(f.get("title", "") for f in high[:5])))
@@ -154,9 +214,14 @@ def verdict(cov, findings, language="en"):
         reasons.append("%d confirmed medium" % len(medium))
     if open_cells:
         reasons.append("%d cells not done" % len(open_cells))
+    if unreviewed:
+        reasons.append("%d done cells whose evidence no reviewer looked at: %s"
+                       % (len(unreviewed), ", ".join(c["id"] for c in unreviewed[:5])))
+    if pending:
+        reasons.append("%d findings not verified" % len(pending))
     if cov.get("unchecked"):
         reasons.append("%d items not checked" % len(cov["unchecked"]))
-    complete = not open_cells and not cov.get("unchecked")
+    complete = not open_cells and not unreviewed and not pending and not cov.get("unchecked")
     if high:
         code = "BLOCK"
     elif medium:
@@ -251,11 +316,16 @@ def screens_from_diff(repo, base, config):
 
 
 def _load_findings(paths):
-    out = []
+    """All findings and all reviewed pack paths from findings.json files."""
+    findings, reviewed = [], []
     for p in paths:
-        data = read_json(p)
-        out += data.get("findings", []) if isinstance(data, dict) else data
-    return out
+        try:
+            data = read_json(p)
+        except (OSError, ValueError) as e:
+            raise FEError("cannot read findings file %s: %s" % (p, e))
+        findings += data.get("findings", []) if isinstance(data, dict) else data
+        reviewed += data.get("reviewed_packs", []) if isinstance(data, dict) else []
+    return findings, reviewed
 
 
 def main():
@@ -263,6 +333,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("plan"); p.add_argument("--config", required=True); p.add_argument("--preflight", required=True)
     p.add_argument("--mode", required=True, choices=["quick", "full"]); p.add_argument("--screens")
+    p.add_argument("--recheck", help="comma list of backlog ids to replay (quick BUG-N)")
     p.add_argument("--out", required=True)
     p = sub.add_parser("set"); p.add_argument("--cov", required=True); p.add_argument("--cell", required=True)
     p.add_argument("--status", required=True, choices=STATUSES); p.add_argument("--evidence", nargs="*")
@@ -278,7 +349,8 @@ def main():
     p.add_argument("--config", required=True)
     a = ap.parse_args()
     if a.cmd == "plan":
-        cov = plan(read_json(a.config), read_json(a.preflight), a.mode, a.screens.split(",") if a.screens else None)
+        cov = plan(read_json(a.config), read_json(a.preflight), a.mode, a.screens.split(",") if a.screens else None,
+                   a.recheck.split(",") if a.recheck else ())
         write_json(a.out, cov)
         print(json.dumps({"cells": len(cov["cells"]), "unchecked": len(cov["unchecked"]), "out": a.out}))
     elif a.cmd == "set":
@@ -287,9 +359,15 @@ def main():
         write_json(a.cov, cov)
         print(json.dumps({"cell": a.cell, "status": a.status}))
     elif a.cmd == "next":
-        print(json.dumps([c["id"] for c in next_cells(read_json(a.cov), a.platform, a.limit)], ensure_ascii=False))
+        cov = read_json(a.cov)
+        pf = os.path.join(os.path.dirname(os.path.abspath(a.cov)), "preflight.json")
+        allowed = os.path.exists(pf) and read_json(pf).get("mutating_allowed") is True
+        cells = next_cells(cov, a.platform, a.limit, allowed)
+        write_json(a.cov, cov)
+        print(json.dumps([c["id"] for c in cells], ensure_ascii=False))
     elif a.cmd == "verdict":
-        print(json.dumps(verdict(read_json(a.cov), _load_findings(a.findings), a.language), ensure_ascii=False))
+        findings, reviewed = _load_findings(a.findings)
+        print(json.dumps(verdict(read_json(a.cov), findings, a.language, reviewed), ensure_ascii=False))
     elif a.cmd == "map":
         print(coverage_map(read_json(a.cov), a.language))
     else:

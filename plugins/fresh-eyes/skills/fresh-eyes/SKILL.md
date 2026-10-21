@@ -74,14 +74,16 @@ words / nothing (= the current diff).
    "no Maestro iOS driver", call the Maestro MCP `inspect_screen` on that simulator once and run preflight
    again. If no platform is ready, stop: tell the user what is missing; the verdict is INCOMPLETE.
 4. Screens:
-   - `BUG-N`: read the entry in the backlog (heading + its fields). Ask the navigator to replay its steps into
-     `$RUN/<platform>/recheck-BUG-N/` (on the entry's platform, or both if none) and the reviewer to compare
-     with its "Expected" field. Then take screens from the fix: `git log --format=%H -1 --grep BUG-N`, and
-     `python3 $S/coverage.py diff-screens --repo . --base <that commit>^ --config .fresh-eyes/config.json`.
+   - `BUG-N`: read the entry in the backlog (heading + its fields); its replay becomes the coverage cell
+     `<platform>/recheck-BUG-N/default/replay` (step 5, `--recheck BUG-N`), reviewed against its "Expected"
+     field. Then take screens from the fix: `git log --format=%H -1 -E --grep 'BUG-N([^0-9]|$)'` (so BUG-1
+     does not match BUG-12), and `python3 $S/coverage.py diff-screens --repo . --base <that commit>^ --config
+     .fresh-eyes/config.json`. No such commit → no diff screens; say so.
    - screen ids: use them. Otherwise: `diff-screens --base <merge-base with the default branch>`; list
      `unmapped` files in the report as areas without a screen.
 5. `python3 $S/coverage.py plan --config .fresh-eyes/config.json --preflight $RUN/preflight.json --mode quick
-   --screens a,b --out $RUN/coverage.json`. Tell the user the cell count and the unchecked items in one line.
+   --screens a,b [--recheck BUG-N] --out $RUN/coverage.json`. Tell the user the cell count and the unchecked
+   items in one line.
 6. Smoke: navigator on the first cell of each ready platform. If it ends `blocked`, stop and report why.
 7. Navigation: one `fresh-eyes:navigator` per platform (they may run in parallel), ≤15 cells per call, until
    `coverage.py next` is empty. Prompt: run folder, config path, platform, device id and name from preflight,
@@ -89,11 +91,13 @@ words / nothing (= the current diff).
 8. Review: one `fresh-eyes:reviewer` per screen × platform with done cells (up to 4 in parallel). Prompt: the
    pack folders, `.fresh-eyes/spec.md` + the screen id and its `neighbors` ids (their rules often apply), `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the
    `references` from config. Journey cells get one reviewer per platform over `<run>/<platform>/journey/`;
-   its findings carry the real screen they concern.
+   its findings carry the real screen they concern. More than ~8 packs for one screen: split them between
+   reviewers, each writing its own `findings-<k>.json` in the screen folder.
 9. Verify: `fresh-eyes:verifier` with all `findings.json` paths. If it answers `needs: requests`, run the
    navigator in requests mode with `$RUN/requests.json`, then the verifier again (second pass).
-10. `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings.json> --language <config>`
-    and `python3 $S/coverage.py map --cov $RUN/coverage.json --language <config>`.
+10. `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`
+    and `python3 $S/coverage.py map --cov $RUN/coverage.json --language <config>`. If the verdict names done
+    cells no reviewer looked at, send those packs to a reviewer (`findings-<k>.json`), verify, and rerun it.
 11. Write `$RUN/report.md` by `$R/report-format.md` (see "Report").
 12. Review with the user, then write the backlog and regression flows (see "After the report").
 

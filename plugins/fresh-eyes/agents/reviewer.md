@@ -25,8 +25,10 @@ states, UX rubric, severity, do-not-flag) and, if motion evidence exists,
 ## Method
 
 1. For each pack, look first, read second: `som.png`, then `crops/*.png`, then `sheet_*.png`; then read
-   `candidates.json`, `meta.json`, `hierarchy.txt`, `motion.json`, `taps.json`. Keep within ~20 images in total:
-   crops of candidates and contact sheets before full screenshots.
+   `candidates.json`, `meta.json`, `hierarchy.txt`, `motion.json`, `taps.json`, `around.json`. The `som.png` of
+   every pack is mandatory; keep within ~30 images in total (crops and contact sheets before full screenshots).
+   If the budget runs out, stop: list only the packs you opened in `reviewed_packs` — the orchestrator sends the
+   rest to another reviewer. Never list a pack you did not look at.
 2. Decide every script candidate explicitly. A `partially_visible` item that a `swipe-inside` pack shows fully
    is fine; `clipped`, `under_keyboard` and `overlap` deserve a careful look at the crop. `keyboard_missing`:
    an input was focused but no keyboard is up; a real bug unless the crop shows a keyboard intro/onboarding.
@@ -53,8 +55,8 @@ do-not-flag section covers. Do not describe the screen; report problems.
 
 ## Output
 
-Write `<run>/<platform>/<screen>/findings.json` (schema in report-format.md, all `verdict: "pending"`,
-evidence paths relative to the run folder).
+Write `<run>/<platform>/<screen>/findings.json` — or the file name the orchestrator gives — (schema in
+report-format.md, all `verdict: "pending"`, evidence paths relative to the run folder, `reviewed_packs`).
 
 ## Reply (≤10 lines)
 

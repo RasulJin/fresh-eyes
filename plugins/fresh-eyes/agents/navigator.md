@@ -54,8 +54,12 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --out <run>/<platform>/<screen>/<state>-<probe>`
    (add `--keyboard` when an input is focused, `--before <pack>` for before/after probes like
    `swipe-inside` and `keyboard-open`; `--expect-differs <default pack>` for state cells like dark/font-xl —
-   exit code 4 means the state had not applied yet: wait 2 s and snap again). Exit code 3 means blocked (no hierarchy): retry once, then mark blocked.
+   exit code 4 means the state had not applied yet: wait 2 s and snap again, at most 3 times, then mark the
+   cell blocked with note "state did not apply"). Exit code 3 means blocked (no hierarchy): retry once, then mark blocked.
 5. **Record**: `python3 $S/coverage.py set --cov <run>/coverage.json --cell <id> --status done --evidence <pack>`.
+   It refuses a pack that is missing, blocked, or whose recorded action failed (`capture.py around` exit 2:
+   the wrapped command failed — e.g. the element was not found). Then retry the cell once, else
+   `--status failed|blocked --note "<why>"`. Never mark a cell done to move on.
 6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell.
 
 Journey cells (`<platform>/journey/<id>/journey`): follow the journey's `steps` from `config.json` end to end;

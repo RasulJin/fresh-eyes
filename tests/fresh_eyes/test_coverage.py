@@ -1,22 +1,36 @@
 import copy
 import os
+import shutil
 import subprocess
+import tempfile
 import unittest
 
 from tests.fresh_eyes.helpers import tmpdir
-from fe_common import FEError
+from fe_common import FEError, write_json
 from coverage import PROBES, STATES, coverage_map, next_cells, plan, screens_from_diff, set_status, verdict
 
 ONE_SCREEN = {"language": "ru", "app": {"expo_root": "apps/mobile"}, "hooks": {},
               "screens": [{"id": "profile-trips", "route": "app/(tabs)/profile.tsx", "states": ["default", "dark"],
                            "probes": ["rapid-tap", "edit-delete-restore"], "neighbors": []}]}
 BOTH_OK_MUT_OFF = {"platforms": {"android": {"ok": True}, "ios": {"ok": True}}, "mutating_allowed": False}
+BOTH_OK_MUT_ON = dict(BOTH_OK_MUT_OFF, mutating_allowed=True)
+MUT_SCREEN = copy.deepcopy(ONE_SCREEN)
+MUT_SCREEN["screens"][0]["probes"] = ["edit-delete-restore"]
 
 
-def done_all(cov):
+def make_pack(root, cell, **meta):
+    path = os.path.join(root, cell["platform"], cell["screen"], "%s-%s" % (cell["state"], cell["probe"]))
+    write_json(os.path.join(path, "meta.json"), dict({"platform": cell["platform"]}, **meta))
+    return path
+
+
+def done_all(cov, root):
+    """Mark every cell done with a real pack; returns the pack paths (what a reviewer would list)."""
+    packs = []
     for c in cov["cells"]:
-        set_status(cov, c["id"], "done")
-    return cov
+        packs.append(make_pack(root, c))
+        set_status(cov, c["id"], "done", evidence=[packs[-1]])
+    return packs
 
 
 def finding(sev, verdict_="confirmed", kind="BUG"):
@@ -111,10 +125,54 @@ class StatusTest(unittest.TestCase):
         with self.assertRaises(FEError):
             set_status(cov, cov["cells"][0]["id"], "finished")
 
+    def test_done_needs_a_real_unblocked_pack(self):
+        cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full")
+        cell = cov["cells"][0]
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        with self.assertRaises(FEError):
+            set_status(cov, cell["id"], "done")
+        with self.assertRaises(FEError):
+            set_status(cov, cell["id"], "done", evidence=[os.path.join(root, "missing")])
+        with self.assertRaises(FEError):
+            set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell, blocked="no hierarchy")])
+        failed = make_pack(root, dict(cell, probe="around"))
+        write_json(os.path.join(failed, "around.json"), {"action_exit": 2})
+        with self.assertRaises(FEError):
+            set_status(cov, cell["id"], "done", evidence=[failed])
+        self.assertEqual(cell["status"], "todo")
+        set_status(cov, cell["id"], "blocked", note="no hierarchy")  # other statuses need no evidence
+
+    def test_resume_blocks_mutating_cells_when_mutation_no_longer_allowed(self):
+        cov = plan(MUT_SCREEN, BOTH_OK_MUT_ON, "full")
+        ids = [c["id"] for c in next_cells(cov, limit=100, mutating_allowed=False)]
+        self.assertFalse(any("edit-delete-restore" in i for i in ids))
+        self.assertTrue(any(c["status"] == "blocked" and c["mutating"] for c in cov["cells"]))
+
+    def test_recheck_cells_and_ios_offline_gap(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["states"] = ["default", "offline", "loading"]
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "quick", recheck=["BUG-12"])
+        ids = [c["id"] for c in cov["cells"]]
+        self.assertIn("android/recheck-BUG-12/default/replay", ids)
+        self.assertIn("ios/recheck-BUG-12/default/replay", ids)
+        whats = " ".join(u["what"] + " " + u["why"] for u in cov["unchecked"])
+        self.assertIn("ios/profile-trips/offline", whats)
+        self.assertIn("hooks.loading", whats)
+
+    def test_seed_states_need_mutation_too(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["hooks"] = {"seed": "npm run seed"}
+        cfg["screens"][0]["states"] = ["empty"]
+        self.assertFalse(any(c["state"] == "empty" for c in plan(cfg, BOTH_OK_MUT_OFF, "full")["cells"]))
+        self.assertTrue(any(c["state"] == "empty" for c in plan(cfg, BOTH_OK_MUT_ON, "full")["cells"]))
+
     def test_next_cells_skips_done_for_resume(self):
         cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full")
         first = cov["cells"][0]["id"]
-        set_status(cov, first, "done", evidence=["p/screen.png"])
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        set_status(cov, first, "done", evidence=[make_pack(root, cov["cells"][0])])
         nxt = next_cells(cov, limit=2)
         self.assertEqual(len(nxt), 2)
         self.assertNotIn(first, [c["id"] for c in nxt])
@@ -125,18 +183,35 @@ class VerdictTest(unittest.TestCase):
     def setUp(self):
         self.cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full")
         self.cov["unchecked"] = []
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root)
 
     def test_verdict_clean_only_when_full(self):
-        done_all(self.cov)
-        self.assertEqual(verdict(self.cov, [], "ru")["code"], "CLEAN")
-        self.assertEqual(verdict(self.cov, [], "ru")["label"], "ЧИСТО")
+        packs = done_all(self.cov, self.root)
+        self.assertEqual(verdict(self.cov, [], "ru", packs)["code"], "CLEAN")
+        self.assertEqual(verdict(self.cov, [], "ru", packs)["label"], "ЧИСТО")
         set_status(self.cov, self.cov["cells"][0]["id"], "todo")
-        self.assertEqual(verdict(self.cov, [], "ru")["code"], "INCOMPLETE")
+        self.assertEqual(verdict(self.cov, [], "ru", packs)["code"], "INCOMPLETE")
+
+    def test_unreviewed_evidence_blocks_clean(self):
+        packs = done_all(self.cov, self.root)
+        self.assertEqual(verdict(self.cov, [], "en")["code"], "INCOMPLETE")  # no reviewer at all
+        v = verdict(self.cov, [], "en", packs[1:])
+        self.assertEqual(v["code"], "INCOMPLETE")
+        self.assertIn("no reviewer looked at", " ".join(v["reasons"]))
+        relative = [os.path.relpath(p) for p in packs]  # the reviewer may list paths in another form
+        self.assertEqual(verdict(self.cov, [], "en", relative)["code"], "CLEAN")
+
+    def test_pending_findings_block_clean(self):
+        packs = done_all(self.cov, self.root)
+        v = verdict(self.cov, [finding("high", "pending")], "en", packs)
+        self.assertEqual(v["code"], "INCOMPLETE")
+        self.assertIn("not verified", " ".join(v["reasons"]))
 
     def test_unchecked_items_block_clean(self):
-        done_all(self.cov)
+        packs = done_all(self.cov, self.root)
         self.cov["unchecked"] = [{"what": "ios", "why": "no device"}]
-        self.assertEqual(verdict(self.cov, [], "en")["code"], "INCOMPLETE")
+        self.assertEqual(verdict(self.cov, [], "en", packs)["code"], "INCOMPLETE")
 
     def test_verdict_high_blocks_even_incomplete(self):
         v = verdict(self.cov, [finding("high")], "ru")
@@ -144,16 +219,16 @@ class VerdictTest(unittest.TestCase):
         self.assertEqual(v["label"], "НЕ ВЫПУСКАТЬ")
 
     def test_medium_full_is_issues(self):
-        done_all(self.cov)
-        self.assertEqual(verdict(self.cov, [finding("medium")], "en")["code"], "ISSUES")
+        packs = done_all(self.cov, self.root)
+        self.assertEqual(verdict(self.cov, [finding("medium")], "en", packs)["code"], "ISSUES")
 
     def test_verdict_low_unsure_and_imp_ignored(self):
-        done_all(self.cov)
+        packs = done_all(self.cov, self.root)
         fs = [finding("low"), finding("high", "unsure"), finding("high", "rejected"), finding("high", kind="IMP")]
-        self.assertEqual(verdict(self.cov, fs, "en")["code"], "CLEAN")
+        self.assertEqual(verdict(self.cov, fs, "en", packs)["code"], "CLEAN")
 
     def test_map_has_symbols(self):
-        set_status(self.cov, self.cov["cells"][0]["id"], "done")
+        set_status(self.cov, self.cov["cells"][0]["id"], "done", evidence=[make_pack(self.root, self.cov["cells"][0])])
         set_status(self.cov, self.cov["cells"][1]["id"], "failed")
         m = coverage_map(self.cov, "en")
         self.assertIn("profile-trips", m)

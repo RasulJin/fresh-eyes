@@ -83,6 +83,11 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 - Android: `devices.set_network(dev, False)`, snap the screen, restore with `set_network(dev, True)`.
 - Note: after airplane mode an emulator can lose DNS until restarted; prefer wifi/data toggles.
 
+### replay
+- `quick BUG-N`: replay the backlog entry's steps into `<run>/<platform>/recheck-BUG-N/default-replay/`
+  (snap after each step as in a journey), so the reviewer can compare with its "Expected" field.
+- Steps that create or change data only when preflight allowed mutation; otherwise mark the cell blocked.
+
 ### edit-delete-restore
 - Mutating. Reveals: indicators that stay after editing (a "✓ selected" next to changed text), previews that
   differ from what is saved, restored items that stay grey or "not found".

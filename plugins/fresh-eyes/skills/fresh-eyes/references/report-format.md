@@ -8,13 +8,14 @@
   <platform>/<screen>/<state>-<probe>/      ← one evidence pack per cell
     screen.png screen_1000.png som.png som.json nodes.json hierarchy.txt candidates.json meta.json
     crops/*.png  [video.mp4 motion.json sheet_*.png around.json]  [taps.json]
-  <platform>/<screen>/findings.json         ← one per screen × platform (reviewer, then verifier)
+  <platform>/<screen>/findings.json         ← per screen × platform (reviewer, then verifier);
+                                              findings-2.json … when packs were split between reviewers
 ```
 
 ## `findings.json` (`<run>/<platform>/<screen>/findings.json`)
 
 ```json
-{"pack": "<path>", "findings": [{
+{"reviewed_packs": ["<pack path>", "…"], "findings": [{
   "id": "f1", "kind": "BUG|IMP", "severity": "high|medium|low", "confidence": 0.0,
   "title": "", "screen": "", "platform": "",
   "check": "<geometry check | motion flag | spec rule id | taste>",
@@ -24,6 +25,8 @@
  "questions": [{"text": "", "options": [""]}]}
 ```
 
+- `reviewed_packs`: every pack whose `som.png` the reviewer actually opened, and only those. A done cell whose
+  packs no reviewer listed keeps the verdict INCOMPLETE.
 - `rule: taste` (no spec rule behind it) caps `confidence` at 0.6.
 - The verifier sets `verdict` and `verify_note`; nothing reaches the backlog while `pending`.
 
@@ -36,7 +39,8 @@
 Computed only by `coverage.py verdict` (never by a model):
 - any confirmed BUG of severity high → `BLOCK` (НЕ ВЫПУСКАТЬ);
 - confirmed medium with full coverage → `ISSUES` (ЕСТЬ ПРОБЛЕМЫ);
-- any cell not done/na or any unchecked item → `INCOMPLETE` (НЕ ПРОВЕРЕНО ДО КОНЦА);
+- any cell not done/na, any unchecked item, any done cell whose packs no reviewer listed, any finding still
+  `pending` → `INCOMPLETE` (НЕ ПРОВЕРЕНО ДО КОНЦА);
 - otherwise `CLEAN` (ЧИСТО). IMP and unsure findings never change the verdict.
 
 ## `report.md` (project language)
@@ -58,6 +62,9 @@ Build: <branch/commit>, backend: <api host or "not verified">, devices: <names>
 
 ## Improvements
 1. **<title>** — <what to change and why>, reference: <app/pattern>
+
+## Not verified
+- <finding still pending, and why the verifier could not decide>
 
 ## Look with your own eyes (unsure)
 - <title> — <why unsure> — <crop path>

@@ -82,7 +82,7 @@ def load_run_findings(run, cases):
     """Map case id -> all findings of the case's platform in one run (match() filters by screen; journey
     findings carry the real screen they concern)."""
     by_platform = {}
-    for p in glob.glob(os.path.join(run, "*", "*", "findings.json")):
+    for p in glob.glob(os.path.join(run, "*", "*", "findings*.json")):
         by_platform.setdefault(p.split(os.sep)[-3], []).extend(read_json(p).get("findings", []))
     return {c["id"]: by_platform.get(c["platform"], []) for c in cases}
 
@@ -90,7 +90,7 @@ def load_run_findings(run, cases):
 def _verdict_counts(runs):
     confirmed = rejected = 0
     for run in runs:
-        for p in glob.glob(os.path.join(run, "*", "*", "findings.json")):
+        for p in glob.glob(os.path.join(run, "*", "*", "findings*.json")):
             for fd in read_json(p).get("findings", []):
                 confirmed += fd.get("verdict") == "confirmed"
                 rejected += fd.get("verdict") == "rejected"
