@@ -52,7 +52,8 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
    Wrap transitions and probes in `capture.py around ... -- <command>` so they are recorded.
 4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --out <run>/<platform>/<screen>/<state>-<probe>`
    (add `--keyboard` when an input is focused, `--before <pack>` for before/after probes like
-   `swipe-inside` and `keyboard-open`). Exit code 3 means blocked (no hierarchy): retry once, then mark blocked.
+   `swipe-inside` and `keyboard-open`; `--expect-differs <default pack>` for state cells like dark/font-xl —
+   exit code 4 means the state had not applied yet: wait 2 s and snap again). Exit code 3 means blocked (no hierarchy): retry once, then mark blocked.
    On iOS pass `--hierarchy-file`: save the `inspect_screen` result to a file in the pack first.
 5. **Record**: `python3 $S/coverage.py set --cov <run>/coverage.json --cell <id> --status done --evidence <pack>`.
 6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell.

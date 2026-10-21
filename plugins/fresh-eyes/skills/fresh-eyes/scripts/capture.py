@@ -2,7 +2,7 @@
 """Build the evidence pack for one coverage cell, so the navigator never has to look at pixels.
 
 snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json, som.png (+som.json),
-        crops/<check>-<k>.png (native resolution), meta.json. Exit 3 = blocked (no hierarchy).
+        crops/<check>-<k>.png (native resolution), meta.json. Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs.
 around: records the screen around an action command, then motion analysis: video.mp4, motion.json,
         sheet_*.png, around.json.
 
@@ -12,8 +12,10 @@ CLI:
   capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms 500] -- CMD ...
 """
 import argparse
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -67,13 +69,26 @@ def _marks(nodes, candidates):
     return items[:MAX_MARKS]
 
 
-def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, before=None, keyboard=False):
+def _same_file(a, b):
+    try:
+        with open(a, "rb") as fa, open(b, "rb") as fb:
+            return hashlib.md5(fa.read()).digest() == hashlib.md5(fb.read()).digest()
+    except OSError:
+        return False
+
+
+def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, before=None, keyboard=False,
+         expect_differs=None):
     dev = Device(platform, device_id, "")
     os.makedirs(out, exist_ok=True)
     shot = devices.screenshot(dev, os.path.join(out, "screen.png"))
     w, h = image_size(shot)
     meta = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "platform": platform, "device": device_id,
             "screen_wh": [w, h]}
+    if expect_differs and _same_file(shot, os.path.join(expect_differs, "screen.png")):
+        meta["blocked"] = "screen identical to %s: the state did not apply, wait and snap again" % expect_differs
+        write_json(os.path.join(out, "meta.json"), meta)
+        return 4
     try:
         nodes, source = _hierarchy(dev, hierarchy_file, hierarchy_source)
     except FEError as e:
@@ -96,6 +111,7 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
     downscale(full_som, os.path.join(out, "som.png"))
     os.remove(full_som)
     write_json(os.path.join(out, "som.json"), mapping)
+    shutil.rmtree(os.path.join(out, "crops"), ignore_errors=True)  # a re-snap must not keep crops of an old screen
     counters = {}
     for c in candidates[:MAX_CROPS]:
         counters[c["check"]] = counters.get(c["check"], 0) + 1
@@ -151,12 +167,14 @@ def main():
     s.add_argument("--hierarchy-file"); s.add_argument("--hierarchy-source", choices=["maestro", "uiautomator",
                                                                                      "maestro-cli"])
     s.add_argument("--before"); s.add_argument("--keyboard", action="store_true")
+    s.add_argument("--expect-differs", help="pack whose screen must differ (state cells: the default pack)")
     r = sub.choices["around"]
     r.add_argument("--settle", type=float, default=2.5); r.add_argument("--ceiling-ms", type=int,
                                                                         default=DEFAULT_CEILING_MS)
     a = ap.parse_args(argv)
     if a.cmd == "snap":
-        code = snap(a.platform, a.device, a.out, a.hierarchy_file, a.hierarchy_source, a.before, a.keyboard)
+        code = snap(a.platform, a.device, a.out, a.hierarchy_file, a.hierarchy_source, a.before, a.keyboard,
+                    a.expect_differs)
     else:
         if not action:
             raise FEError("around needs an action command after --")

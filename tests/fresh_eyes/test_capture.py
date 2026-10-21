@@ -125,3 +125,34 @@ class SnapCornerTest(unittest.TestCase):
             crops = sorted(os.listdir(os.path.join(pack, "crops")))
             self.assertIn("sharp_corners-1-tr.png", crops)
             self.assertIn("sharp_corners-1-br.png", crops)
+
+
+class ExpectDiffersTest(unittest.TestCase):
+    def test_identical_screen_to_reference_pack_is_rejected(self):
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as fh:
+            xml = fh.read()
+        with tmpdir() as d, mock.patch.object(devices, "screenshot", fake_screenshot), \
+                mock.patch.object(devices, "px_per_dp", lambda dv: 2.625), \
+                mock.patch.object(devices, "keyboard_top", lambda dv: None), \
+                mock.patch.object(capture, "_dump_uiautomator", lambda dev: xml), \
+                mock.patch.object(capture.time, "sleep", lambda s: None):
+            base = os.path.join(d, "default-none")
+            self.assertEqual(capture.snap("android", "emulator-5560", base), 0)
+            dark = os.path.join(d, "dark-none")
+            self.assertEqual(capture.snap("android", "emulator-5560", dark, expect_differs=base), 4)
+            self.assertIn("identical", read_json(os.path.join(dark, "meta.json"))["blocked"])
+
+
+class StaleCropsTest(unittest.TestCase):
+    def test_resnap_removes_old_crops(self):
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as fh:
+            xml = fh.read()
+        with tmpdir() as d, mock.patch.object(devices, "screenshot", fake_screenshot), \
+                mock.patch.object(devices, "px_per_dp", lambda dv: 2.625), \
+                mock.patch.object(devices, "keyboard_top", lambda dv: None), \
+                mock.patch.object(capture, "_dump_uiautomator", lambda dev: xml):
+            pack = os.path.join(d, "p")
+            os.makedirs(os.path.join(pack, "crops"))
+            open(os.path.join(pack, "crops", "truncation-7.png"), "w").close()
+            capture.snap("android", "emulator-5560", pack)
+            self.assertFalse(os.path.exists(os.path.join(pack, "crops", "truncation-7.png")))
