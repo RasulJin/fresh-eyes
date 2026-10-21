@@ -5,7 +5,7 @@ from tests.fresh_eyes.helpers import tmpdir
 from bench import false_positives, load_run_findings, match, score, summary
 from fe_common import write_json
 
-CASE = {"id": "KDD-357", "screen": "side-menu", "platform": "android", "ref": "main", "kind": "bug", "pair": None,
+CASE = {"id": "BUG-357", "screen": "side-menu", "platform": "android", "ref": "main", "kind": "bug", "pair": None,
         "group": "live", "expect": {"checks": ["truncation"], "keywords": ["обрез", "сс…"], "bbox": None}}
 
 
@@ -40,11 +40,11 @@ class MatchTest(unittest.TestCase):
 class ScoreTest(unittest.TestCase):
     def test_two_of_three_rule(self):
         hit, miss = [f(check="truncation")], []
-        self.assertTrue(score([CASE], [{"KDD-357": hit}, {"KDD-357": hit}, {"KDD-357": miss}])["KDD-357"]["caught"])
-        self.assertFalse(score([CASE], [{"KDD-357": hit}, {"KDD-357": miss}, {"KDD-357": miss}])["KDD-357"]["caught"])
+        self.assertTrue(score([CASE], [{"BUG-357": hit}, {"BUG-357": hit}, {"BUG-357": miss}])["BUG-357"]["caught"])
+        self.assertFalse(score([CASE], [{"BUG-357": hit}, {"BUG-357": miss}, {"BUG-357": miss}])["BUG-357"]["caught"])
 
     def test_single_attempt_needs_one_hit(self):
-        self.assertTrue(score([CASE], [{"KDD-357": [f(check="truncation")]}])["KDD-357"]["caught"])
+        self.assertTrue(score([CASE], [{"BUG-357": [f(check="truncation")]}])["BUG-357"]["caught"])
 
     def test_control_fp(self):
         control = dict(CASE, id="CTRL-1", kind="control")
@@ -52,13 +52,13 @@ class ScoreTest(unittest.TestCase):
         self.assertEqual(fp["control"], 1)
 
     def test_pair_fp(self):
-        fp = false_positives([CASE], fix_runs={"KDD-357": [f(check="truncation")]}, control_runs={})
+        fp = false_positives([CASE], fix_runs={"BUG-357": [f(check="truncation")]}, control_runs={})
         self.assertEqual(fp["pairs"], 1)
 
     def test_summary_counts(self):
         cases = [CASE, dict(CASE, id="OCT-1", group="october", expect=dict(CASE["expect"], checks=["clipped"],
                                                                            keywords=["zzz"]))]
-        scores = score(cases, [{"KDD-357": [f(check="truncation")], "OCT-1": []}])
+        scores = score(cases, [{"BUG-357": [f(check="truncation")], "OCT-1": []}])
         s = summary(cases, scores, {"pairs": 0, "control": 0}, confirmed=4, rejected=1)
         self.assertEqual(s["live"], "1/1")
         self.assertEqual(s["october"], "0/1")
@@ -72,7 +72,7 @@ class RunLoadTest(unittest.TestCase):
                        {"findings": [f(check="truncation", screen="side-menu")]})
             write_json(os.path.join(d, "android", "feed", "findings.json"), {"findings": [f(screen="feed")]})
             got = load_run_findings(d, [CASE])
-        self.assertTrue(match(CASE, got["KDD-357"]))
+        self.assertTrue(match(CASE, got["BUG-357"]))
 
     def test_also_screens(self):
         case = dict(CASE, screen="post-detail", also_screens=["thread"])

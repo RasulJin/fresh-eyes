@@ -13,7 +13,7 @@ Machine: macOS, Xcode 26.2 (17C52), iOS runtime `com.apple.CoreSimulator.SimRunt
 - Defaults on a fresh AVD: `settings get secure show_ime_with_hard_keyboard` → `0`; `settings get global window_animation_scale` → `1.0`. With `hw.keyboard=no` the soft keyboard shows anyway, but preflight still sets the flag to `1`.
 
 ## Q6 — Maestro CLI vs MCP
-- The CLI binary is `/Users/rasul/.maestro-install/maestro/bin/maestro`. The MCP is configured in `~/.claude.json` → `projects[<path>].mcpServers.maestro` as `{command: <that binary>, args: ["mcp"]}`.
+- The CLI binary is `~/.maestro-install/maestro/bin/maestro`. The MCP is configured in `~/.claude.json` → `projects[<path>].mcpServers.maestro` as `{command: <that binary>, args: ["mcp"]}`.
 - `maestro --device <id> hierarchy` works but takes about **35 s** (JVM start plus driver install) and prints JSON in the form `{attributes:{text, accessibilityText, hintText, resource-id, bounds:"[x1,y1][x2,y2]", clickable:"false", …}, children:[…]}`. Fixture: `settings_maestro_cli.json`.
 - **Critical:** running the CLI on a device the MCP is using **kills the MCP session for that device**. When the CLI exits it uninstalls the Maestro driver, and from then on every MCP call returns `DeviceServerDiedException … UNAVAILABLE` and does not recover. The only fix found is a new device serial (restart the emulator on another port) or a restart of the MCP server. **Rule: never call the Maestro CLI while the MCP drives that device.** The scripts do not use the Maestro CLI on Android.
 

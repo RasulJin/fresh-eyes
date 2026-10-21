@@ -58,7 +58,7 @@ class DevicesTest(unittest.TestCase):
     def test_clear_app_refuses_foreign_device(self):
         fake = self.patch({})
         with self.assertRaises(FEError):
-            devices.clear_app(Device("android", "emulator-5554", "Pixel_8"), "com.voiova.app")
+            devices.clear_app(Device("android", "emulator-5554", "Pixel_8"), "com.example.app")
         self.assertEqual(fake.calls, [])
 
     def test_settings_refuse_foreign_device(self):
@@ -120,9 +120,9 @@ class DevicesTest(unittest.TestCase):
         self.assertEqual(devices.keyboard_top(Device("android", "emulator-5560", "x")), 1517)
 
     def test_launch_resolves_launcher_activity(self):
-        fake = self.patch({"resolve-activity": "priority=0 preferredOrder=0\ncom.voiova.app/.MainActivity\n"})
-        devices.launch(Device("android", "emulator-5560", "fresh-eyes-pixel"), "com.voiova.app")
-        self.assertIn("am start -n com.voiova.app/.MainActivity", " | ".join(c[-1] for c in fake.calls))
+        fake = self.patch({"resolve-activity": "priority=0 preferredOrder=0\ncom.example.app/.MainActivity\n"})
+        devices.launch(Device("android", "emulator-5560", "fresh-eyes-pixel"), "com.example.app")
+        self.assertIn("am start -n com.example.app/.MainActivity", " | ".join(c[-1] for c in fake.calls))
 
     def test_disable_stylus_handwriting(self):
         fake = self.patch({})
