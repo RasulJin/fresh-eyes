@@ -4,12 +4,13 @@
 
 ```
 .fresh-eyes/runs/<YYYYMMDD-HHMM>-<mode>/
-  preflight.json  coverage.json  report.md  requests.json (optional)
+  preflight.json  coverage.json  report.md
   <platform>/<screen>/<state>-<probe>/      ← one evidence pack per cell
     screen.png screen_1000.png som.png som.json nodes.json hierarchy.txt candidates.json meta.json
     crops/*.png  [video.mp4 motion.json sheet_*.png around.json]  [taps.json]
   <platform>/<screen>/findings.json         ← per screen × platform (reviewer, then verifier);
                                               findings-2.json … when packs were split between reviewers
+  <platform>/<screen>/requests.json         ← optional: the verifier asks the navigator for fresh evidence
 ```
 
 ## `findings.json` (`<run>/<platform>/<screen>/findings.json`)
@@ -30,9 +31,10 @@
 - `rule: taste` (no spec rule behind it) caps `confidence` at 0.6.
 - The verifier sets `verdict` and `verify_note`; nothing reaches the backlog while `pending`.
 
-## `requests.json` (verifier → navigator)
+## `requests.json` (verifier → navigator, in the screen folder)
 
-`[{"finding": "f1", "pack": "<path>", "do": "resnap|repeat-probe|crop", "probe": "<id>", "bbox": [..]}]`
+`[{"finding": "f1", "pack": "<path>", "do": "resnap|repeat-probe|crop", "probe": "<id>", "bbox": [..]}]`; the
+navigator adds `"done": "<path>"` or `"failed": "<why>"` to each entry.
 
 ## Verdict
 

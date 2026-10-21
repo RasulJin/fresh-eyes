@@ -31,7 +31,9 @@ the heavy work runs in subagents that exchange files with you.
 - Project files live in `.fresh-eyes/` at the repo root: `config.json`, `spec.md`, `known.md`, `examples/`
   (committed) and `runs/`, `cache/` (git-ignored).
 - Agents: `fresh-eyes:navigator`, `fresh-eyes:reviewer`, `fresh-eyes:verifier`. Call them by these full names
-  with the Agent tool and never pass `model` (it would override the agent's own model).
+  with the Agent tool and never pass `model` (it would override the agent's own model). Never stand in a
+  general-purpose agent with their text: it starts with every MCP tool name and skill of the session (~78k
+  tokens instead of ~7k) and repeats that on every turn. No such agents → the plugin is not loaded; stop.
 - Parse `$ARGUMENTS`: first word = subcommand (`init`, `quick`, `full`, `bench`); default `quick`.
 
 ## init
@@ -79,13 +81,19 @@ words / nothing (= the current diff).
      field. Then take screens from the fix: `git log --format=%H -1 -E --grep 'BUG-N([^0-9]|$)'` (so BUG-1
      does not match BUG-12), and `python3 $S/coverage.py diff-screens --repo . --base <that commit>^ --config
      .fresh-eyes/config.json`. No such commit → no diff screens; say so.
-   - screen ids: use them. Otherwise: `diff-screens --base <merge-base with the default branch>`; list
-     `unmapped` files in the report as areas without a screen.
+   - screen ids: use them. Otherwise: `diff-screens --base <merge-base with the default branch>` (most-hit
+     screens first); list `unmapped` files in the report as areas without a screen.
+   - Quick checks at most 4 screens and no neighbors; the plan lists the rest as not checked, so such a run
+     ends INCOMPLETE, never CLEAN. Pass `--max-screens <n>` only when the user named more screens themselves.
+   - No screens and no `BUG-N` (only unmapped files changed): do not plan. List the unmapped files and ask the
+     user for screen ids or suggest `full`.
 5. `python3 $S/coverage.py plan --config .fresh-eyes/config.json --preflight $RUN/preflight.json --mode quick
-   --screens a,b [--recheck BUG-N] --out $RUN/coverage.json`. Tell the user the cell count and the unchecked
+   --screens a,b [--recheck BUG-N] [--max-screens N] --out $RUN/coverage.json`. Tell the user the cell count and the unchecked
    items in one line. If the plan has seeded states, run `hooks.seed` now (the plan only has them when
    preflight allowed mutation) and `hooks.cleanup` after the run.
 6. Smoke: navigator on the first cell of each ready platform. If it ends `blocked`, stop and report why.
+   Any navigator reply `needs: ios-driver` (here, in step 7 or in requests mode): call the Maestro MCP
+   `inspect_screen` on that simulator once, then call the navigator again with what it had left.
 7. Navigation: one `fresh-eyes:navigator` per platform (they may run in parallel), ≤15 cells per call, until
    `coverage.py next` is empty. Prompt: run folder, config path, platform, device id and name from preflight,
    the cell ids.
@@ -94,8 +102,10 @@ words / nothing (= the current diff).
    `references` from config. Journey cells get one reviewer per platform over `<run>/<platform>/journey/`;
    its findings carry the real screen they concern. More than ~8 packs for one screen: split them between
    reviewers, each writing its own `findings-<k>.json` in the screen folder.
-9. Verify: `fresh-eyes:verifier` with all `findings.json` paths. If it answers `needs: requests`, run the
-   navigator in requests mode with `$RUN/requests.json`, then the verifier again (second pass).
+9. Verify: one `fresh-eyes:verifier` per screen folder that has pending findings (up to 4 in parallel); the
+   prompt is `first pass`, that folder, `.fresh-eyes/spec.md`, `.fresh-eyes/known.md`. Folders whose verifier
+   answered `needs: requests`: one navigator per platform in requests mode with their `requests.json` paths;
+   when every entry has `done` or `failed`, a fresh verifier per such folder with `second pass`.
 10. `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`
     and `python3 $S/coverage.py map --cov $RUN/coverage.json --language <config>`. If the verdict names done
     cells no reviewer looked at, send those packs to a reviewer (`findings-<k>.json`), verify, and rerun it.

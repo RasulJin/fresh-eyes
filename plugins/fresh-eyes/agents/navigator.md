@@ -2,7 +2,7 @@
 name: navigator
 description: Internal step of /fresh-eyes; use only when that skill delegates. Drives an owned simulator/emulator to coverage cells and saves evidence.
 model: sonnet
-disallowedTools: Edit, NotebookEdit, Agent, WebFetch, WebSearch
+tools: Bash, Read, Glob, Grep, Write
 omitClaudeMd: true
 maxTurns: 200
 ---
@@ -19,7 +19,7 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 
 - `run`: the run folder (has `coverage.json`, `preflight.json`), `config`: `.fresh-eyes/config.json`.
 - `platform`, `device` (id) and `name` (from `preflight.json` → `platforms.<p>`), the list of cell ids,
-  or `requests`: a `requests.json` to fulfil for the verifier.
+  or `requests`: one or more `requests.json` files (one per screen folder) to fulfil for the verifier.
 
 ## Hard rules
 
@@ -27,12 +27,12 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 - **Navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`, `swipe`,
   `back`, `wait`; add `--platform ios` on iOS). It prints the screen as compact text after each action; when
   a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
-- Android: never use the Maestro MCP (its driver holds UiAutomation, which kills `uiautomator dump` and with it
-  every capture). Non-ASCII typing: a Maestro **CLI** flow with `inputText`, always with `--device <your device id>` (slow,
-  ~35 s; no MCP runs there).
-- iOS: `nav.py` talks to the Maestro driver that one MCP `inspect_screen` starts. If `nav.py` says "no Maestro
-  iOS driver", call MCP `inspect_screen` once on that device and retry. Use the MCP for nothing else (except
-  `setOrientation`); never call the Maestro CLI there, and never MCP `take_screenshot` (an image in your context).
+- Android non-ASCII typing: a Maestro **CLI** flow with `inputText`, always with `--device <your device id>`
+  (slow, ~35 s).
+- iOS: `nav.py` talks to the Maestro driver the orchestrator started. If `nav.py` says "no Maestro iOS driver",
+  stop and reply `needs: ios-driver` with the cells or requests left (the orchestrator restarts it and calls
+  you again).
+  Never call the Maestro CLI there.
 - Only run cells listed in `coverage.json`. A cell with `"mutating": true` may create/edit/delete test data;
   clean up what you created before you finish. Never touch data that is not clearly test data.
 - Skip anything destructive outside the plan (log out, delete account, pay, send to real people).
@@ -72,9 +72,10 @@ For `tap-everything`, write `<pack>/taps.json`: `[{"som": n, "label": "...", "re
 
 ## Requests mode (for the verifier)
 
-For each entry in `requests.json`: `resnap` → new `snap` into `<pack>-recheck`; `repeat-probe` → run the probe
+For each entry in each `requests.json` that has no `done` yet: `resnap` → new `snap` into `<pack>-recheck`; `repeat-probe` → run the probe
 again into `<pack>-recheck`; `crop` → `python3 $S/pixels.py crop <pack>/screen.png <pack>/crops/req-<finding>.png
---bbox x,y,w,h --zoom 2`. Add `"done": "<path>"` to each entry and save the file.
+--bbox x,y,w,h --zoom 2`. Add `"done": "<path>"` to each entry you fulfilled and save the file. An entry you cannot fulfil gets
+`"failed": "<why>"` instead.
 
 ## Reply (≤10 lines)
 

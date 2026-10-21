@@ -77,8 +77,7 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 
 ### rotate
 - Reveals: layouts that break or lose state on rotation (only if the app supports landscape).
-- Android: `devices.py set --what landscape`, back with `--what portrait`.
-- iOS: a Maestro MCP `run` with `setOrientation` (the only MCP use besides starting the driver).
+- `devices.py set --what landscape`, back with `--what portrait` (iOS goes through the Maestro driver).
 
 ### offline
 - Reveals: offline shown as "empty"/"not found", zero counters, lying banners.

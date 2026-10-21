@@ -51,7 +51,7 @@ touched.
 
 ```
 /fresh-eyes init                 # once per project: config, spec, devices; you confirm the spec
-/fresh-eyes quick                # screens your branch changed (diff against the default branch)
+/fresh-eyes quick                # up to 4 screens your branch changed most (diff against the default branch)
 /fresh-eyes quick BUG-12         # recheck one backlog bug: verified or reopened
 /fresh-eyes quick feed,profile   # chosen screens
 /fresh-eyes full                 # every screen, state and probe, before a release (resumable)
@@ -68,6 +68,14 @@ The skill is invoked only by you (`disable-model-invocation`), so it adds about 
 you call it. During a run the orchestrator keeps screenshots and videos out of the main conversation;
 subagents exchange files and reply in at most ten lines. Screens reach the navigator as compact text
 (~1.5k characters), not as hierarchy JSON or images.
+
+- Each agent has a tool allowlist, so it starts at about 7k tokens. A general-purpose agent in a session with
+  many connectors and plugins starts at 30–80k and re-reads that on every turn.
+- `quick` checks at most 4 screens and skips neighbors unless you name them. The report lists what it skipped,
+  and a run that skipped something ends INCOMPLETE, never CLEAN.
+- Each screen gets its own verifier, which only sees that screen's findings.
+- Run fresh-eyes in a new session, or right after `/compact`: every orchestrator step re-reads the whole
+  conversation.
 
 ## Benchmark
 

@@ -13,15 +13,19 @@ a zoomed crop or a repeated probe, you ask for it in `requests.json` and the nav
 Read once: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/checklist.md` (severity, do-not-flag) and
 `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/report-format.md` (schemas).
 
+Every turn re-reads your whole context, so open files in batches: one message with all the reads you need
+(a pack's images and JSON together), not one file per turn.
+
 ## Input (from the orchestrator)
 
-- One or more `findings.json` paths, their packs, `.fresh-eyes/spec.md`, `known.md`.
-- On the second pass: the same plus `<pack>-recheck` folders and `requests.json` entries marked `done`.
+- One screen folder `<run>/<platform>/<screen>/` (its `findings*.json`), `.fresh-eyes/spec.md`, `known.md`.
+- The prompt says `first pass` or `second pass`. On the second pass the folder's `requests.json` entries are
+  marked `done` (or `failed`) and point to `<pack>-recheck` folders. Only look at the findings still pending.
 
 ## First pass
 
 For each finding with `verdict: "pending"`:
-1. Open its evidence crop(s) at native resolution and the matching part of `som.png`; read the spec rule.
+1. Open its evidence crop(s); open the pack's `som.png` only when the crop lacks context. Read the spec rule.
 2. Try to disprove it:
    - the "truncated" text is actually complete in the crop; the "clipped" row scrolls fully into view in a
      `swipe-inside` pack; the "overlap" is an intended badge; the "flash" is a deliberate crossfade;
@@ -31,14 +35,15 @@ For each finding with `verdict: "pending"`:
    `rejected`: when the evidence shows the issue, it is `unsure` with a note that the owner decides.
 3. If the evidence decides it → set `verdict` to `confirmed` or `rejected` with a one-line `verify_note`.
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
-   append to `<run>/requests.json`: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
+   append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
    "probe": "<probe id>", "bbox": [x, y, w, h]}` and leave it pending.
 
-Write the updated `findings.json` back in place.
+Write each updated findings file back in place.
 
 ## Second pass
 
-Use the `-recheck` evidence. Rule on every remaining pending finding: `confirmed` (reproduced, evidence
+Use the `-recheck` evidence. A finding whose request has neither `done` nor `failed` stays `pending` (the
+evidence never came; the verdict then stays INCOMPLETE). Rule on every other pending finding: `confirmed` (reproduced, evidence
 attached), `rejected` (disproved, say how), or `unsure` (evidence still ambiguous: say what a human should look
 at). Adjust `severity` if the evidence shows a different impact, and say so in `verify_note`.
 

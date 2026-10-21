@@ -293,8 +293,8 @@ def ios_driver(dev):
             cmd = fe_common.run(["ps", "-p", pid, "-o", "command="], check=False).stdout.decode("utf-8", "replace")
             if dev.id in cmd:
                 return "http://127.0.0.1:%s" % line.rsplit(":", 1)[1]
-    raise FEError("no Maestro iOS driver for %s: call the Maestro MCP inspect_screen on it once (that starts "
-                  "the driver), then retry" % (dev.name or dev.id))
+    raise FEError("no Maestro iOS driver for %s: one Maestro MCP inspect_screen on it starts the driver (the "
+                  "orchestrator does this; a navigator replies needs: ios-driver)" % (dev.name or dev.id))
 
 
 def ios_call(dev, route, body=None, timeout=20, base=None):
@@ -559,16 +559,23 @@ def screen_size(dev):
 def _android_only(what, command):
     def apply(dev):
         if dev.platform != "android":
-            raise FEError("%s is Android only here (iOS: a Maestro MCP setOrientation)" % what)
+            raise FEError("%s is Android only here" % what)
         _shell(dev, command)
     return apply
 
 
+def set_orientation(dev, landscape):
+    if dev.platform == "ios":  # the Maestro driver route behind its setOrientation command
+        ios_call(dev, "setOrientation", {"orientation": "landscapeLeft" if landscape else "portrait"})
+    elif landscape:
+        _shell(dev, "settings put system accelerometer_rotation 0; settings put system user_rotation 1")
+    else:
+        _shell(dev, "settings put system user_rotation 0")
+
+
 SETTINGS = {
     "dark": lambda d: set_dark(d, True), "light": lambda d: set_dark(d, False),
-    "landscape": _android_only("landscape", "settings put system accelerometer_rotation 0; "
-                                            "settings put system user_rotation 1"),
-    "portrait": _android_only("portrait", "settings put system user_rotation 0"),
+    "landscape": lambda d: set_orientation(d, True), "portrait": lambda d: set_orientation(d, False),
     "slow-animations": _android_only("slow-animations", "settings put global animator_duration_scale 5"),
     "font-xl": lambda d: set_font_scale(d, "xl"), "font-default": lambda d: set_font_scale(d, "default"),
     "offline": lambda d: set_network(d, False), "online": lambda d: set_network(d, True),

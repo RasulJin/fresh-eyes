@@ -101,13 +101,26 @@ class PlanTest(unittest.TestCase):
         self.assertIn("empty", whats)
         self.assertIn("small-screen", whats)
 
-    def test_quick_includes_neighbors(self):
+    def test_quick_lists_neighbors_and_extra_screens_as_unchecked(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0]["neighbors"] = ["profile-posts"]
-        cfg["screens"].append({"id": "profile-posts", "route": "x", "states": ["default"], "probes": []})
-        cfg["screens"].append({"id": "feed", "route": "y", "states": ["default"], "probes": []})
-        screens = {c["screen"] for c in plan(cfg, BOTH_OK_MUT_OFF, "quick", ["profile-trips"])["cells"]}
-        self.assertEqual(screens, {"profile-trips", "profile-posts"})
+        for sid in ["profile-posts", "feed", "a", "b", "c"]:
+            cfg["screens"].append({"id": sid, "route": sid, "states": ["default"], "probes": []})
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "quick", ["profile-trips"])
+        self.assertEqual({c["screen"] for c in cov["cells"]}, {"profile-trips"})
+        self.assertIn("profile-posts: all states", [u["what"] for u in cov["unchecked"]])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "quick", ["profile-trips", "profile-posts"])
+        self.assertEqual({c["screen"] for c in cov["cells"]}, {"profile-trips", "profile-posts"})
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "quick", ["feed", "a", "b", "c", "profile-trips"])
+        self.assertNotIn("profile-trips", {c["screen"] for c in cov["cells"]})
+        self.assertIn("over the quick limit", " ".join(u["why"] for u in cov["unchecked"]))
+        self.assertEqual(len({c["screen"] for c in plan(cfg, BOTH_OK_MUT_OFF, "quick", ["feed", "a", "b", "c",
+                              "profile-trips"], max_screens=5)["cells"]}), 5)
+
+    def test_quick_without_screens_plans_only_rechecks(self):
+        cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "quick", recheck=["BUG-3"])
+        self.assertEqual({c["screen"] for c in cov["cells"]}, {"recheck-BUG-3"})
+        self.assertEqual(plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "quick")["cells"], [])
 
     def test_unknown_screen_raises(self):
         with self.assertRaises(FEError):
@@ -152,7 +165,7 @@ class StatusTest(unittest.TestCase):
     def test_recheck_cells_and_ios_offline_gap(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0]["states"] = ["default", "offline", "loading"]
-        cov = plan(cfg, BOTH_OK_MUT_OFF, "quick", recheck=["BUG-12"])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "quick", ["profile-trips"], recheck=["BUG-12"])
         ids = [c["id"] for c in cov["cells"]]
         self.assertIn("android/recheck-BUG-12/default/replay", ids)
         self.assertIn("ios/recheck-BUG-12/default/replay", ids)
@@ -301,6 +314,30 @@ class DiffScreensTest(unittest.TestCase):
             out = screens_from_diff(repo, "HEAD", ONE_SCREEN)
             self.assertEqual(out["screens"], ["profile-trips"])
             self.assertEqual(out["unmapped"], ["apps/mobile/components/Unused.tsx"])
+
+    def test_a_screens_own_file_outranks_shared_components(self):
+        with tmpdir() as repo:
+            self._git(repo, "init", "-q")
+            ids = ["a", "b", "c", "d", "e"]
+            for sid in ids:
+                self._write(repo, "app/%s.tsx" % sid, "import A from '../components/A';\nimport B from '../components/B';\n")
+            self._write(repo, "app/settings.tsx", "export default 1;\n")
+            for name in ("A", "B"):
+                self._write(repo, "components/%s.tsx" % name, "export default 1;\n")
+            self._git(repo, "add", "-A")
+            self._git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base")
+            for rel in ("components/A.tsx", "components/B.tsx", "app/settings.tsx"):
+                self._write(repo, rel, "export default 2;\n")
+            cfg = {"app": {"expo_root": "."},
+                   "screens": [{"id": sid, "route": "app/%s.tsx" % sid} for sid in ids + ["settings"]]}
+            self.assertEqual(screens_from_diff(repo, "HEAD", cfg)["screens"][0], "settings")
+
+    def test_plan_dedupes_and_checks_the_limit(self):
+        cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full", ["profile-trips", "profile-trips"], recheck=["BUG-1", "BUG-1"])
+        ids = [c["id"] for c in cov["cells"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        with self.assertRaises(FEError):
+            plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "quick", ["profile-trips"], max_screens=0)
 
     def test_bad_base_is_an_error_not_an_empty_diff(self):
         with tmpdir() as repo:

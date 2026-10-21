@@ -5,7 +5,8 @@ The verdict is computed here, never by a model. Mutating probes only enter the p
 confirmed a staging/local backend.
 
 CLI:
-  coverage.py plan --config C --preflight P --mode quick|full [--screens a,b] [--recheck BUG-1,BUG-2] --out cov.json
+  coverage.py plan --config C --preflight P --mode quick|full [--screens a,b] [--recheck BUG-1,BUG-2]
+                   [--max-screens 4] --out cov.json
   coverage.py set --cov cov.json --cell ID --status todo|done|failed|blocked|na [--evidence P ...] [--note T]
   coverage.py next --cov cov.json [--platform android|ios] [--limit 10]
   coverage.py verdict --cov cov.json --findings F [F ...] [--language ru|en]
@@ -17,7 +18,7 @@ import json
 import os
 import re
 import time
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 
 from fe_common import FEError, cli, locked, read_json, run, write_json
 
@@ -62,23 +63,33 @@ def _cell(platform, screen, state, probe):
             "evidence": [], "note": ""}
 
 
-def plan(config, preflight, mode, screens=None, recheck=()):
+QUICK_MAX_SCREENS = 4
+
+
+def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MAX_SCREENS):
     by_id = {s["id"]: s for s in config.get("screens", [])}
-    if screens:
-        missing = [s for s in screens if s not in by_id]
-        if missing:
-            raise FEError("unknown screens: %s (known: %s)" % (", ".join(missing), ", ".join(sorted(by_id))))
-        chosen = list(screens)
-        if mode == "quick":
-            for s in screens:
-                chosen += [n for n in by_id[s].get("neighbors", []) if n in by_id and n not in chosen]
-    else:
-        chosen = list(by_id)
+    missing = [s for s in screens or () if s not in by_id]
+    if missing:
+        raise FEError("unknown screens: %s (known: %s)" % (", ".join(missing), ", ".join(sorted(by_id))))
+    if max_screens < 1:
+        raise FEError("--max-screens must be at least 1")
+    recheck = list(dict.fromkeys(recheck))  # a twin cell would stay todo forever: set updates the first id only
+    unchecked = []
+    if mode == "full":
+        chosen = list(dict.fromkeys(screens or by_id))
+    else:  # quick stays small: named screens only (none = only the recheck cells), neighbors when named
+        chosen = list(dict.fromkeys(screens or ()))
+        unchecked += [{"what": "%s: all states" % s, "why": "over the quick limit of %d screens" % max_screens}
+                      for s in chosen[max_screens:]]
+        chosen = chosen[:max_screens]
+        near = [n for s in chosen for n in by_id[s].get("neighbors", []) if n in by_id and n not in screens]
+        unchecked += [{"what": "%s: all states" % n, "why": "neighbor of a checked screen; quick checks it when named"}
+                      for n in dict.fromkeys(near)]
     plats = preflight.get("platforms", {})
     targets = config.get("platforms", PLATFORMS)
     ok = [p for p in targets if plats.get(p, {}).get("ok")]
-    unchecked = [{"what": "%s: all screens" % p, "why": "no ready device or build (see preflight)"}
-                 for p in targets if p not in ok]
+    unchecked += [{"what": "%s: all screens" % p, "why": "no ready device or build (see preflight)"}
+                  for p in targets if p not in ok]
     hooks = config.get("hooks") or {}
     mutating = bool(preflight.get("mutating_allowed"))
     cells = []
@@ -302,7 +313,7 @@ def screens_from_diff(repo, base, config):
                 else:
                     continue
                 importers[_strip_ext(target)].add(rel)
-    screens, unmapped, root = set(), [], os.path.normpath(expo_root)
+    hits, unmapped, root = Counter(), [], os.path.normpath(expo_root)
     for f in sorted(changed):
         if not f.endswith(CODE_EXT):
             continue
@@ -317,11 +328,12 @@ def screens_from_diff(repo, base, config):
                 if imp not in seen:
                     seen.add(imp)
                     queue.append((imp, depth + 1))
-        if found:
-            screens.update(found)
-        elif root in (".", "") or os.path.normpath(f).startswith(root + os.sep):
+        for s in found:  # a file shared by many screens counts less than a screen's own file
+            hits[s] += 1.0 / len(found)
+        if not found and (root in (".", "") or os.path.normpath(f).startswith(root + os.sep)):
             unmapped.append(f)
-    return {"screens": sorted(screens), "unmapped": unmapped}
+    # most-hit first: quick keeps the first QUICK_MAX_SCREENS
+    return {"screens": sorted(hits, key=lambda s: (-hits[s], s)), "unmapped": unmapped}
 
 
 def _load_findings(paths):
@@ -343,6 +355,7 @@ def main():
     p = sub.add_parser("plan"); p.add_argument("--config", required=True); p.add_argument("--preflight", required=True)
     p.add_argument("--mode", required=True, choices=["quick", "full"]); p.add_argument("--screens")
     p.add_argument("--recheck", help="comma list of backlog ids to replay (quick BUG-N)")
+    p.add_argument("--max-screens", type=int, default=QUICK_MAX_SCREENS, help="quick only")
     p.add_argument("--out", required=True)
     p = sub.add_parser("set"); p.add_argument("--cov", required=True); p.add_argument("--cell", required=True)
     p.add_argument("--status", required=True, choices=STATUSES); p.add_argument("--evidence", nargs="*")
@@ -359,7 +372,7 @@ def main():
     a = ap.parse_args()
     if a.cmd == "plan":
         cov = plan(read_json(a.config), read_json(a.preflight), a.mode, a.screens.split(",") if a.screens else None,
-                   a.recheck.split(",") if a.recheck else ())
+                   a.recheck.split(",") if a.recheck else (), a.max_screens)
         write_json(a.out, cov)
         print(json.dumps({"cells": len(cov["cells"]), "unchecked": len(cov["unchecked"]), "out": a.out}))
     elif a.cmd == "set":

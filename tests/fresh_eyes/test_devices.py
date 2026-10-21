@@ -217,6 +217,14 @@ class IosDriverTest(unittest.TestCase):
             devices.rapid_taps(self.DEV, 603, 1065, 3, 0)
         self.assertEqual([r for r, _ in sent].count("touch"), 3)
 
+    def test_landscape_goes_through_the_driver(self):
+        sent, call = self.fake_call()
+        with mock.patch.object(devices, "ios_call", call):
+            devices.apply_setting(self.DEV, "landscape")
+            devices.apply_setting(self.DEV, "portrait")
+        self.assertEqual(sent, [("setOrientation", {"orientation": "landscapeLeft"}),
+                                ("setOrientation", {"orientation": "portrait"})])
+
     def test_back_is_edge_swipe(self):
         sent, call = self.fake_call()
         with mock.patch.object(devices, "ios_call", call), \

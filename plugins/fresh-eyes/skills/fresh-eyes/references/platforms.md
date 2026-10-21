@@ -12,7 +12,7 @@
   HTTP server on localhost (found by the simulator's UDID in its process path). `nav.py` (with `--platform ios`) and
   `capture.py` use it for the hierarchy (in points; scripts scale to screenshot pixels), taps, swipes and typing
   (any language) — no screen JSON passes through the model. If the MCP server restarts, the driver dies with it:
-  call `inspect_screen` once more. The driver serializes touches (~225 ms each).
+  the orchestrator calls `inspect_screen` once more (a navigator replies `needs: ios-driver`). The driver serializes touches (~225 ms each).
 - Never run the Maestro CLI on a device the Maestro MCP is driving: the CLI uninstalls the MCP's driver on exit
   and every later MCP call fails with `DeviceServerDiedException` until a new device serial is used.
   Recovery: restart the owned emulator on another port (`emulator -avd fresh-eyes-pixel -port 5564`, ownership

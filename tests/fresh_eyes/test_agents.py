@@ -34,10 +34,9 @@ class AgentsTest(unittest.TestCase):
             fm, _ = frontmatter(name)
             self.assertEqual(fm["tools"], "Read, Glob, Grep, Write", name)
 
-    def test_navigator_cannot_edit_or_spawn(self):
-        fm, _ = frontmatter("navigator")
-        for tool in ("Edit", "NotebookEdit", "Agent", "WebFetch", "WebSearch"):
-            self.assertIn(tool, fm["disallowedTools"])
+    def test_navigator_has_an_allowlist(self):
+        # an allowlist keeps MCP tool names and the skill list out of the agent's base context (7k vs 30-78k)
+        self.assertEqual(frontmatter("navigator")[0]["tools"], "Bash, Read, Glob, Grep, Write")
 
     def test_models(self):
         self.assertEqual(frontmatter("navigator")[0]["model"], "sonnet")

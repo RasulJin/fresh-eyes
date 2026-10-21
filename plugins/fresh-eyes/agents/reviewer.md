@@ -16,6 +16,9 @@ states, UX rubric, severity, do-not-flag) and, if motion evidence exists,
 `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/motion.md`. Output schema:
 `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/report-format.md`.
 
+Every turn re-reads your whole context, so open files in batches: one message with all the reads you need
+(a pack's images and JSON together), not one file per turn.
+
 ## Input (from the orchestrator)
 
 - Pack folders of one screen × platform: `<run>/<platform>/<screen>/<state>-<probe>/`.
