@@ -66,9 +66,33 @@ def is_owned(dev):
     return bool(dev.name) and dev.name.startswith(OWNED_PREFIX)
 
 
+def real_name(dev):
+    """The device's own name (AVD / simulator name), read from the device, never the label a caller passed."""
+    if dev.platform == "android":
+        if not dev.id.startswith("emulator-"):
+            return ""  # a phone is never ours
+        return (_adb(dev.id, "emu", "avd", "name", check=False).splitlines() or [""])[0].strip()
+    try:
+        sims = json.loads(_simctl("list", "devices", "-j", check=False) or "{}")
+    except ValueError:
+        return ""
+    return next((d.get("name", "") for devs in (sims.get("devices") or {}).values() for d in devs
+                 if d.get("udid") == dev.id), "")
+
+
 def _require_owned(dev, action):
-    if not is_owned(dev):
-        raise FEError("refusing to %s on %s: not a %s device" % (action, dev.name or dev.id, OWNED_PREFIX))
+    name = real_name(dev)
+    if not name.startswith(OWNED_PREFIX):
+        raise FEError("refusing to %s on %s: not a %s device" % (action, name or dev.id, OWNED_PREFIX))
+
+
+_APP_ID = re.compile(r"^[A-Za-z0-9_.]+$")
+
+
+def _app_id(app_id):
+    if not _APP_ID.match(app_id or ""):
+        raise FEError("invalid app id %r" % app_id)
+    return app_id
 
 
 def list_devices():
@@ -133,7 +157,11 @@ def ensure_owned(platform, kind="default", boot_timeout=240):
         name, port, w, h, dens = ANDROID_OWNED[kind]
         serial = "emulator-%d" % port
         proc = None
-        if not any(d.id == serial for d in list_devices()):
+        running = next((d for d in list_devices() if d.id == serial), None)
+        if running is not None and running.name != name:
+            raise FEError("%s is taken by another emulator (%s); stop it or free port %d for %s"
+                          % (serial, running.name or "unknown AVD", port, name))
+        if running is None:
             if not os.path.exists(os.path.join(AVD_DIR, name + ".ini")):
                 _write_avd(name, w, h, dens, ANDROID_DATA_BYTES[kind])
             log = _open_log(name)
@@ -270,6 +298,7 @@ def ios_scale(dev, base=None):
 
 def tap(dev, x, y):
     """x, y in screenshot pixels on both platforms."""
+    _require_owned(dev, "send input")
     if dev.platform == "android":
         _shell(dev, "input tap %d %d" % (x, y))
         return
@@ -279,6 +308,7 @@ def tap(dev, x, y):
 
 def rapid_taps(dev, x, y, count, interval_ms):
     """Taps that land nearly at once on Android (sequential adb taps are ~200 ms apart); ~225 ms apart on iOS."""
+    _require_owned(dev, "send input")
     if dev.platform == "android":
         sep = " sleep %g; " % (interval_ms / 1000.0) if interval_ms > 0 else " "
         _shell(dev, sep.join(["input tap %d %d &" % (x, y)] * count) + " wait")
@@ -294,6 +324,7 @@ def rapid_taps(dev, x, y, count, interval_ms):
 
 
 def swipe(dev, x1, y1, x2, y2, ms=300):
+    _require_owned(dev, "send input")
     if dev.platform == "android":
         _shell(dev, "input swipe %d %d %d %d %d" % (x1, y1, x2, y2, ms))
         return
@@ -304,10 +335,12 @@ def swipe(dev, x1, y1, x2, y2, ms=300):
 
 def ios_type(dev, text):
     """Any text, into the focused field (Android types through nav.py: adb, ASCII only)."""
+    _require_owned(dev, "send input")
     ios_call(dev, "inputText", {"text": text, "appIds": []})
 
 
 def back(dev, count=1, interval_ms=0):
+    _require_owned(dev, "send input")
     if dev.platform == "android":
         sep = " sleep %g; " % (interval_ms / 1000.0) if interval_ms > 0 else "; "
         _shell(dev, sep.join(["input keyevent 4"] * count))
@@ -324,6 +357,8 @@ def back(dev, count=1, interval_ms=0):
 
 
 def launch(dev, app_id):
+    _require_owned(dev, "launch apps")
+    _app_id(app_id)
     if dev.platform == "android":
         lines = _shell(dev, "cmd package resolve-activity --brief %s" % app_id, check=False).strip().splitlines()
         component = lines[-1].strip() if lines and "/" in lines[-1] else ""
@@ -331,11 +366,18 @@ def launch(dev, app_id):
             _shell(dev, "am start -n %s" % component)
         else:  # monkey exits non-zero on some images even when it launched the app
             _shell(dev, "monkey -p %s -c android.intent.category.LAUNCHER 1" % app_id, check=False)
+            for _ in range(10):
+                if _shell(dev, "pidof %s" % app_id, check=False).strip():
+                    return
+                time.sleep(0.5)
+            raise FEError("%s did not start on %s" % (app_id, dev.id))
     else:
         _simctl("launch", dev.id, app_id)
 
 
 def terminate(dev, app_id):
+    _require_owned(dev, "stop apps")
+    _app_id(app_id)
     if dev.platform == "android":
         _shell(dev, "am force-stop %s" % app_id)
     else:
@@ -343,6 +385,7 @@ def terminate(dev, app_id):
 
 
 def background_foreground(dev, app_id, seconds=3):
+    _require_owned(dev, "background apps")
     if dev.platform == "android":
         _shell(dev, "input keyevent 3")
     else:
@@ -352,6 +395,7 @@ def background_foreground(dev, app_id, seconds=3):
 
 
 def app_installed(dev, app_id):
+    _app_id(app_id)
     if dev.platform == "android":
         return "package:" in _shell(dev, "pm path %s" % app_id, check=False)
     return bool(_simctl("get_app_container", dev.id, app_id, check=False).strip())
@@ -366,6 +410,7 @@ def install(dev, artifact):
 
 def clear_app(dev, app_id):
     _require_owned(dev, "clear app data")
+    _app_id(app_id)
     if dev.platform == "android":
         _shell(dev, "pm clear %s" % app_id)
     else:

@@ -36,6 +36,7 @@ SIMCTL_JSON = json.dumps({"devices": {
 
 class DevicesTest(unittest.TestCase):
     def patch(self, answers):
+        answers = dict({"emu avd name": "fresh-eyes-pixel\nOK\n"}, **answers)
         fake = FakeRun(answers)
         p = mock.patch.object(fe_common, "run", fake)
         p.start()
@@ -56,10 +57,33 @@ class DevicesTest(unittest.TestCase):
         self.assertEqual(len(found), 2)
 
     def test_clear_app_refuses_foreign_device(self):
-        fake = self.patch({})
+        fake = self.patch({"emu avd name": "Pixel_8\nOK\n"})
         with self.assertRaises(FEError):
             devices.clear_app(Device("android", "emulator-5554", "Pixel_8"), "com.example.app")
-        self.assertEqual(fake.calls, [])
+        self.assertFalse(any("pm clear" in " ".join(c) for c in fake.calls))
+
+    def test_owned_label_on_a_foreign_emulator_is_refused(self):
+        fake = self.patch({"emu avd name": "Voiova_QA_4GB\nOK\n"})
+        for fn in (lambda d: devices.set_dark(d, True), lambda d: devices.tap(d, 10, 10),
+                   lambda d: devices.clear_app(d, "com.example.app")):
+            with self.assertRaises(FEError) as e:
+                fn(Device("android", "emulator-5560", "fresh-eyes-pixel"))
+            self.assertIn("Voiova_QA_4GB", str(e.exception))
+        self.assertFalse(any("input" in " ".join(c) or "uimode" in " ".join(c) for c in fake.calls))
+
+    def test_simulator_name_read_from_simctl_not_label(self):
+        self.patch({"list devices -j": SIMCTL_JSON})
+        self.assertEqual(devices.real_name(Device("ios", "BBB", "fresh-eyes iPhone 17")), "iPhone 17 Pro")
+
+    def test_a_phone_is_never_owned(self):
+        self.patch({})
+        with self.assertRaises(FEError):
+            devices.tap(Device("android", "R58M123", "fresh-eyes-pixel"), 10, 10)
+
+    def test_invalid_app_id_refused(self):
+        self.patch({})
+        with self.assertRaises(FEError):
+            devices.launch(Device("android", "emulator-5560", "fresh-eyes-pixel"), "com.x; reboot")
 
     def test_settings_refuse_foreign_device(self):
         self.patch({})
@@ -72,8 +96,9 @@ class DevicesTest(unittest.TestCase):
     def test_rapid_taps_backgrounds_in_one_shell(self):
         fake = self.patch({})
         devices.rapid_taps(Device("android", "emulator-5560", "fresh-eyes-pixel"), 10, 20, 3, 30)
-        self.assertEqual(len(fake.calls), 1)
-        shell = fake.calls[0][-1]
+        taps = [c for c in fake.calls if "input tap" in c[-1]]
+        self.assertEqual(len(taps), 1)
+        shell = taps[0][-1]
         self.assertEqual(shell.count("input tap 10 20 &"), 3)
         self.assertIn("sleep 0.03", shell)
         self.assertTrue(shell.endswith("wait"))
@@ -111,6 +136,7 @@ class DevicesTest(unittest.TestCase):
         self.patch({})
         with self.assertRaises(FEError):
             devices.apply_setting(Device("android", "emulator-5560", "fresh-eyes-pixel"), "sepia")
+        self.patch({"emu avd name": "Pixel_8\nOK\n"})
         with self.assertRaises(FEError):
             devices.apply_setting(Device("android", "emulator-5554", ""), "dark")
 
@@ -148,6 +174,11 @@ if __name__ == "__main__":
 class IosDriverTest(unittest.TestCase):
     DEV = Device("ios", "1EB9BE1B", "fresh-eyes iPhone 17")
     INFO = json.dumps({"widthPoints": 402, "heightPoints": 874, "widthPixels": 1206, "heightPixels": 2622})
+
+    def setUp(self):
+        p = mock.patch.object(devices, "real_name", lambda dev: "fresh-eyes iPhone 17")
+        p.start()
+        self.addCleanup(p.stop)
 
     def fake_call(self):
         sent = []

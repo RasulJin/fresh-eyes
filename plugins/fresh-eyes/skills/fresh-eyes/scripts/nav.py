@@ -9,12 +9,13 @@ Maestro: text/label are full-string, case-insensitive regexes; ids match by suff
 CLI (all print the compressed screen after acting; --platform defaults to android):
   nav.py screen --device ID [--platform android|ios]
   nav.py tap    --device ID (--text RE | --label RE | --id SUFFIX | --point X,Y) [--index N]
-  nav.py type   --device ID --text "text"        (Android: ASCII only)
+  nav.py type   --device ID (--text "text" | --env VAR)   (Android: ASCII only; --env for secrets)
   nav.py swipe  --device ID --from X,Y --to X,Y [--ms 300]
   nav.py back   --device ID                      (iOS: edge swipe)
   nav.py wait   --device ID (--text RE | --label RE | --id SUFFIX) [--timeout 15]
 """
 import argparse
+import os
 import re
 import sys
 import time
@@ -81,13 +82,13 @@ def tap(dev, text=None, label=None, rid=None, point=None, index=0):
 
 
 def adb_text_arg(text):
-    if any(ord(c) > 126 for c in text):
-        raise FEError("adb can only type ASCII; use a Maestro flow (inputText) for non-ASCII text")
-    out = text.replace("%", "\\%").replace(" ", "%s")
-    for ch in "&|;<>()$`\\\"'*?!#~":
-        if ch != "\\":
-            out = out.replace(ch, "\\" + ch)
-    return out
+    """Escape for `adb shell input text` (adb joins args into one device shell command line)."""
+    if any(ord(c) > 126 or ord(c) < 32 for c in text):
+        raise FEError("adb can only type printable ASCII; use a Maestro flow (inputText) for other text")
+    out = text.replace("\\", "\\\\")
+    for ch in "&|;<>()$`\"'*?!#~":
+        out = out.replace(ch, "\\" + ch)
+    return out.replace("%", "\\%").replace(" ", "%s")
 
 
 def wait_for(dev, text=None, label=None, rid=None, timeout=15):
@@ -120,8 +121,9 @@ def main():
             p.add_argument("--point", type=_xy); p.add_argument("--index", type=int, default=0)
         if name == "wait":
             p.add_argument("--timeout", type=float, default=15)
-        if name == "type":
-            p.add_argument("--text", required=True)
+        if name == "type":  # --env: a secret read here from the environment, never printed or passed as text
+            g = p.add_mutually_exclusive_group(required=True)
+            g.add_argument("--text"); g.add_argument("--env", metavar="VAR")
         if name == "swipe":
             p.add_argument("--from", dest="src", type=_xy, required=True)
             p.add_argument("--to", type=_xy, required=True)
@@ -132,10 +134,16 @@ def main():
         node = tap(dev, a.text, a.label, a.id, a.point, a.index)
         print("tapped %s %r" % (node.get("id"), node.get("text") or node.get("label", "")))
     elif a.cmd == "type":
+        text = os.environ.get(a.env, "") if a.env else a.text
+        if not text:
+            raise FEError("environment variable %s is not set" % a.env)
         if dev.platform == "ios":
-            devices.ios_type(dev, a.text)
+            devices.ios_type(dev, text)
         else:
-            fe_common.run([devices.adb_path(), "-s", dev.id, "shell", "input", "text", adb_text_arg(a.text)])
+            devices._require_owned(dev, "send input")
+            arg = adb_text_arg(text)
+            fe_common.run([devices.adb_path(), "-s", dev.id, "shell", "input", "text", arg],
+                          redact=(text, arg) if a.env else ())
         time.sleep(0.5)
     elif a.cmd == "swipe":
         devices.swipe(dev, a.src[0], a.src[1], a.to[0], a.to[1], a.ms)

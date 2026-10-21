@@ -49,6 +49,17 @@ class InputTest(unittest.TestCase):
     def test_ascii_text_escaped_for_adb(self):
         self.assertEqual(nav.adb_text_arg("hello world & co"), "hello%sworld%s\\&%sco")
 
+    def test_control_chars_refused_backslash_escaped(self):
+        with self.assertRaises(FEError):
+            nav.adb_text_arg("line one\nreboot")
+        self.assertEqual(nav.adb_text_arg("a\\b"), "a\\\\b")
+
+    def test_secret_redacted_from_errors(self):
+        import fe_common
+        with self.assertRaises(FEError) as e:
+            fe_common.run(["sh", "-c", "exit 3", "hunter2-secret"], redact=("hunter2-secret",))
+        self.assertNotIn("hunter2", str(e.exception))
+
     def test_non_ascii_refused(self):
         with self.assertRaises(FEError):
             nav.adb_text_arg("Привет")
