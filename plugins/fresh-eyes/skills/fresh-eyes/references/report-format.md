@@ -49,8 +49,9 @@ Computed only by `coverage.py verdict` (never by a model):
 - any confirmed BUG of severity high → `BLOCK` (НЕ ВЫПУСКАТЬ);
 - confirmed medium with full coverage → `ISSUES` (ЕСТЬ ПРОБЛЕМЫ);
 - any cell not done/na, any unchecked item, any done cell whose packs no reviewer listed, any finding still
-  `pending` → `INCOMPLETE` (НЕ ПРОВЕРЕНО ДО КОНЦА);
-- otherwise `CLEAN` (ЧИСТО). IMP and unsure findings never change the verdict.
+  `pending`, any `unsure` BUG of severity high or medium (e.g. intermittent) → `INCOMPLETE`
+  (НЕ ПРОВЕРЕНО ДО КОНЦА);
+- otherwise `CLEAN` (ЧИСТО). IMP findings and low unsure ones never change the verdict.
 
 ## `report.md` (project language)
 

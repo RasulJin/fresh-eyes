@@ -219,6 +219,9 @@ def verdict(cov, findings, language="en", reviewed=()):
     high = [f for f in bugs if f.get("severity") == "high"]
     medium = [f for f in bugs if f.get("severity") == "medium"]
     pending = [f for f in findings if f.get("verdict", "pending") == "pending"]
+    # an intermittent bug the repeat missed ends unsure: a human has to look before anyone says CLEAN
+    doubtful = [f for f in findings if f.get("verdict") == "unsure" and f.get("kind", "BUG") == "BUG"
+                and f.get("severity") in ("high", "medium")]
     # "na" (not applicable) is reported, never counted as checked: the config should drop that probe instead
     open_cells = [c for c in cov["cells"] if c["status"] != "done"]
     seen = {pack_key(p) for p in reviewed}
@@ -241,11 +244,15 @@ def verdict(cov, findings, language="en", reviewed=()):
                        % (len(unreviewed), ", ".join(c["id"] for c in unreviewed[:5])))
     if pending:
         reasons.append("%d findings not verified" % len(pending))
+    if doubtful:
+        reasons.append("%d high/medium findings need a human look (unsure): %s"
+                       % (len(doubtful), "; ".join(f.get("title", "") for f in doubtful[:3])))
     if merged:
         reasons.append("%d duplicate findings merged" % len(merged))
     if cov.get("unchecked"):
         reasons.append("%d items not checked" % len(cov["unchecked"]))
-    complete = bool(cov["cells"]) and not open_cells and not unreviewed and not pending and not cov.get("unchecked")
+    complete = (bool(cov["cells"]) and not open_cells and not unreviewed and not pending and not doubtful
+                and not cov.get("unchecked"))
     if high:
         code = "BLOCK"
     elif medium:

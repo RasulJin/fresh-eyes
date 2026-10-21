@@ -34,6 +34,11 @@ For each finding with `verdict: "pending"`:
    - the spec rule does not say what the finding claims.
    A finding that rests on a rule marked `⚠ conflict` / `⚠ конфликт` (or any conflict the user has not decided) is never
    `rejected`: when the evidence shows the issue, it is `unsure` with a note that the owner decides.
+   A frame that clearly shows the defect stays evidence when a resnap or repeat does not show it again: the bug
+   may be intermittent (timing, state left by an earlier step). Then the finding is `unsure`, severity kept,
+   `verify_note` "intermittent: seen in <pack>, not reproduced in <recheck pack>" — never `rejected`. Reject
+   only when the original frame itself is wrong: captured mid-animation or mid-transition (motion evidence, a
+   half-faded layer), stale, or showing test data rather than the app.
 3. If the evidence decides it → set `verdict` to `confirmed` or `rejected` with a one-line `verify_note`.
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
@@ -54,7 +59,7 @@ Write each updated findings file back in place.
 
 Use the `-recheck` evidence. A finding whose request has neither `done` nor `failed` stays `pending` (the
 evidence never came; the verdict then stays INCOMPLETE). Rule on every other pending finding: `confirmed` (reproduced, evidence
-attached), `rejected` (disproved, say how), or `unsure` (evidence still ambiguous: say what a human should look
+attached), `rejected` (disproved, say how; a repeat that does not reproduce is not disproof, see first pass), or `unsure` (evidence still ambiguous: say what a human should look
 at). Adjust `severity` if the evidence shows a different impact, and say so in `verify_note`.
 
 ## Reply (≤10 lines)

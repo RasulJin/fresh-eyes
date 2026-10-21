@@ -1,6 +1,6 @@
 {
   "name": "fresh-eyes",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Tests a running iOS/Android app like a picky human QA + designer and writes findings to your backlog.",
   "license": "MIT",
   "keywords": [

@@ -306,10 +306,17 @@ class VerdictTest(unittest.TestCase):
         packs = done_all(self.cov, self.root)
         self.assertEqual(verdict(self.cov, [finding("medium")], "en", packs)["code"], "ISSUES")
 
-    def test_verdict_low_unsure_and_imp_ignored(self):
+    def test_verdict_low_rejected_and_imp_ignored(self):
         packs = done_all(self.cov, self.root)
-        fs = [finding("low"), finding("high", "unsure"), finding("high", "rejected"), finding("high", kind="IMP")]
+        fs = [finding("low"), finding("low", "unsure"), finding("high", "rejected"), finding("high", kind="IMP")]
         self.assertEqual(verdict(self.cov, fs, "en", packs)["code"], "CLEAN")
+
+    def test_unsure_high_or_medium_keeps_clean_away(self):
+        packs = done_all(self.cov, self.root)
+        for sev in ("high", "medium"):
+            v = verdict(self.cov, [finding(sev, "unsure")], "en", packs)
+            self.assertEqual(v["code"], "INCOMPLETE", sev)
+            self.assertIn("need a human look", " ".join(v["reasons"]))
 
     def test_map_has_symbols(self):
         set_status(self.cov, self.cov["cells"][0]["id"], "done", evidence=[make_pack(self.root, self.cov["cells"][0])])
