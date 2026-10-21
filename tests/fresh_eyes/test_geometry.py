@@ -115,6 +115,30 @@ class TextChecksTest(unittest.TestCase):
         header = node("h", [0, 2300, 1080, 100], cls="Other", label="Шапка")
         self.assertEqual(len(overlaps([ROOT, header, row])), 1)
 
+    def test_layer_over_layer_is_not_an_overlap_but_header_over_list_is(self):
+        lst = node("list", [0, 0, 1080, 2400], cls="ScrollView")
+        row = node("row", [0, 200, 1080, 150], parent="list", text="Основные", cls="StaticText")
+        search = node("search", [0, 0, 1080, 2400], cls="Other")
+        sug = node("sug", [0, 220, 1080, 150], parent="search", text="Предложения", cls="StaticText")
+        self.assertEqual(overlaps([ROOT, lst, row, search, sug], screen_wh=SCREEN), [])
+        header = node("h", [0, 180, 1080, 200], cls="Other", label="Шапка")
+        self.assertEqual(len(overlaps([ROOT, lst, row, header], screen_wh=SCREEN)), 1)
+
+    def test_small_title_inside_its_own_cell_is_not_a_target(self):
+        cell = node("cell", [0, 400, 1080, 160], cls="Cell", label="Основные", clickable=True)
+        title = node("t", [40, 440, 300, 80], parent="cell", cls="Button", label="Основные", clickable=True)
+        heart = node("heart", [900, 440, 50, 50], parent="cell", cls="Button", label="Нравится", clickable=True)
+        got = [c["node_ids"] for c in small_targets([ROOT, cell, title, heart], 2.625, 48)]
+        self.assertEqual(got, [["heart"]])
+
+    def test_one_element_overlapping_many_is_one_candidate(self):
+        big = node("big", [0, 0, 1080, 1800], text="Аккаунт Apple и очень длинный текст")
+        rows = [node("r%d" % i, [0, 200 + 300 * i, 1080, 150], text="Строка %d" % i) for i in range(5)]
+        got = overlaps([ROOT, big] + rows)
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0]["node_ids"][0], "big")
+        self.assertIn("5 elements", got[0]["detail"])
+
     def test_overlap_parent_child_ignored(self):
         a = node("a", [100, 100, 200, 50], label="card")
         b = node("b", [110, 100, 150, 50], parent="a", text="Title")

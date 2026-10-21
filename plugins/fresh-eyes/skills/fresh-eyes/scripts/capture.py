@@ -59,6 +59,19 @@ def _marks(nodes, candidates):
     return items[:MAX_MARKS]
 
 
+def _crop_order(candidates):
+    """Round-robin over checks, most severe first, so a flood of one kind cannot take every crop."""
+    rank = {"high": 0, "medium": 1, "low": 2}
+    groups = {}
+    for c in sorted(candidates, key=lambda c: rank.get(c["hint"], 3)):
+        groups.setdefault(c["check"], []).append(c)
+    order, queues = [], list(groups.values())
+    while queues:
+        order += [q.pop(0) for q in queues]
+        queues = [q for q in queues if q]
+    return order
+
+
 def _same_file(a, b):
     try:
         with open(a, "rb") as fa, open(b, "rb") as fb:
@@ -108,7 +121,7 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
     write_json(os.path.join(out, "som.json"), mapping)
     shutil.rmtree(os.path.join(out, "crops"), ignore_errors=True)  # a re-snap must not keep crops of an old screen
     counters = {}
-    for c in candidates[:MAX_CROPS]:
+    for c in _crop_order(candidates)[:MAX_CROPS]:
         counters[c["check"]] = counters.get(c["check"], 0) + 1
         k = counters[c["check"]]
         try:
@@ -160,10 +173,11 @@ def main():
         p.add_argument("--out", required=True)
     s = sub.choices["snap"]
     s.add_argument("--hierarchy-file"); s.add_argument("--hierarchy-source", choices=["maestro", "uiautomator",
-                                                                                     "maestro-cli"])
+                                                                                     "maestro-cli", "xctest"])
     s.add_argument("--before"); s.add_argument("--keyboard", action="store_true")
     s.add_argument("--expect-differs", help="pack whose screen must differ (state cells: the default pack)")
     r = sub.choices["around"]
+    r.usage = "capture.py around --platform P --device ID --out PACK [--settle S] [--ceiling-ms MS] -- CMD ..."
     r.add_argument("--settle", type=float, default=2.5); r.add_argument("--ceiling-ms", type=int,
                                                                         default=DEFAULT_CEILING_MS)
     a = ap.parse_args(argv)

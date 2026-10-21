@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 from fe_common import FEError, cli, read_json, write_json
 
 _BOUNDS = re.compile(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
+_PERCENT = re.compile(r"^\d+\s?%$")
 
 
 class HierarchyError(FEError):
@@ -137,6 +138,10 @@ XCUI_TAPPABLE = {"Button", "Cell", "Link", "Switch", "Toggle", "TextField", "Sec
 XCUI_TEXT_INPUTS = {"TextField", "SecureTextField", "SearchField", "TextView"}
 
 
+def _labeled(el):
+    return bool(el.get("label")) or any(_labeled(c) for c in el.get("children") or [])
+
+
 def _from_xctest(raw, scale):
     data = json.loads(raw)
     if not isinstance(data, dict) or "axElement" not in data:
@@ -147,8 +152,9 @@ def _from_xctest(raw, scale):
     def walk(el, parent, depth):
         t = el.get("elementType", 0)
         cls = XCUI_TYPES[t] if 0 <= t < len(XCUI_TYPES) else "Type%d" % t
-        if cls == "StatusBar":  # OS chrome, like com.android.systemui
-            return
+        if cls == "StatusBar" or (cls == "Other" and _PERCENT.match(str(el.get("value") or ""))
+                                  and not any(_labeled(c) for c in el.get("children") or [])):
+            return  # OS chrome, like com.android.systemui; scroll indicators ("37 %" with an unlabeled thumb)
         f, pid = el.get("frame"), parent
         if f:
             bounds = [f["X"], f["Y"], f["Width"], f["Height"]]

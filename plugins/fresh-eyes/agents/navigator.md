@@ -25,7 +25,8 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 
 - Only touch the device you were given. Its name starts with `fresh-eyes`; never use another device.
 - **Navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`, `swipe`,
-  `back`, `wait`; add `--platform ios` on iOS). It prints the screen as compact text after each action.
+  `back`, `wait`; add `--platform ios` on iOS). It prints the screen as compact text after each action; when
+  a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
 - Android: never use the Maestro MCP (its driver holds UiAutomation, which kills `uiautomator dump` and with it
   every capture). Non-ASCII typing: a Maestro **CLI** flow with `inputText` (slow, ~35 s; no MCP runs there).
 - iOS: `nav.py` talks to the Maestro driver that one MCP `inspect_screen` starts. If `nav.py` says "no Maestro

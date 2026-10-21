@@ -28,7 +28,7 @@ PROBES = {
     "rapid-tap": {"mutating": False, "platforms": BOTH},
     "tap-outside": {"mutating": False, "platforms": BOTH},
     "back-during-animation": {"mutating": False, "platforms": BOTH},
-    "hardware-back": {"mutating": False, "platforms": ["android"]},
+    "hardware-back": {"mutating": False, "platforms": BOTH},  # iOS: the left-edge swipe
     "hardware-back-keyboard": {"mutating": False, "platforms": ["android"]},
     "background-foreground": {"mutating": False, "platforms": BOTH},
     "kill-relaunch": {"mutating": False, "platforms": BOTH},

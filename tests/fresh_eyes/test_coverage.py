@@ -26,7 +26,7 @@ def finding(sev, verdict_="confirmed", kind="BUG"):
 class PlanTest(unittest.TestCase):
     def test_registry_shapes(self):
         self.assertTrue(PROBES["edit-delete-restore"]["mutating"])
-        self.assertEqual(PROBES["hardware-back"]["platforms"], ["android"])
+        self.assertEqual(PROBES["hardware-back-keyboard"]["platforms"], ["android"])
         self.assertIn("keyboard", STATES)
 
     def test_plan_two_platforms_mutating_off(self):
@@ -73,10 +73,10 @@ class PlanTest(unittest.TestCase):
 
     def test_platform_only_probe_skipped_on_other_platform(self):
         cfg = copy.deepcopy(ONE_SCREEN)
-        cfg["screens"][0].update(states=["default"], probes=["hardware-back"])
+        cfg["screens"][0].update(states=["default"], probes=["hardware-back-keyboard"])
         ids = [c["id"] for c in plan(cfg, BOTH_OK_MUT_OFF, "full")["cells"]]
-        self.assertIn("android/profile-trips/default/hardware-back", ids)
-        self.assertNotIn("ios/profile-trips/default/hardware-back", ids)
+        self.assertIn("android/profile-trips/default/hardware-back-keyboard", ids)
+        self.assertNotIn("ios/profile-trips/default/hardware-back-keyboard", ids)
 
     def test_seed_states_unchecked_without_hook(self):
         cfg = copy.deepcopy(ONE_SCREEN)

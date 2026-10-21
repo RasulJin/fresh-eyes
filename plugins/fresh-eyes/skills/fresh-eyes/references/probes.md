@@ -16,7 +16,8 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 ### rapid-tap
 - Reveals: double sheets/dialogs, double send, double navigation (stacked screens).
 - `python3 $S/taps.py rapid --platform P --device ID --x X --y Y --count 3 --interval-ms 30 ...` wrapped in
-  `capture.py around` to record (x, y in screenshot pixels, e.g. the center of the node from `nodes.json`).
+  `capture.py around` to record (x, y in screenshot pixels: the center of the node in a fresh `nav.py screen`
+  taken right before; rows move after state changes, so never reuse coordinates from an earlier screen).
 - Oracle: one Back/dismiss later nothing of it is left on screen (`capture.py snap`, then compare).
 - Mutating: no (but if the button sends something, the probe belongs to a mutating cell).
 

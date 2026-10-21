@@ -74,6 +74,14 @@ class SnapTest(unittest.TestCase):
             self.assertIn("no Maestro iOS driver", read_json(os.path.join(pack, "meta.json"))["blocked"])
 
 
+class CropOrderTest(unittest.TestCase):
+    def test_round_robin_most_severe_first(self):
+        cands = [{"check": "overlap", "hint": "medium"} for _ in range(20)] + \
+                [{"check": "small_target", "hint": "low"}, {"check": "clipped", "hint": "high"}]
+        first = [c["check"] for c in capture._crop_order(cands)[:3]]
+        self.assertEqual(first, ["clipped", "overlap", "small_target"])
+
+
 class IosSnapTest(unittest.TestCase):
     def test_reads_driver_and_works_in_pixels(self):
         from tests.fresh_eyes.test_hierarchy import XCTEST

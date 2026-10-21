@@ -42,6 +42,9 @@ XCTEST = {"depth": 9, "axElement": {"children": [
          "frame": {"X": 16, "Y": 500, "Width": 370, "Height": 36}},
         {"elementType": 40, "label": "Тёмная тема", "value": 1,
          "frame": {"X": 300, "Y": 560, "Width": 51, "Height": 31}},
+        {"elementType": 1, "label": "Вертикальная полоса прокрутки, 2 страницы", "value": "0\u00a0%",
+         "frame": {"X": 369, "Y": 116, "Width": 30, "Height": 672},
+         "children": [{"elementType": 1, "frame": {"X": 396, "Y": 119, "Width": 3, "Height": 406}}]},
         {"elementType": 19, "frame": {"X": 0, "Y": 538, "Width": 402, "Height": 336}, "children": [
             {"elementType": 20, "label": "й", "frame": {"X": 3, "Y": 550, "Width": 33, "Height": 42}}]}]}]}}
 
@@ -144,6 +147,9 @@ class XctestTest(unittest.TestCase):
         f = self.by_cls["TextField"][0]
         self.assertEqual((f["text"], f["label"], f["focused"]), ("Ист", "Поиск", True))
         self.assertEqual(self.by_cls["Switch"][0]["text"], "")  # a control's label is not drawn text
+
+    def test_scroll_indicator_dropped(self):
+        self.assertFalse(any("прокрутки" in n["label"] for n in self.nodes))
 
     def test_duplicate_siblings_dropped(self):
         self.assertEqual(sorted(b["label"] for b in self.by_cls["Button"]), ["Камера", "Основные"])

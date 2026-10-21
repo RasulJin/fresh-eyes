@@ -113,15 +113,31 @@ def still_clipped(before, after, screen_wh):
     return result
 
 
-def overlaps(nodes, min_ratio=0.2):
+def _layers(a, b, by_id, paths, screen_area):
+    """Both branches below the common ancestor cover half the screen: a layer over a layer (a sheet over a list,
+    a search screen over the list it hides, a covered screen of a JS stack), not two elements colliding."""
+    pb = set(paths[b["id"]])
+    lca = next((i for i in paths[a["id"]] if i in pb), None)
+    if lca is None:
+        return False
+    ra = paths[a["id"]][paths[a["id"]].index(lca) - 1]
+    rb = paths[b["id"]][paths[b["id"]].index(lca) - 1]
+    return min(_area(by_id[ra]["bounds"]), _area(by_id[rb]["bounds"])) >= 0.5 * screen_area
+
+
+def overlaps(nodes, min_ratio=0.2, screen_wh=None):
     by_id = {n["id"]: n for n in nodes}
     texty = [n for n in nodes if (n["text"] or n["label"]) and _area(n["bounds"]) > 0]
-    anc = {n["id"]: set(_ancestors(n, by_id)) for n in texty}
-    bar = {nid: next((i for i in [nid] + list(a) if by_id[i]["cls"] in NATIVE_BARS), None) for nid, a in anc.items()}
+    paths = {n["id"]: [n["id"]] + _ancestors(n, by_id) for n in texty}
+    anc = {nid: set(p[1:]) for nid, p in paths.items()}
+    bar = {nid: next((i for i in p if by_id[i]["cls"] in NATIVE_BARS), None) for nid, p in paths.items()}
+    screen_area = _area([0, 0] + list(screen_wh)) if screen_wh else None
     result = []
     for i, a in enumerate(texty):
         for b in texty[i + 1:]:
             if a["id"] in anc[b["id"]] or b["id"] in anc[a["id"]] or bar[a["id"]] != bar[b["id"]]:
+                continue
+            if screen_area and _layers(a, b, by_id, paths, screen_area):
                 continue
             inter = _intersect(a["bounds"], b["bounds"])
             smaller = min(_area(a["bounds"]), _area(b["bounds"]))
@@ -129,7 +145,22 @@ def overlaps(nodes, min_ratio=0.2):
                 result.append(_cand("overlap", [a["id"], b["id"]], inter,
                                     "%r overlaps %r" % (a["text"] or a["label"], b["text"] or b["label"]),
                                     "medium"))
-    return result
+    return _collapse_hubs(result, by_id)
+
+
+def _collapse_hubs(pairs, by_id, max_pairs=3):
+    """One element overlapping many (a huge or stale frame) becomes one candidate, so it cannot eat the crop budget."""
+    seen = defaultdict(list)
+    for c in pairs:
+        for nid in c["node_ids"]:
+            seen[nid].append(c)
+    hubs = [nid for nid, cs in seen.items() if len(cs) > max_pairs]
+    out = [c for c in pairs if not any(nid in hubs for nid in c["node_ids"])]
+    for h in hubs:
+        n, others = by_id[h], [i for c in seen[h] for i in c["node_ids"] if i != h]
+        out.append(_cand("overlap", [h] + others[:5], n["bounds"],
+                         "%r overlaps %d elements" % (n["text"] or n["label"], len(others)), "medium"))
+    return out
 
 
 TYPICAL_CHAR_PER_H = 0.42  # avg glyph width / line-box height when no peers are available
@@ -186,10 +217,16 @@ def repeated_strings(nodes, min_count=3, min_len=8):
 
 def small_targets(nodes, px_per_dp, min_dp):
     limit = px_per_dp * min_dp
+    by_id = {n["id"]: n for n in nodes}
+
+    def same_control(n):  # iOS cells expose their title as an inner "button" with the cell's own label
+        return bool(n["label"]) and any(by_id[a]["clickable"] and by_id[a]["label"] == n["label"]
+                                        for a in _ancestors(n, by_id))
     return [_cand("small_target", [n["id"]], n["bounds"],
                   "%dx%d px < %ddp (%.0f px)" % (n["bounds"][2], n["bounds"][3], min_dp, limit), "low")
             for n in nodes
-            if n["clickable"] and _area(n["bounds"]) > 0 and (n["bounds"][2] < limit or n["bounds"][3] < limit)]
+            if n["clickable"] and _area(n["bounds"]) > 0 and (n["bounds"][2] < limit or n["bounds"][3] < limit)
+            and not same_control(n)]
 
 
 def under_keyboard(after, keyboard_top, before=None):
@@ -229,7 +266,7 @@ def run_all(nodes, ctx, before=None):
     nodes = _app_only(nodes)
     before = _app_only(before) if before is not None else None
     screen = ctx["screen_wh"]
-    result = partially_visible(nodes, screen) + overlaps(nodes) + truncation_candidates(nodes) \
+    result = partially_visible(nodes, screen) + overlaps(nodes, screen_wh=screen) + truncation_candidates(nodes) \
         + repeated_strings(nodes)
     if ctx.get("px_per_dp") and ctx.get("min_dp"):
         result += small_targets(nodes, ctx["px_per_dp"], ctx["min_dp"])
