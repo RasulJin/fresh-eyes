@@ -7,11 +7,14 @@ CLI:
   devices.py ensure --platform android|ios [--kind default|small]
   devices.py screenshot --platform P --device ID --out PNG
   devices.py set --platform P --device ID --name NAME --what dark|light|font-xl|font-default|offline|online|...
-  devices.py app --platform P --device ID --name NAME --app BUNDLE --do launch|terminate|clear|background
+  devices.py app --platform P --device ID --name NAME --app BUNDLE --do launch|terminate|clear|background|install
+                 [--artifact APK_OR_APP]   (iOS clear uninstalls: install again before launch)
 """
 import argparse
+import glob
 import json
 import os
+import platform
 import re
 import shutil
 import signal
@@ -32,8 +35,6 @@ IOS_OWNED = {"default": ("fresh-eyes iPhone 17", "com.apple.CoreSimulator.SimDev
              "small": ("fresh-eyes iPhone 16e", "com.apple.CoreSimulator.SimDeviceType.iPhone-16e")}
 ANDROID_DATA_BYTES = {"default": 4 * 1024 ** 3, "small": 2 * 1024 ** 3}  # sparse, but the emulator wants it free
 AVD_DIR = os.path.expanduser("~/.android/avd")
-ANDROID_IMAGE = "system-images/android-36.1/google_apis_playstore/arm64-v8a/"
-ANDROID_TARGET = "android-36.1"
 
 
 def sdk_root():
@@ -119,20 +120,40 @@ def list_devices():
     return found
 
 
+def system_image():
+    """Newest installed Google APIs image for this Mac's CPU, Play Store variant first:
+    (sysdir relative to the SDK, target, abi, tag)."""
+    abi = "arm64-v8a" if platform.machine() in ("arm64", "aarch64") else "x86_64"
+    found = []
+    for api_dir in glob.glob(os.path.join(sdk_root(), "system-images", "android-*")):
+        api = os.path.basename(api_dir)
+        nums = tuple(int(n) for n in re.findall(r"\d+", api))
+        for rank, tag in enumerate(("google_apis_playstore", "google_apis")):
+            if os.path.isdir(os.path.join(api_dir, tag, abi)):
+                found.append((nums, -rank, "system-images/%s/%s/%s/" % (api, tag, abi), api, tag))
+    if not found:
+        raise FEError("no Google APIs %s system image in %s; install one, e.g. sdkmanager "
+                      "\"system-images;android-36;google_apis_playstore;%s\"" % (abi, sdk_root(), abi))
+    _, _, sysdir, target, tag = max(found)
+    return sysdir, target, abi, tag
+
+
 def _write_avd(name, w, h, dens, data_bytes):
+    sysdir, target, abi, tag = system_image()
     avd_dir = AVD_DIR
     os.makedirs(os.path.join(avd_dir, name + ".avd"), exist_ok=True)
     with open(os.path.join(avd_dir, name + ".ini"), "w") as f:
         f.write("avd.ini.encoding=UTF-8\npath=%s/%s.avd\npath.rel=avd/%s.avd\ntarget=%s\n"
-                % (avd_dir, name, name, ANDROID_TARGET))
-    cfg = {"AvdId": name, "avd.ini.displayname": name, "PlayStore.enabled": "true", "abi.type": "arm64-v8a",
-           "disk.dataPartition.size": str(data_bytes), "fastboot.forceColdBoot": "no", "hw.cpu.arch": "arm64",
+                % (avd_dir, name, name, target))
+    cfg = {"AvdId": name, "avd.ini.displayname": name, "PlayStore.enabled": str(tag.endswith("playstore")).lower(),
+           "abi.type": abi, "disk.dataPartition.size": str(data_bytes), "fastboot.forceColdBoot": "no",
+           "hw.cpu.arch": "arm64" if abi == "arm64-v8a" else "x86_64",
            "hw.cpu.ncore": "4", "hw.ramSize": "3072", "hw.keyboard": "no", "hw.mainKeys": "no", "hw.dPad": "no",
            "hw.trackBall": "no", "hw.gpu.enabled": "yes", "hw.gpu.mode": "auto", "hw.lcd.width": str(w),
            "hw.lcd.height": str(h), "hw.lcd.density": str(dens), "hw.initialOrientation": "portrait",
-           "hw.sdCard": "yes", "image.sysdir.1": ANDROID_IMAGE, "skin.dynamic": "yes",
-           "skin.name": "%dx%d" % (w, h), "showDeviceFrame": "no", "tag.display": "Google Play",
-           "tag.id": "google_apis_playstore", "target": ANDROID_TARGET, "vm.heapSize": "256"}
+           "hw.sdCard": "yes", "image.sysdir.1": sysdir, "skin.dynamic": "yes",
+           "skin.name": "%dx%d" % (w, h), "showDeviceFrame": "no", "tag.display": "Google Play" if tag.endswith("playstore") else "Google APIs",
+           "tag.id": tag, "target": target, "vm.heapSize": "256"}
     with open(os.path.join(avd_dir, name + ".avd", "config.ini"), "w") as f:
         f.write("".join("%s=%s\n" % kv for kv in cfg.items()))
 
@@ -417,6 +438,9 @@ def app_installed(dev, app_id):
 
 
 def install(dev, artifact):
+    _require_owned(dev, "install apps")
+    if not os.path.exists(artifact):
+        raise FEError("no build at %s" % artifact)
     if dev.platform == "android":
         _adb(dev.id, "install", "-r", artifact, timeout=300)
     else:
@@ -563,7 +587,8 @@ def main():
     p.add_argument("--name", required=True); p.add_argument("--what", required=True, choices=sorted(SETTINGS))
     p = sub.add_parser("app"); p.add_argument("--platform", required=True); p.add_argument("--device", required=True)
     p.add_argument("--name", required=True); p.add_argument("--app", required=True)
-    p.add_argument("--do", required=True, choices=sorted(APP_ACTIONS))
+    p.add_argument("--do", required=True, choices=sorted(APP_ACTIONS) + ["install"])
+    p.add_argument("--artifact", help="with --do install: the .apk / .app to install")
     a = ap.parse_args()
     if a.cmd == "list":
         out = [dict(d._asdict(), owned=is_owned(d)) for d in list_devices()]
@@ -572,6 +597,11 @@ def main():
     elif a.cmd == "set":
         apply_setting(Device(a.platform, a.device, a.name), a.what)
         out = {"set": a.what}
+    elif a.cmd == "app" and a.do == "install":
+        if not a.artifact:
+            raise FEError("--do install needs --artifact")
+        install(Device(a.platform, a.device, a.name), a.artifact)
+        out = {"app": a.app, "do": a.do}
     elif a.cmd == "app":
         APP_ACTIONS[a.do](Device(a.platform, a.device, a.name), a.app)
         out = {"app": a.app, "do": a.do}

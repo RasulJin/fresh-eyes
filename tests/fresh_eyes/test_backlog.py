@@ -133,6 +133,21 @@ class BacklogTest(unittest.TestCase):
             self.assertEqual(rel, os.path.join("qa-backlog", "bug-54-сетка-обрезана.png"))
             self.assertTrue(os.path.exists(os.path.join(d, rel)))
 
+    def test_append_attaches_crop_under_the_new_id(self):
+        with tmpdir() as d:
+            p = write(d)
+            src = make_png(os.path.join(d, "runs", "crop.png"), 10, 10)
+            item = append(p, FINDING, "ru-backlog", "2026-10-19", src, os.path.join(d, "qa-backlog"))
+            self.assertEqual(item, "BUG-54")
+            self.assertTrue(os.path.exists(os.path.join(d, "qa-backlog", "bug-54-сетка-обрезана.png")))
+            self.assertIn("доказательство: qa-backlog/bug-54-сетка-обрезана.png", read(p))
+
+    def test_unknown_status_refused(self):
+        with tmpdir() as d:
+            p = write(d)
+            with self.assertRaises(FEError):
+                set_status(p, "BUG-22", "done-ish", "n")
+
 
 if __name__ == "__main__":
     unittest.main()

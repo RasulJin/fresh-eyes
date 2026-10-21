@@ -83,7 +83,8 @@ words / nothing (= the current diff).
      `unmapped` files in the report as areas without a screen.
 5. `python3 $S/coverage.py plan --config .fresh-eyes/config.json --preflight $RUN/preflight.json --mode quick
    --screens a,b [--recheck BUG-N] --out $RUN/coverage.json`. Tell the user the cell count and the unchecked
-   items in one line.
+   items in one line. If the plan has seeded states, run `hooks.seed` now (the plan only has them when
+   preflight allowed mutation) and `hooks.cleanup` after the run.
 6. Smoke: navigator on the first cell of each ready platform. If it ends `blocked`, stop and report why.
 7. Navigation: one `fresh-eyes:navigator` per platform (they may run in parallel), ≤15 cells per call, until
    `coverage.py next` is empty. Prompt: run folder, config path, platform, device id and name from preflight,
@@ -107,8 +108,11 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
 - `--mode full`: release builds from `builds.full`; preflight checks the API inside the installed app's bundle.
 - Screens: all of `config.screens`; also walk every `journeys[]` entry end to end (mutating journeys only
   when preflight allowed mutation).
-- Start from a fresh install on the owned devices (`devices.py app --do clear` then launch); sign-in must
-  already be possible without secrets in prompts (a seeded session or a hook) — otherwise cells are blocked.
+- Fresh install on the owned devices: `devices.py app --do clear` (Android wipes the data; iOS uninstalls, so
+  follow with `--do install --artifact <builds.full.ios.artifact>`), then launch. Sign-in: the navigator types
+  `nav.py type --env <accounts.<role>.email_env>` and `--env <…password_env>` (the values live in the user's
+  environment, never in prompts or files). No `accounts` in config → keep the installed state instead of
+  clearing, and say so in the report.
 - The navigator gets one journey or one screen per call.
 - `full --resume`: take the newest `.fresh-eyes/runs/*-full/`, re-run preflight into it, and continue with
   `coverage.py next` until no todo cells remain. Never restart finished cells.
@@ -129,10 +133,11 @@ blocked cells with notes, unmapped files, platform gaps from `$R/platforms.md`),
 
 1. Show the user a numbered list: confirmed bugs and improvements (title, screen, platform, severity, crop
    path). Ask which are real and which are intended. Default if they just say ok: all confirmed are real.
-2. Real ones → backlog: `python3 $S/backlog.py attach` the main crop into `backlog.images_dir`, then
-   `python3 $S/backlog.py append --file <backlog.path> --finding <one finding as JSON> --template <template>`.
-   For `quick BUG-N`: `backlog.py set-status --id BUG-N --status verified|open --note "<date>, <device>,
-   <build>: <result>, <evidence>"`.
+2. Real ones → backlog: write the finding to `$RUN/backlog-<k>.json`, then `python3 $S/backlog.py append
+   --file <backlog.path> --finding $RUN/backlog-<k>.json --template <template> --attach $RUN/<its main crop>
+   --images-dir <backlog.images_dir>` (assigns the id, copies the crop next to the backlog — run folders are
+   git-ignored — and links it). For `quick BUG-N`: `python3 $S/backlog.py set-status --file <backlog.path>
+   --id BUG-N --status verified|open --note "<date>, <device>, <build>: <result>, <evidence>"`.
 3. Intended ones → append to `.fresh-eyes/known.md`; record "rejected by user" counts in `report.md`
    (this is the false-positive measure).
 4. For each real BUG write a regression flow `<maestro_dir>/fresh-eyes-<BUG-id>.yaml` (tag `fresh-eyes`): reach

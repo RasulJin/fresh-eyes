@@ -102,6 +102,41 @@ def _metro_bundle(platform, port):
         raise FEError("no Metro bundle on port %d: %s" % (port, e))
 
 
+def _prepare(dev, platform, app_id, fix):
+    """One device ready to test: the app installed, nothing that hides bugs (keyboard, animations, stylus),
+    and on iOS the Maestro driver up."""
+    st = {"app_installed": bool(app_id) and devices.app_installed(dev, app_id), "soft_keyboard": True,
+          "animations": True, "problems": []}
+    if not st["app_installed"]:
+        st["problems"].append("app %s is not installed on %s; install the build first" % (app_id, dev.name))
+    if platform == "android":
+        if not devices.soft_keyboard_on(dev) and fix:
+            devices.set_soft_keyboard(dev)
+        st["soft_keyboard"] = devices.soft_keyboard_on(dev)
+        if not st["soft_keyboard"]:
+            st["problems"].append("soft keyboard is off: keyboard bugs would be hidden")
+        if not devices.animations_enabled(dev) and fix:
+            devices.enable_animations(dev)
+        st["animations"] = devices.animations_enabled(dev)
+        if not st["animations"]:
+            st["problems"].append("animations are disabled: motion bugs would be hidden")
+        if devices.stylus_handwriting_on(dev) and fix:
+            devices.disable_stylus_handwriting(dev)
+        st["stylus_off"] = not devices.stylus_handwriting_on(dev)
+        if not st["stylus_off"]:
+            st["problems"].append("stylus handwriting is on: Gboard shows a stylus toolbar instead of the keyboard")
+    if platform == "ios":
+        try:
+            devices.ios_driver(dev)
+            st["driver"] = True
+        except FEError as e:
+            st["driver"] = False
+            st["problems"].append(str(e))
+    st["ok"] = st["app_installed"] and st["soft_keyboard"] and st["animations"] and \
+        st.get("stylus_off", True) and st.get("driver", True)
+    return st
+
+
 def _platform_state(config, platform, kind_needed_small, fix):
     app_id = (config.get("app") or {}).get("%s_id" % platform)
     owned = [d for d in devices.list_devices() if d.platform == platform and devices.is_owned(d)]
@@ -126,34 +161,15 @@ def _platform_state(config, platform, kind_needed_small, fix):
     state["small_device"] = small is not None
     if small is not None:
         state["small_device_id"] = small.id
-    state["app_installed"] = bool(app_id) and devices.app_installed(main, app_id)
-    if not state["app_installed"]:
-        state["problems"].append("app %s is not installed on %s; install the build first" % (app_id, main.name))
-    if platform == "android":
-        if not devices.soft_keyboard_on(main) and fix:
-            devices.set_soft_keyboard(main)
-        state["soft_keyboard"] = devices.soft_keyboard_on(main)
-        if not state["soft_keyboard"]:
-            state["problems"].append("soft keyboard is off: keyboard bugs would be hidden")
-        if not devices.animations_enabled(main) and fix:
-            devices.enable_animations(main)
-        state["animations"] = devices.animations_enabled(main)
-        if not state["animations"]:
-            state["problems"].append("animations are disabled: motion bugs would be hidden")
-        if devices.stylus_handwriting_on(main) and fix:
-            devices.disable_stylus_handwriting(main)
-        state["stylus_off"] = not devices.stylus_handwriting_on(main)
-        if not state["stylus_off"]:
-            state["problems"].append("stylus handwriting is on: Gboard shows a stylus toolbar instead of the keyboard")
-    if platform == "ios":
-        try:
-            devices.ios_driver(main)
-            state["driver"] = True
-        except FEError as e:
-            state["driver"] = False
-            state["problems"].append(str(e))
-    state["ok"] = state["app_installed"] and state["soft_keyboard"] and state["animations"] and \
-        state.get("stylus_off", True) and state.get("driver", True)
+    earlier = state["problems"]
+    state.update(_prepare(main, platform, app_id, fix))
+    state["problems"] = earlier + state["problems"]
+    if small is not None:
+        small_state = _prepare(small, platform, app_id, fix)
+        if not small_state["ok"]:  # small-screen cells become "not checked", the platform stays usable
+            state["small_device"] = False
+            state.pop("small_device_id", None)
+            state["problems"] += ["small device %s: %s" % (small.name, p) for p in small_state["problems"]]
     return state
 
 

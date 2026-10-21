@@ -136,6 +136,15 @@ class PreflightTest(unittest.TestCase):
         self.bundle(installed="api-staging.example.com api.example.com")
         self.assertFalse(preflight.check(config(), "full", fix=False)["env"]["verified"])
 
+    def test_small_device_without_the_app_is_not_used(self):
+        small = Device("android", "emulator-5562", "fresh-eyes-small")
+        self.fake_devices(listed=(PIXEL, small))
+        with mock.patch.object(devices, "app_installed", lambda dev, app: dev.id != small.id):
+            st = preflight.check(config(), "quick", fix=False)["platforms"]["android"]
+        self.assertTrue(st["ok"])
+        self.assertFalse(st["small_device"])
+        self.assertIn("fresh-eyes-small", " ".join(st["problems"]))
+
     def test_ios_needs_the_maestro_driver(self):
         sim = Device("ios", "1EB9BE1B", "fresh-eyes iPhone 17")
         self.fake_devices(listed=(sim,))

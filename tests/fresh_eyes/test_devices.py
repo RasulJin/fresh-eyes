@@ -235,11 +235,30 @@ class AvdTest(unittest.TestCase):
     def test_small_avd_gets_small_data_partition(self):
         from tests.fresh_eyes.helpers import tmpdir
         import os
-        with tmpdir() as d, mock.patch.object(devices, "AVD_DIR", d):
+        image = ("system-images/android-36/google_apis/x86_64/", "android-36", "x86_64", "google_apis")
+        with tmpdir() as d, mock.patch.object(devices, "AVD_DIR", d), \
+                mock.patch.object(devices, "system_image", lambda: image):
             devices._write_avd("fresh-eyes-small", 720, 1280, 320, devices.ANDROID_DATA_BYTES["small"])
-            cfg = open(os.path.join(d, "fresh-eyes-small.avd", "config.ini")).read()
+            with open(os.path.join(d, "fresh-eyes-small.avd", "config.ini")) as f:
+                cfg = f.read()
+        self.assertIn("abi.type=x86_64", cfg)
+        self.assertIn("image.sysdir.1=system-images/android-36/google_apis/x86_64/", cfg)
         self.assertIn("disk.dataPartition.size=2147483648", cfg)
         self.assertIn("hw.keyboard=no", cfg)
+
+    def test_system_image_newest_api_for_this_cpu(self):
+        from tests.fresh_eyes.helpers import tmpdir
+        import os
+        with tmpdir() as d, mock.patch.object(devices, "sdk_root", lambda: d), \
+                mock.patch.object(devices.platform, "machine", lambda: "arm64"):
+            for rel in ("android-35/google_apis_playstore/arm64-v8a", "android-36.1/google_apis/arm64-v8a",
+                        "android-36.1/google_apis_playstore/x86_64"):
+                os.makedirs(os.path.join(d, "system-images", rel))
+            self.assertEqual(devices.system_image(), ("system-images/android-36.1/google_apis/arm64-v8a/",
+                                                      "android-36.1", "arm64-v8a", "google_apis"))
+        with tmpdir() as d, mock.patch.object(devices, "sdk_root", lambda: d):
+            with self.assertRaises(FEError):
+                devices.system_image()
 
     def test_ensure_owned_fails_fast_when_emulator_exits(self):
         from tests.fresh_eyes.helpers import tmpdir

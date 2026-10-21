@@ -4,6 +4,7 @@
 CLI:
   backlog.py next-id --file F --prefix BUG|IMP
   backlog.py append --file F --finding finding.json [--template ru-backlog] [--date YYYY-MM-DD]
+                    [--attach CROP --images-dir D]
   backlog.py set-status --file F --id BUG-12 --status verified --note TEXT [--line N] [--template ru-backlog]
   backlog.py attach --src PNG --images-dir D --id BUG-54 --slug TEXT --relative-to DIR
 """
@@ -75,16 +76,26 @@ def _write(path, text):
         f.write(text)
 
 
-def append(path, finding, template, date=None):
+def append(path, finding, template, date=None, attach_src=None, images_dir=None):
+    """Add an entry with the next id; with attach_src, copy that crop into images_dir under the new id and link
+    it from the entry (run folders are git-ignored, so evidence must live next to the backlog)."""
     text = _read(path) if os.path.exists(path) else ""
     prefix = "IMP" if finding.get("kind") == "IMP" else "BUG"
     item_id = "%s-%d" % (prefix, next_id(text, prefix))
+    if attach_src:
+        if not images_dir:
+            raise FEError("--attach needs --images-dir")
+        rel = attach(attach_src, images_dir, item_id, finding.get("title", ""),
+                     os.path.dirname(os.path.abspath(path)))
+        finding = dict(finding, evidence=[rel])
     entry = render(finding, template, item_id, date or time.strftime("%Y-%m-%d"))
     _write(path, text.rstrip("\n") + "\n\n" + entry)
     return item_id
 
 
 def set_status(path, item_id, status, note, line=None, template="ru-backlog"):
+    if status not in KNOWN_STATUSES:
+        raise FEError("status must be one of %s" % ", ".join(KNOWN_STATUSES))
     lines = _read(path).split("\n")
     head = re.compile(r"^(?:#{2,4} %s(?=[ ·—])|- \*\*%s\*\*)" % (re.escape(item_id), re.escape(item_id)))
     hits = [i + 1 for i, l in enumerate(lines) if head.match(l)]
@@ -121,8 +132,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("next-id"); p.add_argument("--file", required=True); p.add_argument("--prefix", required=True)
-    p = sub.add_parser("append"); p.add_argument("--file", required=True); p.add_argument("--finding", required=True)
+    p = sub.add_parser("append"); p.add_argument("--file", required=True)
+    p.add_argument("--finding", required=True, help="path to a JSON file holding one finding")
     p.add_argument("--template", default="ru-backlog"); p.add_argument("--date")
+    p.add_argument("--attach", help="crop to copy next to the backlog"); p.add_argument("--images-dir")
     p = sub.add_parser("set-status"); p.add_argument("--file", required=True); p.add_argument("--id", required=True)
     p.add_argument("--status", required=True); p.add_argument("--note", required=True)
     p.add_argument("--line", type=int); p.add_argument("--template", default="ru-backlog")
@@ -133,7 +146,7 @@ def main():
     if a.cmd == "next-id":
         out = next_id(_read(a.file), a.prefix)
     elif a.cmd == "append":
-        out = append(a.file, read_json(a.finding), a.template, a.date)
+        out = append(a.file, read_json(a.finding), a.template, a.date, a.attach, a.images_dir)
     elif a.cmd == "set-status":
         set_status(a.file, a.id, a.status, a.note, a.line, a.template)
         out = {"id": a.id, "status": a.status}
