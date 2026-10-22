@@ -46,8 +46,9 @@ PROBES = {
 }
 # snaps inside the pack a done cell needs: a navigator skips a probe's extra steps unless the cell depends on them
 REQUIRED_SUBPACKS = {"rapid-tap": "afterback", "keyboard-open": "return", "search": "typed"}
-# a scenario does the task, changes an input after the result, and checks what was kept
-SCENARIO_KINDS = {"task", "change", "check"}
+# a scenario does the task, changes an input after the result, tries an invalid input, interrupts an action,
+# and checks what was kept
+SCENARIO_KINDS = {"task", "change", "invalid", "interrupt", "check"}
 # probes after which the app has no reason to be on another screen: their pack must show the screen's marker
 # (not swipe-inside: scrolling takes headers, and with them most markers, off screen)
 ON_SCREEN_PROBES = {"none", "keyboard-open"}

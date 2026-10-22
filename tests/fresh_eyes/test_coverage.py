@@ -177,7 +177,7 @@ class StatusTest(unittest.TestCase):
             set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell)])
             self.assertEqual(cell["status"], "done")
 
-    def test_scenario_needs_task_change_check_steps_and_logcat(self):
+    def test_scenario_needs_every_step_kind_and_logcat(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0]["probes"] = ["scenario"]
         cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
@@ -186,10 +186,13 @@ class StatusTest(unittest.TestCase):
         cells = {c["platform"]: c for c in cov["cells"] if c["probe"] == "scenario"}
         android = cells["android"]
         pack = make_pack(root, android, sub=False)
-        with self.assertRaisesRegex(FEError, "change/check/task"):
+        with self.assertRaisesRegex(FEError, "change/check/interrupt/invalid/task"):
             set_status(cov, android["id"], "done", evidence=[pack])
         write_json(os.path.join(pack, "steps.json"), [{"n": 1, "kind": "task"}, {"n": 2, "kind": "change"},
                                                       {"n": 3, "kind": "check"}])
+        with self.assertRaisesRegex(FEError, "no interrupt/invalid step"):  # the steps a navigator skips
+            set_status(cov, android["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "steps.json"), [{"n": i, "kind": k} for i, k in enumerate(SCENARIO_KINDS)])
         with self.assertRaisesRegex(FEError, "logcat"):
             set_status(cov, android["id"], "done", evidence=[pack])
         set_status(cov, android["id"], "done", evidence=[make_pack(root, android)])

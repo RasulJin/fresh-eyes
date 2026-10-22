@@ -135,6 +135,12 @@ def _prepare(dev, platform, app_id, fix):
         st["stylus_off"] = not devices.stylus_handwriting_on(dev)
         if not st["stylus_off"]:
             st["problems"].append("stylus handwriting is on: Gboard shows a stylus toolbar instead of the keyboard")
+        if devices.maestro_driver_running(dev) and fix:
+            devices.stop_maestro_driver(dev)
+        st["screen_readable"] = not devices.maestro_driver_running(dev)
+        if not st["screen_readable"]:
+            st["problems"].append("a Maestro driver (left by a Maestro MCP session) holds UiAutomation on %s: "
+                                  "screens cannot be read" % dev.name)
     if platform == "ios":
         try:
             devices.ios_driver(dev)
@@ -143,7 +149,7 @@ def _prepare(dev, platform, app_id, fix):
             st["driver"] = False
             st["problems"].append(str(e))
     st["ok"] = st["app_installed"] and st["soft_keyboard"] and st["animations"] and \
-        st.get("stylus_off", True) and st.get("driver", True)
+        st.get("stylus_off", True) and st.get("screen_readable", True) and st.get("driver", True)
     return st
 
 

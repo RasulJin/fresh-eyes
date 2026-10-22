@@ -87,17 +87,22 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
   `app.android_id`).
 - Steps: snap after each into `<pack>/step-<n>/` and write `<pack>/steps.json`:
   `[{"n": 1, "kind": "task", "did": "...", "expect": "..."}]`, with `expect` written before you look.
-  1. `task`: do what the screen is for (the screen's `task` in config) end to end with realistic input; wait
-     for the result.
+  1. `task`: do what the screen is for (the screen's `task` in config) end to end with realistic input, and use
+     each primary action the screen offers on the way (the buttons on a result or card, the form a header
+     button opens), not one path only; wait for each result.
   2. `change`: after the result, change one input and run again (another value, an edited item, a new
-     question). Also one invalid or edge input, one action stopped or cancelled midway, one retry.
-  3. `check`: leave and come back, then open where the result should live (the `task` says where): is it there,
+     question).
+  3. `invalid`: one invalid or edge input (the same value in two fields that must differ, empty, letters in a
+     number, very long).
+  4. `interrupt`: stop, cancel or go Back in the middle of a running action, then retry it.
+  5. `check`: leave and come back, then open where the result should live (the `task` says where): is it there,
      and is nothing there that was not asked for?
+- Look first, touch second: after each action snap before you touch anything. Never tap the field the app
+  should have focused, never close what the app opened: the snap must show what the app did by itself.
 - After: `capture.py logs --platform android --device ID --out PACK --package PKG` (writes `logcat.txt`).
 - Data: create or change data only when preflight allowed mutation; delete what you created; never send
   anything to real people. Without mutation do the read-only part and say so in `steps.json`.
-- `coverage.py set` refuses the cell without a `task`, a `change` and a `check` step and, on Android, without
-  `logcat.txt`.
+- `coverage.py set` refuses the cell unless `steps.json` has all five kinds and, on Android, `logcat.txt`.
 
 ### swipe-inside
 - Reveals: content clipped by its container (a grid that cannot scroll to its last row), pagers that snap back,

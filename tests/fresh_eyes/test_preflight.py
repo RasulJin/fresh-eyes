@@ -42,6 +42,8 @@ class PreflightTest(unittest.TestCase):
             "enable_animations": lambda dev: calls.append("enable_animations"),
             "stylus_handwriting_on": lambda dev: state.get("stylus", False),
             "disable_stylus_handwriting": lambda dev: (calls.append("disable_stylus"), state.update(stylus=False)),
+            "maestro_driver_running": lambda dev: state.get("maestro", False),
+            "stop_maestro_driver": lambda dev: (calls.append("stop_maestro"), state.update(maestro=False)),
             "terminate": lambda dev, app: calls.append("terminate"),
         }
         for name, fn in patches.items():
@@ -84,6 +86,16 @@ class PreflightTest(unittest.TestCase):
             self.assertIn("stylus", " ".join(res["platforms"]["android"]["problems"]))
             res = preflight.check(config(), "quick", fix=True)
         self.assertIn("disable_stylus", calls)
+        self.assertTrue(res["platforms"]["android"]["ok"])
+
+    def test_leftover_maestro_driver_is_reported_and_stopped(self):
+        calls = self.fake_devices()
+        with mock.patch.object(devices, "maestro_driver_running", lambda dev: "stop_maestro" not in calls):
+            res = preflight.check(config(), "quick", fix=False)
+            self.assertFalse(res["platforms"]["android"]["ok"])
+            self.assertIn("UiAutomation", " ".join(res["platforms"]["android"]["problems"]))
+            res = preflight.check(config(), "quick", fix=True)
+        self.assertIn("stop_maestro", calls)
         self.assertTrue(res["platforms"]["android"]["ok"])
 
     def test_foreign_device_is_not_used(self):

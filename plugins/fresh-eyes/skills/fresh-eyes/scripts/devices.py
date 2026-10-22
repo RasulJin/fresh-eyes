@@ -539,6 +539,22 @@ def disable_stylus_handwriting(dev):
     _shell(dev, "am force-stop %s" % GBOARD, check=False)
 
 
+MAESTRO_DRIVER = ("dev.mobile.maestro", "dev.mobile.maestro.test")
+
+
+def maestro_driver_running(dev):
+    """A Maestro MCP session leaves its driver on the device; it holds UiAutomation, so hierarchy dumps fail."""
+    if dev.platform != "android":
+        return False
+    return bool(_shell(dev, "pidof %s" % MAESTRO_DRIVER[0], check=False).strip())
+
+
+def stop_maestro_driver(dev):
+    _require_owned(dev, "stop the Maestro driver")
+    for pkg in MAESTRO_DRIVER:
+        _shell(dev, "am force-stop %s" % pkg, check=False)
+
+
 def px_per_dp(dev):
     if dev.platform != "android":
         return ios_scale(dev)

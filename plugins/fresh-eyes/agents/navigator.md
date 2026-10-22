@@ -72,7 +72,8 @@ snap after every step into `<run>/<platform>/journey/<id>-journey/step-<n>/` and
 (`[{"n": 1, "did": "...", "screen": "..."}]`). If the journey creates test data, delete it afterwards.
 
 Scenario cells: follow `scenario` in probes.md with the screen's `task` from `config.json`; `PKG` there is
-`app.android_id`.
+`app.android_id`. Look first, touch second: snap after each action before you tap anything, so the frame shows
+what the app did by itself (a field it should have focused, a sheet it opened).
 
 For `tap-everything`, write `<pack>/taps.json`: `[{"som": n, "label": "...", "result": "<screen/state after>"}]`.
 

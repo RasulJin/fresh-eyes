@@ -65,7 +65,7 @@ report it — a reference app doing the same is not a reason to drop it unless t
 Judge from the evidence, not from the app's source code: no hunting for causes or file:line (the fixer does
 that). The one exception: a single lookup of a hit area (`hitSlop`) or a screen-reader label.
 
-Never report a bug without a frame that shows it. Never flag what `known.md` lists or the checklist's
+Never report a bug without evidence that shows it: a frame, or for an app error the `logcat.txt` line. Never flag what `known.md` lists or the checklist's
 do-not-flag section covers. Do not describe the screen; report problems.
 
 ## Output

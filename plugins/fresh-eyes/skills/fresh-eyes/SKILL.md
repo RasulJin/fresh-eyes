@@ -21,7 +21,9 @@ the heavy work runs in subagents that exchange files with you.
    `coverage.json`, which happens only when `preflight.json` verified a staging/local backend. Never improvise one.
 3. Only change devices whose name starts with `fresh-eyes`. The user's own emulators and phones are read-only.
 4. Never run the Maestro CLI on a device the Maestro MCP is driving (it kills the MCP session).
-5. Subagents get paths and return ≤10 lines. Keep screenshots and videos out of this conversation.
+5. Subagents get paths and return ≤10 lines. Keep screenshots and videos out of this conversation. Wait for
+   every agent you start before the next step and never end your turn while one runs: a headless run
+   (`claude -p`) stops background agents 10 minutes after the turn ends.
 6. Never write secrets (passwords, tokens, test credentials) into files, prompts or reports.
 7. Questions to the user come from you (subagents cannot ask): spec conflicts, "bug or intended?", go-aheads.
 8. You orchestrate, you do not test or judge. Run only the steps below: no reading the app's source code, no

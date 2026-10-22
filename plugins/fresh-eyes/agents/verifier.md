@@ -39,6 +39,9 @@ For each finding with `verdict: "pending"`:
    `verify_note` "intermittent: seen in <pack>, not reproduced in <recheck pack>" — never `rejected`. Reject
    only when the original frame itself is wrong: captured mid-animation or mid-transition (motion evidence, a
    half-faded layer), stale, or showing test data rather than the app.
+   An app error from the log needs no frame: when the finding's evidence is a `logcat.txt` line (that file holds
+   only the app's own process and crashes that name the app), confirm it if the line is there and is an error
+   (`E/`, `F/`) or a crash; a warning only when it floods (hundreds of lines). Do not request a frame for it.
 3. If the evidence decides it → set `verdict` to `confirmed` or `rejected` with a one-line `verify_note`.
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
