@@ -37,6 +37,7 @@ noted. Example (generic values):
   "screens": [
     {"id": "profile-trips", "name": "Profile → Trips", "route": "app/(tabs)/profile.tsx",
      "reach": "Open the Profile tab, then the Trips tab of the pager.", "marker": ["Мои поездки", "trips-list"],
+     "task": "Open a trip; a new trip appears here after it is created.",
      "states": ["default", "empty", "long-text", "dark", "font-xl", "small-screen"],
      "probes": ["swipe-inside", "tap-everything"], "neighbors": ["profile-posts"]}
   ],
@@ -73,4 +74,6 @@ noted. Example (generic values):
   (1–3 strings only this screen shows: its header title, a unique button label, a testID; matched
   case-insensitively as part of a node's text, label or id). `coverage.py set` refuses a `none` or
   `keyboard-open` pack that shows none of them, unless `--note` says what is on screen.
+  `task` (for `scenario`): what a person comes to this screen to do, in a sentence, and where the result should
+  show up afterwards (another tab, a list, the same screen after reopening).
 - `journeys[]`: end-to-end paths for full mode; `mutating: true` journeys only run when mutation is allowed.

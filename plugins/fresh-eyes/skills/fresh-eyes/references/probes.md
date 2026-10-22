@@ -78,6 +78,27 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
   `<pack>/form-after`.
 - Mutating: no. A button that writes data (Send, Save, Pay) is `double-submit`, never this probe.
 
+### scenario
+- Reveals: logic and flow bugs no single screen shows: results of the old input under a changed form, a hidden
+  side effect (something saved without asking), invalid input accepted (from = to, letters in a number), a
+  stopped or failed action left unmarked, a retry that duplicates, an edit that loses focus or text, state
+  gone or stale after coming back, app errors in the log while the screen looks fine.
+- Before: `capture.py logs --platform android --device ID --out PACK --package PKG --clear` (PKG =
+  `app.android_id`).
+- Steps: snap after each into `<pack>/step-<n>/` and write `<pack>/steps.json`:
+  `[{"n": 1, "kind": "task", "did": "...", "expect": "..."}]`, with `expect` written before you look.
+  1. `task`: do what the screen is for (the screen's `task` in config) end to end with realistic input; wait
+     for the result.
+  2. `change`: after the result, change one input and run again (another value, an edited item, a new
+     question). Also one invalid or edge input, one action stopped or cancelled midway, one retry.
+  3. `check`: leave and come back, then open where the result should live (the `task` says where): is it there,
+     and is nothing there that was not asked for?
+- After: `capture.py logs --platform android --device ID --out PACK --package PKG` (writes `logcat.txt`).
+- Data: create or change data only when preflight allowed mutation; delete what you created; never send
+  anything to real people. Without mutation do the read-only part and say so in `steps.json`.
+- `coverage.py set` refuses the cell without a `task`, a `change` and a `check` step and, on Android, without
+  `logcat.txt`.
+
 ### swipe-inside
 - Reveals: content clipped by its container (a grid that cannot scroll to its last row), pagers that snap back,
   jumps when releasing halfway.

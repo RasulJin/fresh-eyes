@@ -5,19 +5,24 @@ snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json,
         crops/<check>-<k>.png (native resolution), meta.json. Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs.
 around: records the screen around an action command, then motion analysis: video.mp4, motion.json,
         sheet_*.png, around.json.
+logs:   Android only: the app's warnings and errors since the last `logs --clear`, plus crashes, repeats
+        collapsed: logcat.txt.
 
 CLI:
   capture.py snap --platform P --device ID --out PACK [--before PACK] [--keyboard] [--expect-differs PACK]
                   [--hierarchy-file F --hierarchy-source maestro|uiautomator|xctest]  (default: read the device)
   capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms 500] -- CMD ...
+  capture.py logs --platform android --device ID --out PACK --package PKG [--clear]
 """
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
+from collections import Counter, defaultdict
 
 import devices
 import fe_common
@@ -151,6 +156,45 @@ def around(platform, device_id, out, action, settle=2.5, ceiling_ms=DEFAULT_CEIL
     return 0 if code == 0 else 2
 
 
+CRASH_TAGS = ("AndroidRuntime", "DEBUG")  # a crash is logged by the system, not by the app's own pid
+_BRIEF = re.compile(r"([WEF])/([^(]+)\(\s*(\d+)\): (.*)")
+
+
+def logs(platform, device_id, out, package, clear=False):
+    if platform != "android":
+        raise FEError("logs: Android only (iOS app logs are not automated yet)")
+    if clear:
+        devices._adb(device_id, "logcat", "-c")
+        return 0
+    pid = devices._adb(device_id, "shell", "pidof", package, check=False).strip()
+    seen, first, crashes = Counter(), {}, defaultdict(list)
+
+    def add(level, tag, msg):
+        key = "%s/%s: %s" % (level, tag, re.sub(r"\d+", "#", msg)[:300])
+        seen[key] += 1  # a warning flood (thousands of the same line with other ids) is one line
+        first.setdefault(key, "%s/%s: %s" % (level, tag, msg[:300]))
+    for line in devices._adb(device_id, "logcat", "-d", "-v", "brief", "*:W", timeout=60).splitlines():
+        m = _BRIEF.match(line)
+        if not m:
+            continue
+        level, tag, line_pid, msg = m.group(1), m.group(2).strip(), m.group(3), m.group(4)
+        if tag in CRASH_TAGS:
+            crashes[(tag, line_pid)].append((level, tag, msg))
+        elif line_pid == pid:
+            add(level, tag, msg)
+    for block in crashes.values():  # the crashed process is gone, so its block is kept when it names the app
+        if any(package in msg for _, _, msg in block):
+            for level, tag, msg in block:
+                add(level, tag, msg)
+    order = sorted(seen, key=lambda k: ("FEW".index(k[0]), k[2:].split(":")[0] not in CRASH_TAGS, -seen[k]))
+    os.makedirs(out, exist_ok=True)
+    with open(os.path.join(out, "logcat.txt"), "w", encoding="utf-8") as f:
+        f.write("# %s pid %s: %d warnings/errors, %d distinct\n" % (package, pid or "not running",
+                                                                     sum(seen.values()), len(seen)))
+        f.writelines("%6d x %s\n" % (seen[k], first[k]) for k in order[:200])
+    return 0
+
+
 def main():
     argv = sys.argv[1:]
     action = []
@@ -159,7 +203,7 @@ def main():
         argv, action = argv[:i], argv[i + 1:]
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("snap", "around"):
+    for name in ("snap", "around", "logs"):
         p = sub.add_parser(name)
         p.add_argument("--platform", required=True, choices=["android", "ios"])
         p.add_argument("--device", required=True)
@@ -173,10 +217,14 @@ def main():
     r.usage = "capture.py around --platform P --device ID --out PACK [--settle S] [--ceiling-ms MS] -- CMD ..."
     r.add_argument("--settle", type=float, default=2.5); r.add_argument("--ceiling-ms", type=int,
                                                                         default=DEFAULT_CEILING_MS)
+    g = sub.choices["logs"]
+    g.add_argument("--package", required=True); g.add_argument("--clear", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "snap":
         code = snap(a.platform, a.device, a.out, a.hierarchy_file, a.hierarchy_source, a.before, a.keyboard,
                     a.expect_differs)
+    elif a.cmd == "logs":
+        code = logs(a.platform, a.device, a.out, a.package, a.clear)
     else:
         if not action:
             raise FEError("around needs an action command after --")

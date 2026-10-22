@@ -35,6 +35,7 @@ PROBES = {
     "kill-relaunch": {"mutating": False, "platforms": BOTH},
     "keyboard-open": {"mutating": False, "platforms": BOTH},
     "search": {"mutating": False, "platforms": BOTH},  # type a query, run a read-only search, look at the results
+    "scenario": {"mutating": False, "platforms": BOTH},  # the screen's task end to end; writes only if mutation is on
     "swipe-inside": {"mutating": False, "platforms": BOTH},
     "tap-everything": {"mutating": False, "platforms": BOTH},
     "rotate": {"mutating": False, "platforms": BOTH},
@@ -45,6 +46,8 @@ PROBES = {
 }
 # snaps inside the pack a done cell needs: a navigator skips a probe's extra steps unless the cell depends on them
 REQUIRED_SUBPACKS = {"rapid-tap": "afterback", "keyboard-open": "return", "search": "typed"}
+# a scenario does the task, changes an input after the result, and checks what was kept
+SCENARIO_KINDS = {"task", "change", "check"}
 # probes after which the app has no reason to be on another screen: their pack must show the screen's marker
 # (not swipe-inside: scrolling takes headers, and with them most markers, off screen)
 ON_SCREEN_PROBES = {"none", "keyboard-open"}
@@ -189,6 +192,16 @@ def _shows_marker(pack, markers):
                for n in read_json(path) for k in ("text", "label", "rid") for w in want)
 
 
+def _scenario_problems(pack, platform):
+    steps = os.path.join(pack, "steps.json")
+    kinds = {s.get("kind") for s in read_json(steps)} if os.path.isfile(steps) else set()
+    problems = ["steps.json has no %s step" % "/".join(sorted(SCENARIO_KINDS - kinds))] \
+        if SCENARIO_KINDS - kinds else []
+    if platform == "android" and not os.path.isfile(os.path.join(pack, "logcat.txt")):
+        problems.append("no logcat.txt (capture.py logs)")
+    return problems
+
+
 def set_status(cov, cell_id, status, evidence=None, note=""):
     if status not in STATUSES:
         raise FEError("status must be one of %s" % ", ".join(STATUSES))
@@ -203,6 +216,9 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         need = REQUIRED_SUBPACKS.get(c["probe"])
         if need and packs and not any(os.path.isfile(os.path.join(e, need, "meta.json")) for e in packs):
             problems.append("a %s cell needs the snap <pack>/%s (see probes.md)" % (c["probe"], need))
+        if c["probe"] == "scenario" and packs:
+            problems += ["a scenario cell needs: %s (see probes.md)" % p
+                         for p in _scenario_problems(packs[0], c["platform"])]
         if c.get("marker") and c["probe"] in ON_SCREEN_PROBES and not note \
                 and all(_shows_marker(e, c["marker"]) is False for e in packs):
             problems.append("the pack shows none of %s's markers %s, so it was snapped on another screen: snap it "

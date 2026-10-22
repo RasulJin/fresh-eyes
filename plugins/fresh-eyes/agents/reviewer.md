@@ -32,23 +32,28 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 1. For each pack, look first, read second: `som.png`, then `crops/*.png`, then `sheet_*.png`; then read
    `candidates.json`, `meta.json`, `hierarchy.txt`, `motion.json`, `taps.json`, `around.json`. The `som.png` of
    every pack is mandatory, and a pack's sub-folders with a `meta.json` (`afterback/`, `return/`, `typed/`,
-   `form-after/`, journey `step-N/`) are packs too; keep within ~30 images in total (crops and contact sheets
-   before full screenshots).
+   `form-after/`, journey and scenario `step-N/`) are packs too; keep within ~30 images in total (crops and
+   contact sheets before full screenshots).
    If the budget runs out, stop: list only the packs you opened in `reviewed_packs` — the orchestrator sends the
    rest to another reviewer. Never list a pack you did not look at.
 2. Decide every script candidate explicitly. A `partially_visible` item that a `swipe-inside` pack shows fully
    is fine; `clipped`, `under_keyboard` and `overlap` deserve a careful look at the crop. `keyboard_missing`:
    an input was focused but no keyboard is up; a real bug unless the crop shows a keyboard intro/onboarding.
-3. Go beyond the candidates through the checklist sections and the UX rubric. Compare with the spec rules and
+3. A scenario pack is judged step by step against its `steps.json`: does each frame match the `expect` written
+   before the step? Results must belong to the latest input (nothing stale), what was saved must show where the
+   step says and nothing unasked-for may appear, invalid input must be refused, a stopped or failed action must
+   say so, a retry must not duplicate. `logcat.txt`: an error or a crash during the scenario is a BUG even when
+   the screen looks fine; a flood of one warning is one finding.
+4. Go beyond the candidates through the checklist sections and the UX rubric. Compare with the spec rules and
    with the examples. Check consistency against sibling packs (header vs tab bar icon, the same control in two
    states, light vs dark).
-4. For each problem write a finding: `kind` BUG (defect) or IMP (improvement with a concrete change),
+5. For each problem write a finding: `kind` BUG (defect) or IMP (improvement with a concrete change),
    `severity` per the checklist, `som` numbers and an evidence crop path, `expected` vs `actual`, `steps`
    (the cell id and probe that reproduce it), `rule` = `spec:<rule id>` or `taste`. `confidence` reflects how
    sure the evidence makes you; `taste` findings are capped at 0.6.
-5. Things you suspect but cannot see well enough (needs a zoom, another frame, a repeat): still write the
+6. Things you suspect but cannot see well enough (needs a zoom, another frame, a repeat): still write the
    finding with low confidence and say in `actual` what evidence is missing. The verifier will chase it.
-6. Spec conflicts or "bug or intended?" doubts go to `questions[]` with short options — **in addition to** a
+7. Spec conflicts or "bug or intended?" doubts go to `questions[]` with short options — **in addition to** a
    finding, never instead of one. If the spec is silent and you are unsure whether something is intended (a
    reference app does it differently, siblings disagree), still write it as a finding with `rule: taste` and
    confidence ≤ 0.5, so it reaches "look with your own eyes". A doubt that only lives in `questions[]` gets lost.

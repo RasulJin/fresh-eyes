@@ -53,6 +53,7 @@ Goal: a working `.fresh-eyes/` for this project, confirmed by the user.
      `["default", "dark", "font-xl", "small-screen"]`, plus `keyboard` for screens with inputs. Probes by kind:
      lists/grids → `swipe-inside`, `tap-everything`; forms → `keyboard-open`, `hardware-back-keyboard`;
      search/autocomplete fields with a read-only button (search, filter) → `search`;
+     screens where a person does something (forms, search, chat, create/edit) → `scenario`, with `task`;
      overlays/maps/menus → `tap-outside`, `back-during-animation`; share/send buttons → `rapid-tap`;
      long requests → `background-foreground`. Fill `reach` in plain words, `neighbors`, and `marker` (header
      title or a testID from the route file; another screen must not show it).

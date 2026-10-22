@@ -71,6 +71,9 @@ Journey cells (`<platform>/journey/<id>/journey`): follow the journey's `steps` 
 snap after every step into `<run>/<platform>/journey/<id>-journey/step-<n>/` and write `steps.json`
 (`[{"n": 1, "did": "...", "screen": "..."}]`). If the journey creates test data, delete it afterwards.
 
+Scenario cells: follow `scenario` in probes.md with the screen's `task` from `config.json`; `PKG` there is
+`app.android_id`.
+
 For `tap-everything`, write `<pack>/taps.json`: `[{"som": n, "label": "...", "result": "<screen/state after>"}]`.
 
 ## Requests mode (for the verifier)

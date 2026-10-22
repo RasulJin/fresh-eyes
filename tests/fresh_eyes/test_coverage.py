@@ -8,8 +8,8 @@ import unittest
 
 from tests.fresh_eyes.helpers import tmpdir
 from fe_common import FEError, write_json
-from coverage import (PROBES, REQUIRED_SUBPACKS, STATES, _load_findings, coverage_map, next_cells, plan,
-                      screens_from_diff, set_status, verdict)
+from coverage import (PROBES, REQUIRED_SUBPACKS, SCENARIO_KINDS, STATES, _load_findings, coverage_map, next_cells,
+                      plan, screens_from_diff, set_status, verdict)
 
 ONE_SCREEN = {"language": "ru", "app": {"expo_root": "apps/mobile"}, "hooks": {},
               "screens": [{"id": "profile-trips", "route": "app/(tabs)/profile.tsx", "states": ["default", "dark"],
@@ -25,6 +25,10 @@ def make_pack(root, cell, sub=True, **meta):
     write_json(os.path.join(path, "meta.json"), dict({"platform": cell["platform"]}, **meta))
     if sub and cell["probe"] in REQUIRED_SUBPACKS:
         write_json(os.path.join(path, REQUIRED_SUBPACKS[cell["probe"]], "meta.json"), {"platform": cell["platform"]})
+    if sub and cell["probe"] == "scenario":
+        write_json(os.path.join(path, "steps.json"), [{"n": i, "kind": k} for i, k in enumerate(SCENARIO_KINDS)])
+        with open(os.path.join(path, "logcat.txt"), "w") as f:
+            f.write("# no warnings\n")
     return path
 
 
@@ -172,6 +176,28 @@ class StatusTest(unittest.TestCase):
                     set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell, sub=False)])
             set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell)])
             self.assertEqual(cell["status"], "done")
+
+    def test_scenario_needs_task_change_check_steps_and_logcat(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["probes"] = ["scenario"]
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        cells = {c["platform"]: c for c in cov["cells"] if c["probe"] == "scenario"}
+        android = cells["android"]
+        pack = make_pack(root, android, sub=False)
+        with self.assertRaisesRegex(FEError, "change/check/task"):
+            set_status(cov, android["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "steps.json"), [{"n": 1, "kind": "task"}, {"n": 2, "kind": "change"},
+                                                      {"n": 3, "kind": "check"}])
+        with self.assertRaisesRegex(FEError, "logcat"):
+            set_status(cov, android["id"], "done", evidence=[pack])
+        set_status(cov, android["id"], "done", evidence=[make_pack(root, android)])
+        ios = cells["ios"]  # no app logs on iOS yet: the steps are enough
+        pack = make_pack(root, ios, sub=False)
+        write_json(os.path.join(pack, "steps.json"), [{"n": i, "kind": k} for i, k in enumerate(SCENARIO_KINDS)])
+        set_status(cov, ios["id"], "done", evidence=[pack])
+        self.assertEqual([android["status"], ios["status"]], ["done", "done"])
 
     def test_on_screen_pack_must_show_the_screens_marker(self):
         cfg = copy.deepcopy(ONE_SCREEN)
