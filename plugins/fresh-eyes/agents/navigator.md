@@ -62,6 +62,9 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
    It refuses a pack that is missing, blocked, or whose recorded action failed (`capture.py around` exit 2:
    the wrapped command failed — e.g. the element was not found). Then retry the cell once, else
    `--status failed|blocked --note "<why>"`. Never mark a cell done to move on.
+   It also refuses a state or `keyboard-open` pack that shows none of the screen's `marker`:
+   you snapped another screen, so go there and snap again. If it is that screen and it is blank or broken, set
+   done with `--note` saying what it shows.
 6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell.
 
 Journey cells (`<platform>/journey/<id>/journey`): follow the journey's `steps` from `config.json` end to end;

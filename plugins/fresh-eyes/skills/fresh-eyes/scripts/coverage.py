@@ -45,6 +45,9 @@ PROBES = {
 }
 # snaps inside the pack a done cell needs: a navigator skips a probe's extra steps unless the cell depends on them
 REQUIRED_SUBPACKS = {"rapid-tap": "afterback", "keyboard-open": "return", "search": "typed"}
+# probes after which the app has no reason to be on another screen: their pack must show the screen's marker
+# (not swipe-inside: scrolling takes headers, and with them most markers, off screen)
+ON_SCREEN_PROBES = {"none", "keyboard-open"}
 STATES = ["default", "empty", "loading", "error", "offline", "long-text", "dark", "font-xl", "small-screen",
           "keyboard"]
 STATE_PLATFORMS = {"offline": ["android"]}
@@ -144,6 +147,9 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
             cells.append({"id": "%s/journey/%s/journey" % (p, j["id"]), "platform": p, "screen": "journey",
                           "state": j["id"], "probe": "journey", "mutating": bool(j.get("mutating")),
                           "status": "todo", "evidence": [], "note": j.get("steps", "")})
+    for c in cells:  # what `set` checks an on-screen pack against
+        if by_id.get(c["screen"], {}).get("marker"):
+            c["marker"] = list(by_id[c["screen"]]["marker"])
     return {"run_id": time.strftime("%Y%m%d-%H%M") + "-" + mode, "mode": mode, "cells": cells,
             "unchecked": unchecked}
 
@@ -173,6 +179,16 @@ def _evidence_problem(path):
     return None
 
 
+def _shows_marker(pack, markers):
+    """True/False from the pack's nodes (text, label or testID contains a marker); None when it has none to check."""
+    path = os.path.join(pack, "nodes.json")
+    if not os.path.isfile(path):
+        return None
+    want = [m.casefold() for m in markers]
+    return any(w in (n.get(k) or "").casefold()
+               for n in read_json(path) for k in ("text", "label", "rid") for w in want)
+
+
 def set_status(cov, cell_id, status, evidence=None, note=""):
     if status not in STATUSES:
         raise FEError("status must be one of %s" % ", ".join(STATUSES))
@@ -187,6 +203,11 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         need = REQUIRED_SUBPACKS.get(c["probe"])
         if need and packs and not any(os.path.isfile(os.path.join(e, need, "meta.json")) for e in packs):
             problems.append("a %s cell needs the snap <pack>/%s (see probes.md)" % (c["probe"], need))
+        if c.get("marker") and c["probe"] in ON_SCREEN_PROBES and not note \
+                and all(_shows_marker(e, c["marker"]) is False for e in packs):
+            problems.append("the pack shows none of %s's markers %s, so it was snapped on another screen: snap it "
+                            "there; if it is that screen and it is broken (blank, an error), pass --note saying "
+                            "what it shows" % (c["screen"], c["marker"]))
         if problems:
             raise FEError("cell %s cannot be done: %s. Retry, or mark it failed/blocked with --note"
                           % (cell_id, "; ".join(problems)))

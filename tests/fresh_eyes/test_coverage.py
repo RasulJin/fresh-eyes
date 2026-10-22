@@ -173,6 +173,30 @@ class StatusTest(unittest.TestCase):
             set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell)])
             self.assertEqual(cell["status"], "done")
 
+    def test_on_screen_pack_must_show_the_screens_marker(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["marker"] = ["Мои поездки", "trips-list"]
+        cfg["screens"][0]["probes"] = ["rapid-tap"]
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        self.assertTrue(all(c["marker"] == ["Мои поездки", "trips-list"] for c in cov["cells"]))
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        cell = {c["id"]: c for c in cov["cells"] if c["platform"] == "android"}
+
+        def pack(c, **node):
+            path = make_pack(root, c)
+            write_json(os.path.join(path, "nodes.json"), [dict({"text": "", "label": "", "rid": ""}, **node)])
+            return path
+        dark = cell["android/profile-trips/dark/none"]
+        with self.assertRaisesRegex(FEError, "another screen"):
+            set_status(cov, dark["id"], "done", evidence=[pack(dark, text="Лента")])
+        set_status(cov, dark["id"], "done", evidence=[pack(dark, text="Лента")], note="blank, only the tab bar")
+        default = cell["android/profile-trips/default/none"]
+        set_status(cov, default["id"], "done", evidence=[pack(default, rid="trips-list-0")])
+        rapid = cell["android/profile-trips/default/rapid-tap"]  # leaving the screen is what it may reveal
+        set_status(cov, rapid["id"], "done", evidence=[pack(rapid, text="Поделиться")])
+        self.assertEqual([c["status"] for c in cell.values()], ["done"] * 3)
+
     def test_resume_blocks_mutating_cells_when_mutation_no_longer_allowed(self):
         cov = plan(MUT_SCREEN, BOTH_OK_MUT_ON, "full")
         ids = [c["id"] for c in next_cells(cov, limit=100, mutating_allowed=False)]

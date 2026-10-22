@@ -36,7 +36,7 @@ noted. Example (generic values):
   "motion_ceiling_ms": 300,
   "screens": [
     {"id": "profile-trips", "name": "Profile → Trips", "route": "app/(tabs)/profile.tsx",
-     "reach": "Open the Profile tab, then the Trips tab of the pager.",
+     "reach": "Open the Profile tab, then the Trips tab of the pager.", "marker": ["Мои поездки", "trips-list"],
      "states": ["default", "empty", "long-text", "dark", "font-xl", "small-screen"],
      "probes": ["swipe-inside", "tap-everything"], "neighbors": ["profile-posts"]}
   ],
@@ -69,5 +69,8 @@ noted. Example (generic values):
 - `references`: apps the user compares against; the UX rubric uses them.
 - `motion_ceiling_ms`: transition duration ceiling from the design system.
 - `screens[]`: `id`, `name`, `route`, `reach` (how to get there: words or a flow path), `states` (from the
-  checklist), `probes` (from the probe library), `neighbors` (screens a change here can break).
+  checklist), `probes` (from the probe library), `neighbors` (screens a change here can break), `marker`
+  (1–3 strings only this screen shows: its header title, a unique button label, a testID; matched
+  case-insensitively as part of a node's text, label or id). `coverage.py set` refuses a `none` or
+  `keyboard-open` pack that shows none of them, unless `--note` says what is on screen.
 - `journeys[]`: end-to-end paths for full mode; `mutating: true` journeys only run when mutation is allowed.

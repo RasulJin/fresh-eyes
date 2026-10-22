@@ -54,7 +54,8 @@ Goal: a working `.fresh-eyes/` for this project, confirmed by the user.
      lists/grids → `swipe-inside`, `tap-everything`; forms → `keyboard-open`, `hardware-back-keyboard`;
      search/autocomplete fields with a read-only button (search, filter) → `search`;
      overlays/maps/menus → `tap-outside`, `back-during-animation`; share/send buttons → `rapid-tap`;
-     long requests → `background-foreground`. Fill `reach` in plain words and `neighbors`.
+     long requests → `background-foreground`. Fill `reach` in plain words, `neighbors`, and `marker` (header
+     title or a testID from the route file; another screen must not show it).
 3. Build `.fresh-eyes/spec.md` by `$R/spec-format.md`. Delegate the reading to a general-purpose subagent
    (give it the source paths and the format file; it returns the path and a list of conflicts).
 4. `.fresh-eyes/known.md` (empty template), `.fresh-eyes/examples/`: copy screenshots of past bugs from the
