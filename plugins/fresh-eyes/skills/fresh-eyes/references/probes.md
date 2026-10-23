@@ -104,10 +104,12 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 - Look first, touch second: after each action snap before you touch anything. Never tap the field the app
   should have focused, never close what the app opened: the snap must show what the app did by itself.
 - After: `capture.py logs --platform android --device ID --out PACK --package PKG` (writes `logcat.txt`).
-- Data: create or change data only when preflight allowed mutation; delete what you created; never send
-  anything to real people. Without mutation do the read-only part and say so in `steps.json`.
+- Data: the cell is `"mutating": true` exactly when preflight allowed mutation. Then really send, edit and
+  delete test data (a comment, a message, a saved item) so the edit and delete forms run, and clean up what you
+  created; never send anything to real people. Otherwise do the read-only part and say so in `steps.json`.
 - `coverage.py set` refuses the cell unless `steps.json` has all five kinds, both interruptions (iOS: stop), a
-  `task` step for each form, and, on Android, `logcat.txt`.
+  `task` step for each form that has its own snap in `<pack>/step-<n>/` (a step that did not run does not
+  count), and, on Android, `logcat.txt`.
 
 ### swipe-inside
 - Reveals: content clipped by its container (a grid that cannot scroll to its last row), pagers that snap back,

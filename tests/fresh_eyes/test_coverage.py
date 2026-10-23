@@ -22,9 +22,10 @@ MUT_SCREEN["screens"][0]["probes"] = ["edit-delete-restore"]
 
 def full_steps(forms=()):
     """A scenario that passes `set`: every kind, both interruptions, each form of the screen."""
-    return ([{"kind": k} for k in sorted(SCENARIO_KINDS - {"interrupt"})] +
-            [{"kind": "interrupt", "how": "stop"}, {"kind": "interrupt", "how": "offline"}] +
-            [{"kind": "task", "via": f} for f in forms])
+    steps = ([{"kind": k} for k in sorted(SCENARIO_KINDS - {"interrupt"})] +
+             [{"kind": "interrupt", "how": "stop"}, {"kind": "interrupt", "how": "offline"}] +
+             [{"kind": "task", "via": f} for f in forms])
+    return [dict(s, n=i + 1) for i, s in enumerate(steps)]
 
 
 def make_pack(root, cell, sub=True, **meta):
@@ -33,7 +34,10 @@ def make_pack(root, cell, sub=True, **meta):
     if sub and cell["probe"] in REQUIRED_SUBPACKS:
         write_json(os.path.join(path, REQUIRED_SUBPACKS[cell["probe"]], "meta.json"), {"platform": cell["platform"]})
     if sub and cell["probe"] == "scenario":
-        write_json(os.path.join(path, "steps.json"), full_steps(cell.get("forms", [])))
+        steps = full_steps(cell.get("forms", []))
+        write_json(os.path.join(path, "steps.json"), steps)
+        for s in steps:
+            write_json(os.path.join(path, "step-%d" % s["n"], "meta.json"), {"platform": cell["platform"]})
         with open(os.path.join(path, "logcat.txt"), "w") as f:
             f.write("# no warnings\n")
     return path
@@ -224,10 +228,21 @@ class StatusTest(unittest.TestCase):
         pack = make_pack(root, dict(cell, forms=[]))  # every kind, but the form never opened
         with self.assertRaisesRegex(FEError, "«Задать параметры»"):
             set_status(cov, cell["id"], "done", evidence=[pack])
-        steps = read_json(os.path.join(pack, "steps.json")) + [{"kind": "task", "did": "открыл «задать параметры»"}]
+        steps = read_json(os.path.join(pack, "steps.json"))
+        steps.append({"n": 99, "kind": "task", "via": "Задать параметры", "did": "not run"})  # named, never snapped
         write_json(os.path.join(pack, "steps.json"), steps)
+        with self.assertRaisesRegex(FEError, "own snap"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "step-99", "meta.json"), {"platform": "android"})
         set_status(cov, cell["id"], "done", evidence=[pack])
         self.assertEqual(cell["status"], "done")
+
+    def test_scenario_writes_only_when_the_backend_allows_it(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["probes"] = ["scenario"]
+        for pre, writes in ((BOTH_OK_MUT_ON, True), (BOTH_OK_MUT_OFF, False)):
+            cells = [c for c in plan(cfg, pre, "full")["cells"] if c["probe"] == "scenario"]
+            self.assertEqual([c["mutating"] for c in cells], [writes, writes])  # planned either way
 
     def test_on_screen_pack_must_show_the_screens_marker(self):
         cfg = copy.deepcopy(ONE_SCREEN)

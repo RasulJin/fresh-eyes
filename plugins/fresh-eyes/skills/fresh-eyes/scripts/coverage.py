@@ -140,6 +140,8 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
                                       "why": "mutating probe disabled: backend not verified as staging/local"})
                     continue
                 cells.append(_cell(p, sid, "default", probe))
+                if probe == "scenario":  # writes (send, edit, delete) when the backend allows it, reads otherwise
+                    cells[-1]["mutating"] = mutating
     for j in config.get("journeys", []):
         if mode == "quick" and not set(j.get("screens", [])) & set(chosen):
             continue
@@ -207,9 +209,11 @@ def _scenario_problems(pack, cell):
     missing = sorted({"stop", "offline"} - how if android else {"stop"} - how)
     if "interrupt" in kinds and missing:
         problems.append("an interrupt step with how=%s" % " and how=".join(missing))
-    done = " ".join("%s %s" % (s.get("did", ""), s.get("via", "")) for s in steps if s.get("kind") == "task").casefold()
-    problems += ["a task step through the form «%s» (config forms)" % f for f in cell.get("forms", [])
-                 if f.casefold() not in done]
+    # a form counts only through a task step that has its own snap: naming it in a step that did not run is not enough
+    done = " ".join("%s %s" % (s.get("did", ""), s.get("via", "")) for s in steps if s.get("kind") == "task"
+                    and os.path.isfile(os.path.join(pack, "step-%s" % s.get("n"), "meta.json"))).casefold()
+    problems += ["a task step with its own snap <pack>/step-<n> through the form «%s» (config forms)" % f
+                 for f in cell.get("forms", []) if f.casefold() not in done]
     if android and not os.path.isfile(os.path.join(pack, "logcat.txt")):
         problems.append("no logcat.txt (capture.py logs)")
     return problems
