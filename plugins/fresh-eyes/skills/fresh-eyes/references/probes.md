@@ -88,13 +88,17 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 - Steps: snap after each into `<pack>/step-<n>/` and write `<pack>/steps.json`:
   `[{"n": 1, "kind": "task", "did": "...", "expect": "..."}]`, with `expect` written before you look.
   1. `task`: do what the screen is for (the screen's `task` in config) end to end with realistic input, and use
-     each primary action the screen offers on the way (the buttons on a result or card, the form a header
-     button opens), not one path only; wait for each result.
+     each primary action the screen offers on the way (the buttons on a result or card), not one path only;
+     wait for each result. Go through every form the screen opens itself (config `forms`: a header button's
+     sheet, a picker, an edit mode), one `task` step each, naming it in `via`.
   2. `change`: after the result, change one input and run again (another value, an edited item, a new
      question).
   3. `invalid`: one invalid or edge input (the same value in two fields that must differ, empty, letters in a
      number, very long).
-  4. `interrupt`: stop, cancel or go Back in the middle of a running action, then retry it.
+  4. `interrupt`, twice (a tab switch is not one): `how: "stop"`: stop a running action with the screen's own
+     Stop or Cancel (Back only when it has none), then retry it; `how: "offline"` (Android):
+     `devices.py set --what offline`, run the action, snap what the app says, `devices.py set --what online`,
+     then retry.
   5. `check`: leave and come back, then open where the result should live (the `task` says where): is it there,
      and is nothing there that was not asked for?
 - Look first, touch second: after each action snap before you touch anything. Never tap the field the app
@@ -102,7 +106,8 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 - After: `capture.py logs --platform android --device ID --out PACK --package PKG` (writes `logcat.txt`).
 - Data: create or change data only when preflight allowed mutation; delete what you created; never send
   anything to real people. Without mutation do the read-only part and say so in `steps.json`.
-- `coverage.py set` refuses the cell unless `steps.json` has all five kinds and, on Android, `logcat.txt`.
+- `coverage.py set` refuses the cell unless `steps.json` has all five kinds, both interruptions (iOS: stop), a
+  `task` step for each form, and, on Android, `logcat.txt`.
 
 ### swipe-inside
 - Reveals: content clipped by its container (a grid that cannot scroll to its last row), pagers that snap back,

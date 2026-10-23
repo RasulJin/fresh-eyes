@@ -151,9 +151,11 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
             cells.append({"id": "%s/journey/%s/journey" % (p, j["id"]), "platform": p, "screen": "journey",
                           "state": j["id"], "probe": "journey", "mutating": bool(j.get("mutating")),
                           "status": "todo", "evidence": [], "note": j.get("steps", "")})
-    for c in cells:  # what `set` checks an on-screen pack against
+    for c in cells:  # what `set` checks an on-screen pack and a scenario against
         if by_id.get(c["screen"], {}).get("marker"):
             c["marker"] = list(by_id[c["screen"]]["marker"])
+        if c["probe"] == "scenario" and by_id[c["screen"]].get("forms"):
+            c["forms"] = list(by_id[c["screen"]]["forms"])
     return {"run_id": time.strftime("%Y%m%d-%H%M") + "-" + mode, "mode": mode, "cells": cells,
             "unchecked": unchecked}
 
@@ -193,12 +195,22 @@ def _shows_marker(pack, markers):
                for n in read_json(path) for k in ("text", "label", "rid") for w in want)
 
 
-def _scenario_problems(pack, platform):
-    steps = os.path.join(pack, "steps.json")
-    kinds = {s.get("kind") for s in read_json(steps)} if os.path.isfile(steps) else set()
+def _scenario_problems(pack, cell):
+    path = os.path.join(pack, "steps.json")
+    steps = read_json(path) if os.path.isfile(path) else []
+    kinds = {s.get("kind") for s in steps}
     problems = ["steps.json has no %s step" % "/".join(sorted(SCENARIO_KINDS - kinds))] \
         if SCENARIO_KINDS - kinds else []
-    if platform == "android" and not os.path.isfile(os.path.join(pack, "logcat.txt")):
+    android = cell["platform"] == "android"
+    # a tab switch is not an interruption: stop the running action, and cut the network (Android only)
+    how = {s.get("how") for s in steps if s.get("kind") == "interrupt"}
+    missing = sorted({"stop", "offline"} - how if android else {"stop"} - how)
+    if "interrupt" in kinds and missing:
+        problems.append("an interrupt step with how=%s" % " and how=".join(missing))
+    done = " ".join("%s %s" % (s.get("did", ""), s.get("via", "")) for s in steps if s.get("kind") == "task").casefold()
+    problems += ["a task step through the form «%s» (config forms)" % f for f in cell.get("forms", [])
+                 if f.casefold() not in done]
+    if android and not os.path.isfile(os.path.join(pack, "logcat.txt")):
         problems.append("no logcat.txt (capture.py logs)")
     return problems
 
@@ -218,8 +230,7 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         if need and packs and not any(os.path.isfile(os.path.join(e, need, "meta.json")) for e in packs):
             problems.append("a %s cell needs the snap <pack>/%s (see probes.md)" % (c["probe"], need))
         if c["probe"] == "scenario" and packs:
-            problems += ["a scenario cell needs: %s (see probes.md)" % p
-                         for p in _scenario_problems(packs[0], c["platform"])]
+            problems += ["a scenario cell needs: %s (see probes.md)" % p for p in _scenario_problems(packs[0], c)]
         if c.get("marker") and c["probe"] in ON_SCREEN_PROBES and not note \
                 and all(_shows_marker(e, c["marker"]) is False for e in packs):
             problems.append("the pack shows none of %s's markers %s, so it was snapped on another screen: snap it "

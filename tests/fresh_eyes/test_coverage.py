@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 from tests.fresh_eyes.helpers import tmpdir
-from fe_common import FEError, write_json
+from fe_common import FEError, read_json, write_json
 from coverage import (PROBES, REQUIRED_SUBPACKS, SCENARIO_KINDS, STATES, _load_findings, coverage_map, next_cells,
                       plan, screens_from_diff, set_status, verdict)
 
@@ -20,13 +20,20 @@ MUT_SCREEN = copy.deepcopy(ONE_SCREEN)
 MUT_SCREEN["screens"][0]["probes"] = ["edit-delete-restore"]
 
 
+def full_steps(forms=()):
+    """A scenario that passes `set`: every kind, both interruptions, each form of the screen."""
+    return ([{"kind": k} for k in sorted(SCENARIO_KINDS - {"interrupt"})] +
+            [{"kind": "interrupt", "how": "stop"}, {"kind": "interrupt", "how": "offline"}] +
+            [{"kind": "task", "via": f} for f in forms])
+
+
 def make_pack(root, cell, sub=True, **meta):
     path = os.path.join(root, cell["platform"], cell["screen"], "%s-%s" % (cell["state"], cell["probe"]))
     write_json(os.path.join(path, "meta.json"), dict({"platform": cell["platform"]}, **meta))
     if sub and cell["probe"] in REQUIRED_SUBPACKS:
         write_json(os.path.join(path, REQUIRED_SUBPACKS[cell["probe"]], "meta.json"), {"platform": cell["platform"]})
     if sub and cell["probe"] == "scenario":
-        write_json(os.path.join(path, "steps.json"), [{"n": i, "kind": k} for i, k in enumerate(SCENARIO_KINDS)])
+        write_json(os.path.join(path, "steps.json"), full_steps(cell.get("forms", [])))
         with open(os.path.join(path, "logcat.txt"), "w") as f:
             f.write("# no warnings\n")
     return path
@@ -192,15 +199,35 @@ class StatusTest(unittest.TestCase):
                                                       {"n": 3, "kind": "check"}])
         with self.assertRaisesRegex(FEError, "no interrupt/invalid step"):  # the steps a navigator skips
             set_status(cov, android["id"], "done", evidence=[pack])
-        write_json(os.path.join(pack, "steps.json"), [{"n": i, "kind": k} for i, k in enumerate(SCENARIO_KINDS)])
+        steps = [{"n": i, "kind": k} for i, k in enumerate(SCENARIO_KINDS)]
+        write_json(os.path.join(pack, "steps.json"), steps)  # a tab switch passed off as the interruption
+        with self.assertRaisesRegex(FEError, "how=offline and how=stop"):
+            set_status(cov, android["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "steps.json"), full_steps())
         with self.assertRaisesRegex(FEError, "logcat"):
             set_status(cov, android["id"], "done", evidence=[pack])
         set_status(cov, android["id"], "done", evidence=[make_pack(root, android)])
-        ios = cells["ios"]  # no app logs on iOS yet: the steps are enough
+        ios = cells["ios"]  # no app logs and no automated offline on iOS: steps with a stop are enough
         pack = make_pack(root, ios, sub=False)
-        write_json(os.path.join(pack, "steps.json"), [{"n": i, "kind": k} for i, k in enumerate(SCENARIO_KINDS)])
+        write_json(os.path.join(pack, "steps.json"), steps + [{"kind": "interrupt", "how": "stop"}])
         set_status(cov, ios["id"], "done", evidence=[pack])
         self.assertEqual([android["status"], ios["status"]], ["done", "done"])
+
+    def test_scenario_goes_through_each_form_of_the_screen(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(probes=["scenario"], forms=["Задать параметры"])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        cell = next(c for c in cov["cells"] if c["probe"] == "scenario" and c["platform"] == "android")
+        self.assertEqual(cell["forms"], ["Задать параметры"])
+        pack = make_pack(root, dict(cell, forms=[]))  # every kind, but the form never opened
+        with self.assertRaisesRegex(FEError, "«Задать параметры»"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        steps = read_json(os.path.join(pack, "steps.json")) + [{"kind": "task", "did": "открыл «задать параметры»"}]
+        write_json(os.path.join(pack, "steps.json"), steps)
+        set_status(cov, cell["id"], "done", evidence=[pack])
+        self.assertEqual(cell["status"], "done")
 
     def test_on_screen_pack_must_show_the_screens_marker(self):
         cfg = copy.deepcopy(ONE_SCREEN)

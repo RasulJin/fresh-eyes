@@ -76,4 +76,6 @@ noted. Example (generic values):
   `keyboard-open` pack that shows none of them, unless `--note` says what is on screen.
   `task` (for `scenario`): what a person comes to this screen to do, in a sentence, and where the result should
   show up afterwards (another tab, a list, the same screen after reopening).
+  `forms` (for `scenario`): labels of the controls that open the screen's own forms, sheets, pickers or edit
+  modes; the scenario must go through each.
 - `journeys[]`: end-to-end paths for full mode; `mutating: true` journeys only run when mutation is allowed.
