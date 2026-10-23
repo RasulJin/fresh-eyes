@@ -150,8 +150,16 @@ merged; one pass catches about three quarters of what two catch. Same steps, wit
 
 ## bench
 
-Measures whether the skill catches known bugs. Not available until `.fresh-eyes/bench/cases.json` exists; see
-the plugin README for the benchmark procedure.
+Measures whether the skill catches known bugs (`.fresh-eyes/bench/cases.json`; none → say so and stop). Code finds
+the candidates, a model judges them; keywords never decide.
+1. Attempts: three ordinary `quick` runs over the cases' screens (`--max-screens` = their number) on a build where
+   the bugs live, each in its own run folder. Pairs: one more run on a build with the fixes.
+2. `python3 $S/bench.py sheet --cases .fresh-eyes/bench/cases.json --runs <attempt runs> --fix-runs <ID=fix run>…
+   --out .fresh-eyes/bench/sheet.json`: per case and run, the findings on the case's screen and area.
+3. One `fresh-eyes:judge` with the sheet path: it marks which finding, if any, is each case's defect.
+4. `python3 $S/bench.py score --cases .fresh-eyes/bench/cases.json --sheet .fresh-eyes/bench/sheet.json --out
+   .fresh-eyes/bench/score.json`: caught = matched in at least 2 of 3 attempts; a match on the fix build is a false
+   positive; a CLEAN run that missed a planned case is a false CLEAN. Report these against the spec's targets.
 
 ## Report
 

@@ -81,27 +81,20 @@ subagents exchange files and reply in at most ten lines. Screens reach the navig
 ## Benchmark
 
 To check that fresh-eyes catches the bugs your project actually had, list them in
-`.fresh-eyes/bench/cases.json`:
+`.fresh-eyes/bench/cases.json`, each with what a person sees:
 
 ```json
 [{"id": "BUG-7", "group": "live", "kind": "bug", "screen": "profile-trips", "platform": "android",
-  "ref": "main", "pair": null, "also_screens": [],
-  "expect": {"checks": ["clipped"], "keywords": ["cut off", "last row"], "bbox": null}}]
+  "also_screens": [], "expect": {"description": "the trips grid is cut: the third row shows as a strip",
+  "bbox": null}}]
 ```
 
-Check out the commit where each bug was still present, run `/fresh-eyes quick <screens>` (two or three
-attempts), then score the runs:
-
-```
-python3 <plugin>/skills/fresh-eyes/scripts/bench.py score --cases .fresh-eyes/bench/cases.json \
-  --runs .fresh-eyes/runs/<run1> .fresh-eyes/runs/<run2> --out .fresh-eyes/bench/score.json
-```
-
-A case counts as caught when a confirmed or "unsure" finding on its screen names an expected check or
-keyword in at least two of three attempts. Keyword matching can over-credit: read the matched findings before
-trusting the number. `false_clean` lists runs whose verdict was CLEAN while a listed bug went uncaught; it must
-stay empty. `kind: "control"` cases (screens without known bugs) and `--fix-runs` (runs on the fixed
-commit) measure false positives.
+Run `/fresh-eyes bench`. It needs three ordinary `quick` runs over the cases' screens on a build where the bugs
+still live, and one run on a build with the fixes. Code collects, per case and run, the findings on the case's
+screen (and area), and a `fresh-eyes:judge` decides which of them, if any, is the case's defect; it is not told
+which runs had the fixes. A case is caught when it is matched in at least two of three attempts; a match on the
+fixed build is a false positive; `false_clean` lists runs whose verdict was CLEAN while a planned case went
+uncaught, and must stay empty.
 
 ## Limits
 
