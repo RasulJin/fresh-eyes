@@ -103,8 +103,9 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
     write_json(os.path.join(out, "nodes.json"), nodes)
     with open(os.path.join(out, "hierarchy.txt"), "w", encoding="utf-8") as f:
         f.write(compress(nodes))
+    kb_top = devices.keyboard_top(dev, nodes)  # recorded on every snap: a `return` snap must show no keyboard
     ctx = {"screen_wh": [w, h], "px_per_dp": devices.px_per_dp(dev), "min_dp": MIN_DP.get(platform, 48),
-           "keyboard_top": devices.keyboard_top(dev, nodes) if keyboard else None, "keyboard": keyboard}
+           "keyboard_top": kb_top if keyboard else None, "keyboard": keyboard}
     before_nodes = read_json(os.path.join(before, "nodes.json")) if before else None
     candidates = run_all(nodes, ctx, before_nodes)
     app_nodes = [n for n in nodes if not n["rid"].startswith("com.android.systemui")]
@@ -133,8 +134,8 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
                 crop(shot, os.path.join(out, "crops", "%s-%d.png" % (c["check"], k)), c["bbox"])
         except FEError:
             continue  # bbox fully off-screen: nothing to show, the candidate still stands
-    meta.update(source=source, nodes=len(nodes), candidates=len(candidates), **{k: ctx[k] for k in
-                                                                               ("px_per_dp", "keyboard_top")})
+    meta.update(source=source, nodes=len(nodes), candidates=len(candidates), keyboard_up=kb_top is not None,
+                **{k: ctx[k] for k in ("px_per_dp", "keyboard_top")})
     write_json(os.path.join(out, "meta.json"), meta)
     return 0
 

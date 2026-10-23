@@ -45,6 +45,17 @@ class SnapTest(unittest.TestCase):
             self.assertIsInstance(read_json(os.path.join(pack, "candidates.json")), list)
             self.assertGreater(len(read_json(os.path.join(pack, "som.json"))), 0)
 
+    def test_every_snap_records_whether_the_keyboard_is_up(self):
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            xml = f.read()
+        with tmpdir() as d, mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml), \
+                mock.patch.object(devices, "keyboard_top", lambda dev, n=(): 1500):
+            pack = os.path.join(d, "android", "settings", "default-none")
+            self.assertEqual(capture.snap("android", "emulator-5560", pack), 0)  # no --keyboard
+            meta = read_json(os.path.join(pack, "meta.json"))
+        self.assertTrue(meta["keyboard_up"])
+        self.assertIsNone(meta["keyboard_top"])  # geometry still checks the keyboard only on --keyboard snaps
+
     def test_snap_crops_each_candidate(self):
         xml = ('<hierarchy><node bounds="[0,0][1080,2400]" class="F"><node bounds="[0,2300][1080,2700]" '
                'class="android.view.ViewGroup" text="" content-desc="" resource-id="" clickable="false"/>'

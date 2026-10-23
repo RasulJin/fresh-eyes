@@ -2,7 +2,7 @@
 name: fresh-eyes
 description: Tests a running iOS/Android app like a picky human QA engineer and designer — visual, motion, interaction and UX bugs — and writes them to the backlog.
 disable-model-invocation: true
-argument-hint: "init | quick [BUG-N | screens | what changed] | full [--resume] | bench"
+argument-hint: "init | quick [BUG-N | screens | what changed] [twice] | full [twice] [--resume] | bench"
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
 ---
 
@@ -136,6 +136,17 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
 - The navigator gets one journey or one screen per call.
 - `full --resume`: take the newest `.fresh-eyes/runs/*-full/`, re-run preflight into it, and continue with
   `coverage.py next` until no todo cells remain. Never restart finished cells.
+
+## twice
+
+`quick … twice` or `full twice` (before a release): two independent passes over the same cells, findings
+merged; one pass catches about three quarters of what two catch. Same steps, with these differences:
+- `coverage.py plan … --passes 2`: every cell gets a twin `<id>#2` (a backlog replay runs once).
+- Navigation: all first-pass cells, then the `#2` cells with fresh navigators (their packs end in `-p2`).
+- Review: one reviewer per screen × platform × pass. A second-pass reviewer gets only the `-p2` packs, writes
+  `findings-p2.json` (or `findings-p2-<k>.json`) and never sees first-pass findings.
+- Verify: one verifier per screen folder over both passes' findings; a defect both passes found gets `same_as`,
+  so the verdict and the report count it once.
 
 ## bench
 

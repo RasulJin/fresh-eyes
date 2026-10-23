@@ -188,6 +188,41 @@ class StatusTest(unittest.TestCase):
             set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell)])
             self.assertEqual(cell["status"], "done")
 
+    def test_two_passes_plan_every_cell_twice_with_own_packs(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(probes=["rapid-tap", "scenario"], marker=["Мои поездки"], forms=["Новая поездка"])
+        one = plan(cfg, BOTH_OK_MUT_ON, "quick", screens=["profile-trips"], recheck=["BUG-7"])
+        two = plan(cfg, BOTH_OK_MUT_ON, "quick", screens=["profile-trips"], recheck=["BUG-7"], passes=2)
+        rechecks = [c for c in one["cells"] if c["screen"].startswith("recheck-")]
+        self.assertEqual(len(two["cells"]), 2 * len(one["cells"]) - len(rechecks))  # a replay runs once
+        second = [c for c in two["cells"] if c.get("pass") == 2]
+        self.assertTrue(all(c["id"].endswith("#2") and c["status"] == "todo" for c in second))
+        scen = next(c for c in second if c["probe"] == "scenario")
+        self.assertEqual((scen["marker"], scen["forms"], scen["mutating"]), (["Мои поездки"], ["Новая поездка"], True))
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        rapid = next(c for c in second if c["probe"] == "rapid-tap" and c["platform"] == "android")
+        pack = make_pack(root, rapid) + "-p2"  # the second pass snaps into its own pack
+        shutil.copytree(make_pack(root, rapid), pack)
+        set_status(two, rapid["id"], "done", evidence=[pack])
+        self.assertEqual(next(c for c in two["cells"] if c["id"] == rapid["id"][:-2])["status"], "todo")
+        self.assertIn("rapid-tap android #2", coverage_map(two))
+
+    def test_return_snap_must_show_the_keyboard_closed(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["probes"] = ["keyboard-open"]
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        cell = next(c for c in cov["cells"] if c["probe"] == "keyboard-open")
+        pack = make_pack(root, cell)
+        write_json(os.path.join(pack, "return", "meta.json"), {"platform": cell["platform"], "keyboard_up": True})
+        with self.assertRaisesRegex(FEError, "keyboard is still up"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "return", "meta.json"), {"platform": cell["platform"], "keyboard_up": False})
+        set_status(cov, cell["id"], "done", evidence=[pack])
+        self.assertEqual(cell["status"], "done")
+
     def test_scenario_needs_every_step_kind_and_logcat(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0]["probes"] = ["scenario"]

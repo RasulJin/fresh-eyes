@@ -63,9 +63,10 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 - Steps: tap each input; `capture.py snap --keyboard --before <pack before focus>` so new suggestion nodes
   hidden under the keyboard are caught (no keyboard at all → a `keyboard_missing` candidate); type a few chars with real key taps when the bug may be in the IME.
 - Then, with the keyboard up, leave the screen (a link, avatar or tab, not Back; a sheet or modal with no way
-  out: close and reopen it), return and
-  `capture.py snap --out <pack>/return`: a bar or gap left at keyboard height is a stale inset
-  (`coverage.py set` refuses the cell without it).
+  out: close and reopen it) and return. If the keyboard is up again (a tab keeps the field focused), close it
+  with one `taps.py back` (with the keyboard up Back only hides it), wait 1.5 s, then
+  `capture.py snap --out <pack>/return`: a bar or gap left at keyboard height is a stale inset. `coverage.py set`
+  refuses the cell without this snap, and refuses a `return` snap that still shows the keyboard.
 - Also open/close the keyboard 3–4 times and compare the bottom of the form (layout creep).
 
 ### search

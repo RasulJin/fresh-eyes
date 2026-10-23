@@ -55,6 +55,7 @@ touched.
 /fresh-eyes quick BUG-12         # recheck one backlog bug: verified or reopened
 /fresh-eyes quick feed,profile   # chosen screens
 /fresh-eyes full                 # every screen, state and probe, before a release (resumable)
+/fresh-eyes full twice           # two independent passes, findings merged: one pass misses about a quarter
 ```
 
 A long run asks for many tool calls. `init` prints the allow-rules to add to `.claude/settings.local.json`.

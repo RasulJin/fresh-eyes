@@ -71,6 +71,9 @@ Journey cells (`<platform>/journey/<id>/journey`): follow the journey's `steps` 
 snap after every step into `<run>/<platform>/journey/<id>-journey/step-<n>/` and write `steps.json`
 (`[{"n": 1, "did": "...", "screen": "..."}]`). If the journey creates test data, delete it afterwards.
 
+Second pass: a cell id ending in `#2` belongs to an independent second pass. Its pack takes the suffix `-p2`
+(`<state>-<probe>-p2`, journeys `<id>-journey-p2`); take your own path and do not open the first pass's packs.
+
 Scenario cells: follow `scenario` in probes.md with the screen's `task` from `config.json`; `PKG` there is
 `app.android_id`. Look first, touch second: snap after each action before you tap anything, so the frame shows
 what the app did by itself (a field it should have focused, a sheet it opened).

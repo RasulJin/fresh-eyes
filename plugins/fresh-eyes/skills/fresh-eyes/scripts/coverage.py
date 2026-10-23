@@ -76,7 +76,7 @@ def _cell(platform, screen, state, probe):
 QUICK_MAX_SCREENS = 4
 
 
-def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MAX_SCREENS):
+def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MAX_SCREENS, passes=1):
     by_id = {s["id"]: s for s in config.get("screens", [])}
     missing = [s for s in screens or () if s not in by_id]
     if missing:
@@ -158,6 +158,9 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
             c["marker"] = list(by_id[c["screen"]]["marker"])
         if c["probe"] == "scenario" and by_id[c["screen"]].get("forms"):
             c["forms"] = list(by_id[c["screen"]]["forms"])
+    if passes == 2:  # one pass catches ~75-80% of what two independent passes do: a release gets a second one
+        cells += [dict(c, id=c["id"] + "#2", evidence=[], **{"pass": 2}) for c in cells
+                  if not c["screen"].startswith("recheck-")]
     return {"run_id": time.strftime("%Y%m%d-%H%M") + "-" + mode, "mode": mode, "cells": cells,
             "unchecked": unchecked}
 
@@ -233,6 +236,10 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         need = REQUIRED_SUBPACKS.get(c["probe"])
         if need and packs and not any(os.path.isfile(os.path.join(e, need, "meta.json")) for e in packs):
             problems.append("a %s cell needs the snap <pack>/%s (see probes.md)" % (c["probe"], need))
+        back = os.path.join(packs[0], "return", "meta.json") if packs else ""
+        if c["probe"] == "keyboard-open" and os.path.isfile(back) and read_json(back).get("keyboard_up"):
+            problems.append("the keyboard is still up in <pack>/return, so the state after it closes was never seen: "
+                            "close it with one taps.py back (with the keyboard up Back only hides it), wait, snap again")
         if c["probe"] == "scenario" and packs:
             problems += ["a scenario cell needs: %s (see probes.md)" % p for p in _scenario_problems(packs[0], c)]
         if c.get("marker") and c["probe"] in ON_SCREEN_PROBES and not note \
@@ -346,11 +353,13 @@ _SYMBOL = {"done": "✓", "failed": "✗", "na": "—", "todo": "?", "blocked": 
 
 
 def coverage_map(cov, language="en"):
+    def where(c):  # the second pass gets its own columns
+        return c["platform"] + (" #2" if c.get("pass") == 2 else "")
     cols = sorted({"%s/%s" % (c["state"], c["probe"]) for c in cov["cells"]})
-    plats = [p for p in PLATFORMS if any(c["platform"] == p for c in cov["cells"])]
+    plats = sorted({where(c) for c in cov["cells"]}, key=lambda w: (PLATFORMS.index(w.split()[0]), w))
     grid = defaultdict(dict)
     for c in cov["cells"]:
-        grid[c["screen"]]["%s/%s %s" % (c["state"], c["probe"], c["platform"])] = _SYMBOL[c["status"]]
+        grid[c["screen"]]["%s/%s %s" % (c["state"], c["probe"], where(c))] = _SYMBOL[c["status"]]
     heads = ["%s %s" % (col, p) for col in cols for p in plats]
     first = "экран" if language == "ru" else "screen"
     lines = ["| %s | %s |" % (first, " | ".join(heads)), "|---|%s" % ("---|" * len(heads))]
@@ -448,6 +457,7 @@ def main():
     p.add_argument("--mode", required=True, choices=["quick", "full"]); p.add_argument("--screens")
     p.add_argument("--recheck", help="comma list of backlog ids to replay (quick BUG-N)")
     p.add_argument("--max-screens", type=int, default=QUICK_MAX_SCREENS, help="quick only")
+    p.add_argument("--passes", type=int, choices=[1, 2], default=1, help="2: a second independent pass (release)")
     p.add_argument("--out", required=True)
     p = sub.add_parser("set"); p.add_argument("--cov", required=True); p.add_argument("--cell", required=True)
     p.add_argument("--status", required=True, choices=STATUSES); p.add_argument("--evidence", nargs="*")
@@ -464,7 +474,7 @@ def main():
     a = ap.parse_args()
     if a.cmd == "plan":
         cov = plan(read_json(a.config), read_json(a.preflight), a.mode, a.screens.split(",") if a.screens else None,
-                   a.recheck.split(",") if a.recheck else (), a.max_screens)
+                   a.recheck.split(",") if a.recheck else (), a.max_screens, a.passes)
         write_json(a.out, cov)
         print(json.dumps({"cells": len(cov["cells"]), "unchecked": len(cov["unchecked"]), "out": a.out}))
     elif a.cmd == "set":
