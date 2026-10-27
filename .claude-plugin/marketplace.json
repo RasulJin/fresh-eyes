@@ -1,7 +1,7 @@
 {
-  "name": "lean-kit",
+  "name": "fresh-eyes",
   "owner": { "name": "Rasul" },
-  "description": "Lean, token-efficient Claude Code plugins.",
+  "description": "Tests mobile apps like a picky human QA engineer and designer.",
   "plugins": [
     {
       "name": "fresh-eyes",

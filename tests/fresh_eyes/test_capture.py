@@ -124,7 +124,7 @@ class LogsTest(unittest.TestCase):
             ["E/ReactNativeJS( 4242): TypeError: undefined is not an object",
              "W/chatty( 999): other app noise",
              "E/AndroidRuntime( 5001): FATAL EXCEPTION: main",
-             "E/AndroidRuntime( 5001): Process: com.voiova.app, PID: 5001",
+             "E/AndroidRuntime( 5001): Process: com.example.app, PID: 5001",
              "E/AndroidRuntime( 7000): java.lang.IllegalStateException: UiAutomationService already registered",
              "E/AndroidRuntime( 7000): Process: com.android.commands.uiautomator, PID: 7000",
              "I/ReactNativeJS( 4242): info is below the W filter anyway"])
@@ -134,10 +134,10 @@ class LogsTest(unittest.TestCase):
             calls.append(args)
             return "4242\n" if args[:2] == ("shell", "pidof") else logcat
         with tmpdir() as d, mock.patch.object(devices, "_adb", adb):
-            self.assertEqual(capture.logs("android", "emulator-5560", d, "com.voiova.app"), 0)
+            self.assertEqual(capture.logs("android", "emulator-5560", d, "com.example.app"), 0)
             with open(os.path.join(d, "logcat.txt"), encoding="utf-8") as f:
                 lines = f.read().splitlines()
-            self.assertEqual(capture.logs("android", "emulator-5560", d, "com.voiova.app", clear=True), 0)
+            self.assertEqual(capture.logs("android", "emulator-5560", d, "com.example.app", clear=True), 0)
         self.assertIn("5003 warnings/errors, 4 distinct", lines[0])  # the uiautomator crash is not the app's
         self.assertEqual([l.split(" x ")[1][:16] for l in lines[1:]],
                          ["E/AndroidRuntime", "E/AndroidRuntime", "E/ReactNativeJS:", "W/Reanimated: sy"])

@@ -1,3 +1,3 @@
-# lean-kit
+# fresh-eyes
 
-Lean, token-efficient Claude Code plugins. First plugin: **fresh-eyes** — tests a running iOS/Android app like a picky human QA engineer and designer. Work in progress.
+A Claude Code plugin that tests a running iOS/Android app like a picky human QA engineer and designer. Work in progress. Docs: [plugins/fresh-eyes/README.md](plugins/fresh-eyes/README.md).

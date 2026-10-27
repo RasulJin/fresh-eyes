@@ -63,12 +63,12 @@ class DevicesTest(unittest.TestCase):
         self.assertFalse(any("pm clear" in " ".join(c) for c in fake.calls))
 
     def test_owned_label_on_a_foreign_emulator_is_refused(self):
-        fake = self.patch({"emu avd name": "Voiova_QA_4GB\nOK\n"})
+        fake = self.patch({"emu avd name": "My_QA_Device\nOK\n"})
         for fn in (lambda d: devices.set_dark(d, True), lambda d: devices.tap(d, 10, 10),
                    lambda d: devices.clear_app(d, "com.example.app")):
             with self.assertRaises(FEError) as e:
                 fn(Device("android", "emulator-5560", "fresh-eyes-pixel"))
-            self.assertIn("Voiova_QA_4GB", str(e.exception))
+            self.assertIn("My_QA_Device", str(e.exception))
         self.assertFalse(any("input" in " ".join(c) or "uimode" in " ".join(c) for c in fake.calls))
 
     def test_simulator_name_read_from_simctl_not_label(self):

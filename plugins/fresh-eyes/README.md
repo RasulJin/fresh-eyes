@@ -43,8 +43,8 @@ touched.
 ## Install
 
 ```
-/plugin marketplace add <path-or-git-url-of-lean-kit>
-/plugin install fresh-eyes@lean-kit
+/plugin marketplace add RasulJin/fresh-eyes
+/plugin install fresh-eyes@fresh-eyes
 ```
 
 ## Use
