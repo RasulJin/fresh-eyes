@@ -265,6 +265,41 @@ class AvdTest(unittest.TestCase):
             with self.assertRaises(FEError):
                 devices.system_image()
 
+    def test_stop_owned_shuts_down_only_our_devices(self):
+        fake = FakeRun({"emulator-5554 emu avd name": "Pixel_8\nOK\n",
+                        "emulator-5560 emu avd name": "fresh-eyes-pixel\nOK\n", "booted -j": SIMCTL_JSON,
+                        " devices": "List of devices attached\nemulator-5560\tdevice\nemulator-5554\tdevice\n"})
+        with mock.patch.object(fe_common, "run", fake):
+            self.assertEqual(devices.stop_owned("android"), ["fresh-eyes-pixel"])
+            self.assertEqual(devices.stop_owned("ios"), ["fresh-eyes iPhone 17"])
+        joined = [" ".join(c) for c in fake.calls]
+        self.assertTrue(any("emulator-5560 emu kill" in c for c in joined))
+        self.assertFalse(any("emulator-5554 emu kill" in c for c in joined))
+        self.assertTrue(any(c.endswith("shutdown AAA") for c in joined))
+
+    def test_emulator_never_saves_a_boot_snapshot(self):
+        from tests.fresh_eyes.helpers import tmpdir
+        import os
+        seen = []
+
+        class DeadProc(object):
+            def poll(self):
+                return 1
+
+        def fake_popen(args, **k):
+            seen.extend(args)
+            return DeadProc()
+
+        with tmpdir() as d:
+            open(os.path.join(d, "fresh-eyes-small.ini"), "w").close()
+            with mock.patch.object(devices, "AVD_DIR", d), mock.patch.object(devices, "list_devices", lambda: []), \
+                    mock.patch.object(devices.subprocess, "Popen", fake_popen), \
+                    mock.patch.object(devices, "_open_log", lambda name: None), \
+                    mock.patch.object(devices, "_log_tail", lambda name: ""):
+                with self.assertRaises(FEError):
+                    devices.ensure_owned("android", "small", boot_timeout=30)
+        self.assertIn("-no-snapshot-save", seen)
+
     def test_ensure_owned_fails_fast_when_emulator_exits(self):
         from tests.fresh_eyes.helpers import tmpdir
         import os

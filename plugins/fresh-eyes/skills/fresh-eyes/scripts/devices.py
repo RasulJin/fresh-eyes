@@ -5,6 +5,7 @@ device whose name does not start with "fresh-eyes" (the user's own devices are r
 CLI:
   devices.py list
   devices.py ensure --platform android|ios [--kind default|small]
+  devices.py stop --platform android|ios      (shuts down every running fresh-eyes device of that platform)
   devices.py screenshot --platform P --device ID --out PNG
   devices.py set --platform P --device ID --name NAME --what dark|light|font-xl|font-default|offline|online|...
   devices.py app --platform P --device ID --name NAME --app BUNDLE --do launch|terminate|clear|background|install
@@ -187,7 +188,7 @@ def ensure_owned(platform, kind="default", boot_timeout=240):
                 _write_avd(name, w, h, dens, ANDROID_DATA_BYTES[kind])
             log = _open_log(name)
             proc = subprocess.Popen([os.path.join(sdk_root(), "emulator", "emulator"), "-avd", name,
-                                     "-no-boot-anim", "-no-audio", "-port", str(port)],
+                                     "-no-boot-anim", "-no-audio", "-no-snapshot-save", "-port", str(port)],
                                     stdout=log, stderr=log, start_new_session=True)
         deadline = time.time() + boot_timeout
         while time.time() < deadline:
@@ -215,6 +216,20 @@ def ensure_owned(platform, kind="default", boot_timeout=240):
         _simctl("bootstatus", udid, "-b", timeout=boot_timeout)
         return Device("ios", udid, name)
     raise FEError("unknown platform %s" % platform)
+
+
+def stop_owned(platform):
+    """Shut down our running devices of one platform (an emulator holds ~2.5 GB of RAM); return their names."""
+    stopped = []
+    for dev in list_devices():
+        if dev.platform != platform or not is_owned(dev):  # list_devices reads names from the devices
+            continue
+        if platform == "android":
+            _adb(dev.id, "emu", "kill", check=False)
+        else:
+            _simctl("shutdown", dev.id, check=False)
+        stopped.append(dev.name)
+    return stopped
 
 
 def screenshot(dev, dst):
@@ -616,6 +631,7 @@ def main():
     sub.add_parser("list")
     p = sub.add_parser("ensure"); p.add_argument("--platform", required=True, choices=["android", "ios"])
     p.add_argument("--kind", default="default", choices=["default", "small"])
+    p = sub.add_parser("stop"); p.add_argument("--platform", required=True, choices=["android", "ios"])
     p = sub.add_parser("screenshot"); p.add_argument("--platform", required=True); p.add_argument("--device",
                                                                                                 required=True)
     p.add_argument("--out", required=True)
@@ -630,6 +646,8 @@ def main():
         out = [dict(d._asdict(), owned=is_owned(d)) for d in list_devices()]
     elif a.cmd == "ensure":
         out = ensure_owned(a.platform, a.kind)._asdict()
+    elif a.cmd == "stop":
+        out = {"stopped": stop_owned(a.platform)}
     elif a.cmd == "set":
         apply_setting(Device(a.platform, a.device, a.name), a.what)
         out = {"set": a.what}

@@ -48,8 +48,11 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    with the examples. Check consistency against sibling packs (header vs tab bar icon, the same control in two
    states, light vs dark).
 5. For each problem write a finding: `kind` BUG (defect) or IMP (improvement with a concrete change),
-   `severity` per the checklist, `som` numbers and an evidence crop path, `expected` vs `actual`, `steps`
-   (the cell id and probe that reproduce it), `rule` = `spec:<rule id>` or `taste`. `confidence` reflects how
+   `severity` per the checklist, `som` numbers and an evidence crop path, `expected` vs `actual`, `rule` =
+   `spec:<rule id>` or `taste`. `steps` is for the person who will fix it: from the app's start screen, one
+   plain action per item (system settings too, like "set the system font to the largest"), buttons named by
+   their on-screen text, the last item saying what to look at. No cell ids, pack names, step numbers, script
+   commands or coordinates there: those go to `found_by` (cell id, probe, pack or scenario step). `confidence` reflects how
    sure the evidence makes you; `taste` findings are capped at 0.6.
 6. Things you suspect but cannot see well enough (needs a zoom, another frame, a repeat): still write the
    finding with low confidence and say in `actual` what evidence is missing. The verifier will chase it.

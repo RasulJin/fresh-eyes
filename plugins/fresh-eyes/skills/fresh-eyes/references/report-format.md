@@ -20,7 +20,7 @@
   "id": "f1", "kind": "BUG|IMP", "severity": "high|medium|low", "confidence": 0.0,
   "title": "", "screen": "", "platform": "",
   "check": "<geometry check | motion flag | spec rule id | taste>",
-  "som": [3], "bbox": [0, 0, 0, 0], "expected": "", "actual": "", "steps": [""],
+  "som": [3], "bbox": [0, 0, 0, 0], "expected": "", "actual": "", "steps": [""], "found_by": "",
   "rule": "spec:<id> | taste", "evidence": ["crops/clipped-1.png"],
   "verdict": "pending|confirmed|unsure|rejected", "verify_note": "",
   "same_as": "<findings file relative to the run>#<id> (optional)"}],
@@ -29,6 +29,10 @@
 
 - Text fields (`title`, `expected`, `actual`, `steps`, `verify_note`, `questions`) are in the config's
   `language`; ids, paths, rule ids and on-screen text stay as they are.
+- `steps` is how a person repeats the bug from the app's start screen, written for whoever fixes it, e.g.
+  `["Open the Feed tab", "Tap «Share» under any post three times quickly", "Press Back once", "Look: the share
+  sheet is still open"]`. `found_by` is where the run saw it (`android/post-detail/default/rapid-tap,
+  afterback`): for the verifier and the navigator, never instead of `steps`.
 - `same_as`: the verifier marks a finding that reports the same defect as another one (split reviewers, a
   journey adding evidence). The verdict leaves it out of the counts only when the finding it points to is
   confirmed, of the same kind and not lower in severity, and it was itself ruled on (never while pending); it
@@ -67,8 +71,13 @@ Build: <branch/commit>, backend: <api host or "not verified">, devices: <names>
 - <item> — <why>
 
 ## Bugs (confirmed)
-1. **<title>** — <platform>, <screen>, severity <s>, confidence <c>
-   Steps: … Expected: … Actual: … Evidence: <crop path> Rule: <rule> Backlog: <BUG-N>
+### 1. <title>
+<platform>, <screen>, severity <s>, confidence <c>, rule <rule>
+**Steps**
+1. <step>
+2. <step>
+**Expected:** … **Actual:** …
+Evidence: <crop path> · found by <found_by> · backlog <BUG-N>
 
 ## Improvements
 1. **<title>** — <what to change and why>, reference: <app/pattern>

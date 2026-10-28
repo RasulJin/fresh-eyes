@@ -12,8 +12,10 @@ CLI:
   coverage.py verdict --cov cov.json --findings F [F ...] [--language ru|en]
   coverage.py map --cov cov.json [--language ru|en]
   coverage.py diff-screens --repo R --base REF --config C
+  coverage.py prune --runs .fresh-eyes/runs [--keep 3]
 """
 import argparse
+import glob
 import json
 import os
 import re
@@ -450,6 +452,28 @@ def _load_findings(paths, run="."):
     return findings, reviewed
 
 
+BULKY = ("screen.png", "video.mp4")  # ~60% of a run; screen_1000.png, som.png, crops and sheets stay
+
+
+def prune(runs_dir, keep=3):
+    """Runs older than the newest `keep` lose their full-size screenshots and videos, unless a finding links one.
+    Folder names start with the date, so name order is age order. Returns the bytes freed."""
+    runs = sorted(d for d in glob.glob(os.path.join(runs_dir, "*")) if os.path.isdir(d))
+    freed = 0
+    for run in runs[:-keep] if keep > 0 else runs:
+        linked = set()
+        for f in glob.glob(os.path.join(run, "*", "*", "findings*.json")):
+            for fd in read_json(f).get("findings", []):
+                linked.update(os.path.normpath(os.path.join(run, e)) for e in fd.get("evidence") or [])
+        for root, _, files in os.walk(run):
+            for name in files:
+                path = os.path.normpath(os.path.join(root, name))
+                if name in BULKY and path not in linked:
+                    freed += os.path.getsize(path)
+                    os.remove(path)
+    return freed
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -471,6 +495,7 @@ def main():
     p = sub.add_parser("diff-screens"); p.add_argument("--repo", required=True); p.add_argument("--base",
                                                                                               required=True)
     p.add_argument("--config", required=True)
+    p = sub.add_parser("prune"); p.add_argument("--runs", required=True); p.add_argument("--keep", type=int, default=3)
     a = ap.parse_args()
     if a.cmd == "plan":
         cov = plan(read_json(a.config), read_json(a.preflight), a.mode, a.screens.split(",") if a.screens else None,
@@ -496,6 +521,8 @@ def main():
         print(json.dumps(verdict(read_json(a.cov), findings, a.language, reviewed), ensure_ascii=False))
     elif a.cmd == "map":
         print(coverage_map(read_json(a.cov), a.language))
+    elif a.cmd == "prune":
+        print(json.dumps({"freed_mb": round(prune(a.runs, a.keep) / 1e6, 1)}))
     else:
         print(json.dumps(screens_from_diff(a.repo, a.base, read_json(a.config)), ensure_ascii=False))
     return 0

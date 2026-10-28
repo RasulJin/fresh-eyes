@@ -9,7 +9,7 @@ import unittest
 from tests.fresh_eyes.helpers import tmpdir
 from fe_common import FEError, read_json, write_json
 from coverage import (PROBES, REQUIRED_SUBPACKS, SCENARIO_KINDS, STATES, _load_findings, coverage_map, next_cells,
-                      plan, screens_from_diff, set_status, verdict)
+                      plan, prune, screens_from_diff, set_status, verdict)
 
 ONE_SCREEN = {"language": "ru", "app": {"expo_root": "apps/mobile"}, "hooks": {},
               "screens": [{"id": "profile-trips", "route": "app/(tabs)/profile.tsx", "states": ["default", "dark"],
@@ -472,6 +472,29 @@ class VerdictTest(unittest.TestCase):
         self.assertIn("✓", m)
         self.assertIn("✗", m)
         self.assertIn("?", m)
+
+
+class PruneTest(unittest.TestCase):
+    def test_old_runs_lose_bulky_files_unless_a_finding_links_them(self):
+        with tmpdir() as d:
+            def run(name, linked=False):
+                pack = os.path.join(d, name, "android", "feed", "default-none")
+                os.makedirs(pack)
+                for f in ("screen.png", "video.mp4", "screen_1000.png"):
+                    with open(os.path.join(pack, f), "wb") as fh:
+                        fh.write(b"x" * 10)
+                if linked:
+                    write_json(os.path.join(d, name, "android", "feed", "findings.json"),
+                               {"findings": [{"evidence": ["android/feed/default-none/screen.png"]}]})
+                return pack
+            packs = [run("20261020-1000-quick", linked=True), run("20261021-1000-quick"),
+                     run("20261022-1000-quick"), run("20261023-1000-quick")]
+            self.assertEqual(prune(d, keep=2), 30)
+            left = [sorted(os.listdir(p)) for p in packs]
+        self.assertEqual(left[0], ["screen.png", "screen_1000.png"])
+        self.assertEqual(left[1], ["screen_1000.png"])
+        self.assertEqual(left[2], ["screen.png", "screen_1000.png", "video.mp4"])
+        self.assertEqual(left[3], left[2])
 
 
 class DiffScreensTest(unittest.TestCase):

@@ -56,6 +56,10 @@ Judge from the evidence, not from the app's source code: no hunting for causes o
 bug does that). The one exception: a single lookup of a hit area (`hitSlop`) or a screen-reader label, which a
 frame cannot show.
 
+Before you confirm a finding, read its `steps` as the person who will fix it would: from the app's start, one
+action per item, buttons by their on-screen text, ending with what to look at. If they name cells, packs, step
+numbers, scripts or coordinates, rewrite them from `found_by` and the frames.
+
 Write each updated findings file back in place.
 
 ## Second pass

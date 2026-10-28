@@ -78,6 +78,8 @@ Goal: after a fix or a feature, check what it touched and what it could break. A
 words / nothing (= the current diff).
 
 1. `RUN=.fresh-eyes/runs/<YYYYMMDD-HHMM>-quick` (mkdir). If `.fresh-eyes/config.json` is missing → run `init`.
+   Slim older runs: `python3 $S/coverage.py prune --runs .fresh-eyes/runs --keep 3` (runs before the last three
+   lose full-size screenshots and videos no finding links).
 2. Make the build current: for each platform, if Metro is not running with the config's `metro_env`, start
    `builds.quick.<p>.start` in the background with that env; if the app is missing, run `builds.quick.<p>.build`
    (background; minutes).
@@ -165,9 +167,13 @@ the candidates, a model judges them; keywords never decide.
 
 `report.md` in the project language: the verdict line and reasons (verbatim from `coverage.py verdict`),
 build/backend/devices, the coverage map, "not checked and why" (preflight `unchecked`, plan `unchecked`,
-blocked cells with notes, unmapped files, platform gaps from `$R/platforms.md`), confirmed bugs (a finding the verdict lists
-in `merged` goes under the one its `same_as` points to; any other finding is its own item), improvements,
+blocked cells with notes, unmapped files, platform gaps from `$R/platforms.md`), confirmed bugs, each with its
+numbered steps, expected and actual copied from the finding (a finding the verdict lists in `merged` goes under
+the one its `same_as` points to; any other finding is its own item), improvements,
 "look with your own eyes" (unsure), questions. Link evidence crops by path. Keep it scannable.
+
+Then stop our devices, `python3 $S/devices.py stop --platform <p>` for each platform of the run: an emulator
+holds ~2.5 GB of RAM, and the next run boots it again.
 
 ## After the report
 

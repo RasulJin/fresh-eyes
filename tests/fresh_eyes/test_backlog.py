@@ -63,12 +63,13 @@ class BacklogTest(unittest.TestCase):
     def test_render_ru(self):
         text = render(FINDING, "ru-backlog", "BUG-54", "2026-10-19")
         self.assertTrue(text.startswith("### BUG-54 · Сетка обрезана — `open`"))
-        self.assertIn("- **Шаги** — Открыть профиль → Вкладка «Поездки»", text)
+        self.assertIn("- **Шаги**\n  1. Открыть профиль\n  2. Вкладка «Поездки»\n", text)
         self.assertIn("Факт: Третий ряд — полоска", text)
         self.assertIn("spec:profile-trips#must-1", text)
 
     def test_render_en(self):
-        self.assertIn("- **Steps** —", render(FINDING, "en-backlog", "BUG-1", "2026-10-19"))
+        self.assertIn("- **Steps**\n  1. Открыть профиль", render(FINDING, "en-backlog", "BUG-1", "2026-10-19"))
+        self.assertIn("  1. One step\n", render(dict(FINDING, steps="One step"), "en-backlog", "BUG-1", "2026-10-19"))
 
     def test_render_unknown_template(self):
         with self.assertRaises(FEError):

@@ -21,7 +21,7 @@ TEMPLATES = {
     "ru-backlog": {
         "entry": ("### {id} · {title} — `open`\n"
                   "- **Где** — {screen}, {platform}, {date} (fresh-eyes)\n"
-                  "- **Шаги** — {steps}\n"
+                  "- **Шаги**\n{steps}\n"
                   "- **Ожидание / Факт**\n"
                   "  - Ожидание: {expected}\n"
                   "  - Факт: {actual}\n"
@@ -31,7 +31,7 @@ TEMPLATES = {
     "en-backlog": {
         "entry": ("### {id} · {title} — `open`\n"
                   "- **Where** — {screen}, {platform}, {date} (fresh-eyes)\n"
-                  "- **Steps** — {steps}\n"
+                  "- **Steps**\n{steps}\n"
                   "- **Expected / Actual**\n"
                   "  - Expected: {expected}\n"
                   "  - Actual: {actual}\n"
@@ -60,7 +60,7 @@ def render(finding, template, item_id, date):
     return _template(template)["entry"].format(
         id=item_id, title=finding.get("title", ""), screen=finding.get("screen", ""),
         platform=finding.get("platform", ""), date=date,
-        steps=" → ".join(steps) if isinstance(steps, list) else steps,
+        steps="\n".join("  %d. %s" % (i, s) for i, s in enumerate(steps if isinstance(steps, list) else [steps], 1)),
         expected=finding.get("expected", ""), actual=finding.get("actual", ""),
         confidence=finding.get("confidence", ""), rule=finding.get("rule", ""),
         evidence=", ".join(evidence) if isinstance(evidence, list) else evidence)
