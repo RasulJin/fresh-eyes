@@ -208,6 +208,21 @@ class StatusTest(unittest.TestCase):
         set_status(cov, cell["id"], "done", evidence=[pack], note="the grid fits, it does not scroll")
         self.assertEqual(cell["status"], "done")
 
+    def test_tap_outside_drags_each_listed_surface_with_the_overlay_open(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(probes=["tap-outside"], drag=["шторка маршрута"])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        cell = next(c for c in cov["cells"] if c["probe"] == "tap-outside")
+        self.assertEqual(cell["drag"], ["шторка маршрута"])
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        pack = make_pack(root, cell)
+        with self.assertRaisesRegex(FEError, "шторка маршрута"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "drag-1", "meta.json"), {"platform": "android"})
+        set_status(cov, cell["id"], "done", evidence=[pack])
+        self.assertEqual(cell["status"], "done")
+
     def test_long_list_is_a_seeded_state(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0]["states"] = ["default", "long-list"]

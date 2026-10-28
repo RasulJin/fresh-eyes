@@ -27,6 +27,10 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 - Reveals: cards/sheets/menus that do not dismiss, scrims that pass taps through, sheets sliding under cards.
 - `taps.py outside --x X --y Y` at a neutral point outside the overlay (scrim / map area).
 - Evidence: `capture.py around` (video) + snap after. Oracle: overlay gone, nothing underneath moved wrongly.
+- Then, for each surface the screen's `drag` lists (config), open the overlay again and drag that surface (a
+  bottom sheet up by its handle, the list under a card) with `nav.py swipe` under `capture.py around`, snapped
+  into `<pack>/drag-<n>/` (`coverage.py set` refuses the cell without them). Oracle: the overlay closes, or the
+  dragged surface stays fully usable; a sheet sliding under a card that keeps covering it is a BUG.
 
 ### back-during-animation
 - Reveals: half-open states, invisible windows that eat taps, jumps.

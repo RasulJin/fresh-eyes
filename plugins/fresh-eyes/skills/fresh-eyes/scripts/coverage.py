@@ -160,6 +160,8 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
             c["marker"] = list(by_id[c["screen"]]["marker"])
         if c["probe"] == "scenario" and by_id[c["screen"]].get("forms"):
             c["forms"] = list(by_id[c["screen"]]["forms"])
+        if c["probe"] == "tap-outside" and by_id[c["screen"]].get("drag"):
+            c["drag"] = list(by_id[c["screen"]]["drag"])
     if passes == 2:  # one pass catches ~75-80% of what two independent passes do: a release gets a second one
         cells += [dict(c, id=c["id"] + "#2", evidence=[], **{"pass": 2}) for c in cells
                   if not c["screen"].startswith("recheck-")]
@@ -252,6 +254,9 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
                             "header, and longer; if it really does not scroll, pass --note saying so")
         if c["probe"] == "scenario" and packs:
             problems += ["a scenario cell needs: %s (see probes.md)" % p for p in _scenario_problems(packs[0], c)]
+        problems += ["a drag of «%s» with the overlay open, snapped into <pack>/drag-%d (config drag)" % (d, k)
+                     for k, d in enumerate(c.get("drag", []), 1)
+                     if packs and not os.path.isfile(os.path.join(packs[0], "drag-%d" % k, "meta.json"))]
         if c.get("marker") and c["probe"] in ON_SCREEN_PROBES and not note \
                 and all(_shows_marker(e, c["marker"]) is False for e in packs):
             problems.append("the pack shows none of %s's markers %s, so it was snapped on another screen: snap it "

@@ -78,4 +78,6 @@ noted. Example (generic values):
   show up afterwards (another tab, a list, the same screen after reopening).
   `forms` (for `scenario`): labels of the controls that open the screen's own forms, sheets, pickers or edit
   modes; the scenario must go through each.
+  `drag` (for `tap-outside`): surfaces a person drags or scrolls while a card or menu is open over them (a
+  bottom sheet by its handle, a list); the probe drags each one with the overlay open.
 - `journeys[]`: end-to-end paths for full mode; `mutating: true` journeys only run when mutation is allowed.
