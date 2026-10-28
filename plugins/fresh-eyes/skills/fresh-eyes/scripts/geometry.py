@@ -113,6 +113,14 @@ def still_clipped(before, after, screen_wh):
     return result
 
 
+def moved_fraction(before, after):
+    """Share of the elements found in both snaps whose bounds changed: 0 means the gesture moved nothing."""
+    pairs = _pair_by_key(_app_only(before), _app_only(after))
+    if not pairs:
+        return 1.0  # nothing in common: the whole screen changed
+    return round(sum(b["bounds"] != a["bounds"] for b, a in pairs) / float(len(pairs)), 3)
+
+
 def _layers(a, b, by_id, paths, screen_area):
     """Both branches below the common ancestor cover half the screen: a layer over a layer (a sheet over a list,
     a search screen over the list it hides, a covered screen of a JS stack), not two elements colliding."""

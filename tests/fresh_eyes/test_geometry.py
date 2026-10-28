@@ -1,7 +1,7 @@
 import unittest
 
 import tests.fresh_eyes.helpers  # noqa: F401  (sys.path)
-from geometry import (overlaps, partially_visible, repeated_strings, run_all, small_targets, still_clipped,
+from geometry import (moved_fraction, overlaps, partially_visible, repeated_strings, run_all, small_targets, still_clipped,
                       truncation_candidates, under_keyboard)
 
 SCREEN = [1080, 2400]
@@ -44,6 +44,12 @@ class PartialVisibilityTest(unittest.TestCase):
         self.assertEqual(len(c), 1)
         self.assertEqual(c[0]["check"], "clipped")
         self.assertEqual(c[0]["hint"], "high")
+
+    def test_moved_fraction_tells_a_missed_swipe(self):
+        row = node("row", [0, 1800, 1080, 400], cls="android.view.ViewGroup", text="Paris")
+        self.assertEqual(moved_fraction([ROOT, row], [ROOT, dict(row)]), 0)
+        self.assertEqual(moved_fraction([ROOT, row], [ROOT, dict(row, bounds=[0, 1200, 1080, 400])]), 0.5)
+        self.assertEqual(moved_fraction([row], [node("other", [0, 0, 10, 10], text="Lisbon")]), 1.0)
 
     def test_scrolled_into_view_not_clipped(self):
         row = node("row", [0, 2300, 1080, 400], cls="android.view.ViewGroup")

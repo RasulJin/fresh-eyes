@@ -60,7 +60,7 @@ noted. Example (generic values):
 - `accounts`: names of environment variables holding test credentials. Values never go into files or reports.
 - `builds.quick|full.<platform>`: `build` (command, run in `cwd`), `install` (optional), `start` (Metro),
   `metro_env` (env for Metro), `artifact` (built file to install).
-- `hooks`: optional project commands, run from the repo root: `seed` creates data for `empty`/`long-text`
+- `hooks`: optional project commands, run from the repo root: `seed` creates data for `empty`/`long-text`/`long-list`
   and `cleanup` removes what the run created (the orchestrator runs both, only when preflight allowed
   mutation); `loading` / `error` put the app into that state (e.g. a slow or failing mock), run by the
   navigator right before snapping those cells; `new_account` creates a fresh test account. A state without its

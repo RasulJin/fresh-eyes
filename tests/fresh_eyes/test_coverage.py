@@ -30,7 +30,10 @@ def full_steps(forms=()):
 
 def make_pack(root, cell, sub=True, **meta):
     path = os.path.join(root, cell["platform"], cell["screen"], "%s-%s" % (cell["state"], cell["probe"]))
-    write_json(os.path.join(path, "meta.json"), dict({"platform": cell["platform"]}, **meta))
+    base = {"platform": cell["platform"]}
+    if cell["probe"] == "swipe-inside":  # snapped with --before, and the swipe moved the list
+        base.update(before=path + "-before", moved=0.4)
+    write_json(os.path.join(path, "meta.json"), dict(base, **meta))
     if sub and cell["probe"] in REQUIRED_SUBPACKS:
         write_json(os.path.join(path, REQUIRED_SUBPACKS[cell["probe"]], "meta.json"), {"platform": cell["platform"]})
     if sub and cell["probe"] == "scenario":
@@ -187,6 +190,30 @@ class StatusTest(unittest.TestCase):
                     set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell, sub=False)])
             set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell)])
             self.assertEqual(cell["status"], "done")
+
+    def test_swipe_inside_pack_must_show_what_the_swipe_moved(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["probes"] = ["swipe-inside"]
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        cell = next(c for c in cov["cells"] if c["probe"] == "swipe-inside")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        pack = make_pack(root, cell)
+        write_json(os.path.join(pack, "meta.json"), {"platform": "android"})
+        with self.assertRaisesRegex(FEError, "--before"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "meta.json"), {"platform": "android", "before": pack + "-b", "moved": 0})
+        with self.assertRaisesRegex(FEError, "moved nothing"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        set_status(cov, cell["id"], "done", evidence=[pack], note="the grid fits, it does not scroll")
+        self.assertEqual(cell["status"], "done")
+
+    def test_long_list_is_a_seeded_state(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["states"] = ["default", "long-list"]
+        self.assertIn("android/profile-trips/long-list", " ".join(u["what"] for u in plan(cfg, BOTH_OK_MUT_ON, "full")["unchecked"]))
+        cfg["hooks"] = {"seed": "npm run seed"}
+        self.assertIn("android/profile-trips/long-list/none", [c["id"] for c in plan(cfg, BOTH_OK_MUT_ON, "full")["cells"]])
 
     def test_two_passes_plan_every_cell_twice_with_own_packs(self):
         cfg = copy.deepcopy(ONE_SCREEN)

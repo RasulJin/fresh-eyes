@@ -116,7 +116,9 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
 - Reveals: content clipped by its container (a grid that cannot scroll to its last row), pagers that snap back,
   jumps when releasing halfway.
 - Steps: snap → `nav.py swipe` inside the container's bounds → `capture.py snap --before <first pack>`;
-  `geometry.still_clipped` flags rows still cut.
+  `geometry.still_clipped` flags rows still cut. `coverage.py set` refuses a pack snapped without `--before`,
+  and one where the swipe moved nothing (it missed the list): swipe inside the list itself. A container that
+  truly does not scroll goes in `--note`.
 - For pagers also: slow drag (1.5–2.5 s) released before halfway; strong fling; under `capture.py around`.
 
 ### tap-everything

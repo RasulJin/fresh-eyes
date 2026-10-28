@@ -54,11 +54,11 @@ SCENARIO_KINDS = {"task", "change", "invalid", "interrupt", "check"}
 # probes after which the app has no reason to be on another screen: their pack must show the screen's marker
 # (not swipe-inside: scrolling takes headers, and with them most markers, off screen)
 ON_SCREEN_PROBES = {"none", "keyboard-open"}
-STATES = ["default", "empty", "loading", "error", "offline", "long-text", "dark", "font-xl", "small-screen",
-          "keyboard"]
+STATES = ["default", "empty", "loading", "error", "offline", "long-text", "long-list", "dark", "font-xl",
+          "small-screen", "keyboard"]
 STATE_PLATFORMS = {"offline": ["android"]}
 NOT_AUTOMATED = {"offline"}  # on the other platform this is a gap to report, not "not applicable"
-STATE_NEEDS = {"empty": "seed", "long-text": "seed", "loading": "hook", "error": "hook",
+STATE_NEEDS = {"empty": "seed", "long-text": "seed", "long-list": "seed", "loading": "hook", "error": "hook",
                "small-screen": "small_device"}
 STATUSES = ("todo", "done", "failed", "blocked", "na")
 LABELS = {
@@ -242,6 +242,14 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         if c["probe"] == "keyboard-open" and os.path.isfile(back) and read_json(back).get("keyboard_up"):
             problems.append("the keyboard is still up in <pack>/return, so the state after it closes was never seen: "
                             "close it with one taps.py back (with the keyboard up Back only hides it), wait, snap again")
+        swiped = read_json(os.path.join(packs[0], "meta.json")) \
+            if c["probe"] == "swipe-inside" and packs and os.path.isfile(os.path.join(packs[0], "meta.json")) else None
+        if swiped is not None and "before" not in swiped:
+            problems.append("a swipe-inside pack is snapped after the swipe with capture.py snap --before <the pack "
+                            "snapped before it>, so the scripts can tell what moved")
+        elif swiped is not None and swiped.get("moved") == 0 and not note:
+            problems.append("the swipe moved nothing on screen: swipe inside the list or grid itself, not on a "
+                            "header, and longer; if it really does not scroll, pass --note saying so")
         if c["probe"] == "scenario" and packs:
             problems += ["a scenario cell needs: %s (see probes.md)" % p for p in _scenario_problems(packs[0], c)]
         if c.get("marker") and c["probe"] in ON_SCREEN_PROBES and not note \

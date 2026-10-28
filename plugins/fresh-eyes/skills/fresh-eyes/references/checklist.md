@@ -67,6 +67,11 @@ A failed request. Expect an honest message and a retry; not "nothing found", not
 ### offline
 No network. Offline must not look like "empty" or "not found"; cached data is labelled as cached.
 
+### long-list
+More items than fit on two screens. At the end of the list the last row is whole and reachable: a row shown as a
+thin strip under its siblings is cut by its container (a BUG even when no script flags it), there is no blank area
+under the last row, the header and tab bar stay; loading more, if the list pages, shows progress.
+
 ### long-text
 Longest realistic strings and many items: last row fully reachable, no truncation of meaning, fields grow.
 

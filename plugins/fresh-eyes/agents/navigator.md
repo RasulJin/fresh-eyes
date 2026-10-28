@@ -49,7 +49,9 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 2. **Set the state** on the device (owned devices only):
    `python3 $S/devices.py set --platform P --device ID --name NAME --what dark|font-xl|offline|...`.
    `keyboard`: focus the screen's main input. `small-screen`: use `platforms.<p>.small_device_id`.
-   `empty`/`long-text`: the seeded data. `loading`/`error`: run `hooks.loading` / `hooks.error` from
+   `empty`/`long-text`/`long-list`: the seeded data. `long-list`: snap the top, swipe inside the list until the
+   screen stops changing, snap the end with `--before <top pack>`, record both packs; if every item fits on one
+   screen, mark the cell blocked with note "not enough items". `loading`/`error`: run `hooks.loading` / `hooks.error` from
    `config.json` (repo root) right before the snap, and undo it after if the hook says how.
 3. **Run the probe** exactly as `probes.md` says. Fast probes use `taps.py` (with `--coverage` and `--cell`).
    Wrap transitions and probes in `capture.py around ... -- <command>` so they are recorded.

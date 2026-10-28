@@ -29,7 +29,7 @@ import fe_common
 import nav
 from devices import Device
 from fe_common import FEError, image_size, read_json, write_json
-from geometry import run_all
+from geometry import moved_fraction, run_all
 from hierarchy import HierarchyError, compress, normalize
 from motion import DEFAULT_CEILING_MS, analyze
 from pixels import changed_fraction, corner_candidates, crop, downscale, som_overlay
@@ -134,6 +134,8 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
                 crop(shot, os.path.join(out, "crops", "%s-%d.png" % (c["check"], k)), c["bbox"])
         except FEError:
             continue  # bbox fully off-screen: nothing to show, the candidate still stands
+    if before:
+        meta.update(before=before, moved=moved_fraction(before_nodes, nodes))
     meta.update(source=source, nodes=len(nodes), candidates=len(candidates), keyboard_up=kb_top is not None,
                 **{k: ctx[k] for k in ("px_per_dp", "keyboard_top")})
     write_json(os.path.join(out, "meta.json"), meta)
