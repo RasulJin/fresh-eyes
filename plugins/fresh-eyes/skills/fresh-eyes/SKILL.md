@@ -77,9 +77,9 @@ Goal: a working `.fresh-eyes/` for this project, confirmed by the user.
 Goal: after a fix or a feature, check what it touched and what it could break. Args: `BUG-N`, screen ids, or
 words / nothing (= the current diff).
 
-1. `RUN=.fresh-eyes/runs/<YYYYMMDD-HHMM>-quick` (mkdir). If `.fresh-eyes/config.json` is missing → run `init`.
-   Slim older runs: `python3 $S/coverage.py prune --runs .fresh-eyes/runs --keep 3` (runs before the last three
-   lose full-size screenshots and videos no finding links).
+1. Slim older runs first: `python3 $S/coverage.py prune --runs .fresh-eyes/runs --keep 3` (runs before the last
+   three lose full-size screenshots and videos no finding links). Then `RUN=.fresh-eyes/runs/<YYYYMMDD-HHMM>-quick`
+   (mkdir). If `.fresh-eyes/config.json` is missing → run `init`.
 2. Make the build current: for each platform, if Metro is not running with the config's `metro_env`, start
    `builds.quick.<p>.start` in the background with that env; if the app is missing, run `builds.quick.<p>.build`
    (background; minutes).
