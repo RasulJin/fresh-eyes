@@ -40,6 +40,13 @@ class CandidatesTest(unittest.TestCase):
             got = load_run_findings(os.path.join(d, "r"), [CASE])["BUG-357"]
         self.assertEqual(got[0]["ref"], os.path.join("android", "journey", "findings.json") + "#f1")
 
+    def test_a_run_id_or_an_unreviewed_run_is_refused(self):
+        with tmpdir() as d:
+            os.makedirs(os.path.join(d, "unreviewed", "android"))
+            for run in ("20261028-2124-quick", os.path.join(d, "unreviewed")):
+                with self.assertRaises(FEError):
+                    load_run_findings(run, [CASE])
+
 
 class SheetScoreTest(unittest.TestCase):
     def build(self, d):

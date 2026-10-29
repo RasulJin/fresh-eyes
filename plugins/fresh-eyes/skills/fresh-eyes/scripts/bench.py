@@ -43,8 +43,12 @@ def candidates(case, findings):
 def load_run_findings(run, cases):
     """Map case id -> all findings of the case's platform in one run, each tagged with its ref (journey findings
     carry the real screen they concern)."""
+    paths = sorted(glob.glob(os.path.join(run, "*", "*", "findings*.json")))
+    if not paths:  # a run id instead of its folder gives every case zero candidates, which reads as a miss
+        raise FEError("no <platform>/<screen>/findings*.json in %s: pass the folder of a reviewed run "
+                      "(.fresh-eyes/runs/<id>)" % run)
     by_platform = {}
-    for p in sorted(glob.glob(os.path.join(run, "*", "*", "findings*.json"))):
+    for p in paths:
         for fd in read_json(p).get("findings", []):
             fd = dict(fd, ref="%s#%s" % (os.path.relpath(p, run), fd.get("id")))
             by_platform.setdefault(p.split(os.sep)[-3], []).append(fd)
