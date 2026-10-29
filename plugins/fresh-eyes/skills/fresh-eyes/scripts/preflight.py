@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Check (and with --fix, repair) everything that would hide bugs or make a run unsafe, before a run starts.
 
-Writes preflight.json: {ok, platforms:{p:{ok, device, name, owned, small_device, app_installed, soft_keyboard,
-animations, problems}}, env:{name, verified, api_host}, mutating_allowed, tools:{...}, unchecked:[...]}
+Writes preflight.json: {ok, platforms:{p:{ok, device, name, owned, small_device, app, app_installed, build,
+soft_keyboard, animations, problems}}, env:{name, verified, api_host}, mutating_allowed, tools:{...}, unchecked:[...]}
+build: sha256 of the installed app; `coverage.py verdict` compares it again at the end of the run.
 
 CLI: preflight.py --project DIR --mode quick|full [--fix] [--brief] [--platforms android,ios] --out preflight.json
 """
@@ -49,9 +50,7 @@ def _host(url):
 def _installed_bundle(platform, dev_id, app_id, cache_dir):
     """JS bundle inside the app installed on the device (release builds); None when Metro serves it."""
     if platform == "android":
-        out = devices._adb(dev_id, "shell", "pm path %s" % devices._app_id(app_id), check=False)
-        apk = next((l[8:].strip() for l in out.splitlines() if l.startswith("package:") and l.strip()
-                    .endswith("base.apk")), None)
+        apk = devices.apk_path(dev_id, app_id)
         if not apk:
             return None
         os.makedirs(cache_dir, exist_ok=True)
@@ -117,6 +116,7 @@ def _prepare(dev, platform, app_id, fix):
     and on iOS the Maestro driver up."""
     st = {"app_installed": bool(app_id) and devices.app_installed(dev, app_id), "soft_keyboard": True,
           "animations": True, "problems": []}
+    st["build"] = devices.app_build(dev, app_id) if st["app_installed"] else None
     if not st["app_installed"]:
         st["problems"].append("app %s is not installed on %s; install the build first" % (app_id, dev.name))
     if platform == "android":
@@ -167,7 +167,7 @@ def _platform_state(config, platform, kind_needed_small, fix):
     if main is None:
         state["problems"].append("no booted %s device named fresh-eyes*; run with --fix" % platform)
         return state
-    state.update(device=main.id, name=main.name, owned=True)
+    state.update(device=main.id, name=main.name, owned=True, app=app_id)
     small = next((d for d in owned if d.name.endswith(("small", "16e"))), None)
     if small is None and fix and kind_needed_small:
         try:
@@ -182,6 +182,9 @@ def _platform_state(config, platform, kind_needed_small, fix):
     state["problems"] = earlier + state["problems"]
     if small is not None:
         small_state = _prepare(small, platform, app_id, fix)
+        if small_state["ok"] and small_state["build"] != state["build"]:
+            small_state["ok"] = False
+            small_state["problems"].append("another build than on %s is installed" % main.name)
         if not small_state["ok"]:  # small-screen cells become "not checked", the platform stays usable
             state["small_device"] = False
             state.pop("small_device_id", None)
@@ -235,6 +238,21 @@ def _env(config, mode, states, project=".", fix=False):
     res["verified"] = verified
     res["api_host"] = expected if verified else None
     return res
+
+
+def build_drift(pre):
+    """Devices whose app is no longer the build preflight saw: someone installed another build on our device
+    during the run, so its findings may be about that build."""
+    drift = []
+    for p, st in sorted((pre.get("platforms") or {}).items()):
+        if not st.get("ok") or not st.get("build"):
+            continue
+        for dev_id in filter(None, (st.get("device"), st.get("small_device_id"))):
+            now = devices.app_build(devices.Device(p, dev_id, ""), st["app"])
+            if now != st["build"]:
+                drift.append("%s %s: %s -> %s" % (p, dev_id, st["build"][:12],
+                                                   now[:12] if now else "none (not installed or unreachable)"))
+    return drift
 
 
 def check(config, mode, fix=False, project=".", only=None):

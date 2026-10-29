@@ -419,6 +419,12 @@ class VerdictTest(unittest.TestCase):
         set_status(self.cov, self.cov["cells"][0]["id"], "todo")
         self.assertEqual(verdict(self.cov, [], "ru", packs)["code"], "INCOMPLETE")
 
+    def test_a_build_swapped_mid_run_is_never_clean(self):
+        packs = done_all(self.cov, self.root)
+        v = verdict(self.cov, [], "en", packs, ["android emulator-5560: aaaa -> bbbb"])
+        self.assertEqual(v["code"], "INCOMPLETE")
+        self.assertIn("aaaa -> bbbb", " ".join(v["reasons"]))
+
     def test_duplicates_count_once_and_only_onto_an_equal_finding(self):
         packs = done_all(self.cov, self.root)
 

@@ -290,9 +290,10 @@ def pack_key(path):
     return None
 
 
-def verdict(cov, findings, language="en", reviewed=()):
+def verdict(cov, findings, language="en", reviewed=(), build_changed=()):
     """reviewed: pack paths some reviewer listed in reviewed_packs. A done cell none of whose packs was reviewed
-    is not checked; a finding still pending was never verified. Neither can end in CLEAN."""
+    is not checked; a finding still pending was never verified; build_changed (preflight.build_drift) means the
+    run did not test one build. None of them can end in CLEAN."""
     labels = LABELS.get(language, LABELS["en"])
     merged = [f for f in findings if _merged(f, findings)]
     findings = [f for f in findings if not any(f is m for m in merged)]
@@ -332,8 +333,11 @@ def verdict(cov, findings, language="en", reviewed=()):
         reasons.append("%d duplicate findings merged" % len(merged))
     if cov.get("unchecked"):
         reasons.append("%d items not checked" % len(cov["unchecked"]))
+    if build_changed:
+        reasons.append("the installed app is not the build preflight saw (another build, or the device is off), "
+                       "findings may be about another build: %s" % "; ".join(build_changed))
     complete = (bool(cov["cells"]) and not open_cells and not unreviewed and not pending and not doubtful
-                and not cov.get("unchecked"))
+                and not cov.get("unchecked") and not build_changed)
     if high:
         code = "BLOCK"
     elif medium:
@@ -531,7 +535,12 @@ def main():
         print(json.dumps([c["id"] for c in cells], ensure_ascii=False))
     elif a.cmd == "verdict":
         findings, reviewed = _load_findings(a.findings, os.path.dirname(a.cov) or ".")
-        print(json.dumps(verdict(read_json(a.cov), findings, a.language, reviewed), ensure_ascii=False))
+        pf = os.path.join(os.path.dirname(os.path.abspath(a.cov)), "preflight.json")
+        drift = []
+        if os.path.exists(pf):  # the devices are still up: the report step stops them after the verdict
+            import preflight
+            drift = preflight.build_drift(read_json(pf))
+        print(json.dumps(verdict(read_json(a.cov), findings, a.language, reviewed, drift), ensure_ascii=False))
     elif a.cmd == "map":
         print(coverage_map(read_json(a.cov), a.language))
     elif a.cmd == "prune":

@@ -13,9 +13,11 @@ CLI:
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
 import platform
+import plistlib
 import re
 import shutil
 import signal
@@ -451,6 +453,31 @@ def app_installed(dev, app_id):
     if dev.platform == "android":
         return "package:" in _shell(dev, "pm path %s" % app_id, check=False)
     return bool(_simctl("get_app_container", dev.id, app_id, check=False).strip())
+
+
+def apk_path(dev_id, app_id):
+    out = _adb(dev_id, "shell", "pm path %s" % _app_id(app_id), check=False)
+    return next((l[8:].strip() for l in out.splitlines() if l.startswith("package:") and l.strip()
+                 .endswith("base.apk")), None)
+
+
+def app_build(dev, app_id):
+    """sha256 of the installed APK (iOS: of the app's executable); None when it is not installed or unreachable.
+    Another session can install its own build on our device mid-run; comparing this catches it."""
+    if dev.platform == "android":
+        apk = apk_path(dev.id, app_id)
+        out = _shell(dev, "sha256sum %s" % apk, check=False).split() if apk else []
+        return out[0] if out and len(out[0]) == 64 else None
+    app = _simctl("get_app_container", dev.id, _app_id(app_id), "app", check=False).strip()
+    if not app:
+        return None
+    try:
+        with open(os.path.join(app, "Info.plist"), "rb") as f:
+            exe = os.path.join(app, plistlib.load(f)["CFBundleExecutable"])
+        with open(exe, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except (OSError, KeyError, ValueError):  # plistlib.InvalidFileException is a ValueError
+        return None
 
 
 def install(dev, artifact):

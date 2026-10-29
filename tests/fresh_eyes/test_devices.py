@@ -167,6 +167,33 @@ class DevicesTest(unittest.TestCase):
         self.patch({"stylus_handwriting_enabled": "null\n"})
         self.assertTrue(devices.stylus_handwriting_on(Device("android", "emulator-5560", "x")))
 
+    def test_app_build_is_the_apk_sha256(self):
+        sha = "a" * 64
+        self.patch({"pm path": "package:/data/app/x/split_config.xxhdpi.apk\npackage:/data/app/x/base.apk\n",
+                    "sha256sum /data/app/x/base.apk": sha + "  /data/app/x/base.apk\n"})
+        self.assertEqual(devices.app_build(Device("android", "emulator-5560", "x"), "com.example.app"), sha)
+        self.patch({"pm path": ""})
+        self.assertIsNone(devices.app_build(Device("android", "emulator-5560", "x"), "com.example.app"))
+        self.patch({"pm path": "package:/data/app/x/base.apk\n",
+                    "sha256sum": "sha256sum: /data/app/x/base.apk: Permission denied\n"})
+        self.assertIsNone(devices.app_build(Device("android", "emulator-5560", "x"), "com.example.app"))
+
+    def test_ios_app_build_hashes_the_executable(self):
+        import hashlib
+        import os
+        import plistlib
+        from tests.fresh_eyes.helpers import tmpdir
+        with tmpdir() as d:
+            with open(os.path.join(d, "Info.plist"), "wb") as f:
+                plistlib.dump({"CFBundleExecutable": "App"}, f)
+            with open(os.path.join(d, "App"), "wb") as f:
+                f.write(b"binary")
+            self.patch({"get_app_container": d + "\n"})
+            self.assertEqual(devices.app_build(Device("ios", "AAA", "x"), "com.example.app"),
+                             hashlib.sha256(b"binary").hexdigest())
+        self.patch({"get_app_container": ""})
+        self.assertIsNone(devices.app_build(Device("ios", "AAA", "x"), "com.example.app"))
+
     def test_animations_disabled_detected(self):
         self.patch({"window_animation_scale": "0.0\n", "transition_animation_scale": "1.0\n",
                     "animator_duration_scale": "1.0\n"})

@@ -45,6 +45,7 @@ class PreflightTest(unittest.TestCase):
             "maestro_driver_running": lambda dev: state.get("maestro", False),
             "stop_maestro_driver": lambda dev: (calls.append("stop_maestro"), state.update(maestro=False)),
             "terminate": lambda dev, app: calls.append("terminate"),
+            "app_build": lambda dev, app: "b" * 64,
         }
         for name, fn in patches.items():
             p = mock.patch.object(devices, name, fn)
@@ -168,6 +169,25 @@ class PreflightTest(unittest.TestCase):
         self.assertTrue(st["ok"])
         self.assertFalse(st["small_device"])
         self.assertIn("fresh-eyes-small", " ".join(st["problems"]))
+
+    def test_small_device_with_another_build_is_not_used(self):
+        small = Device("android", "emulator-5562", "fresh-eyes-small")
+        self.fake_devices(listed=(PIXEL, small))
+        with mock.patch.object(devices, "app_build", lambda dev, app: ("c" if dev.id == small.id else "b") * 64):
+            st = preflight.check(config(), "quick", fix=False)["platforms"]["android"]
+        self.assertTrue(st["ok"])
+        self.assertEqual(st["build"], "b" * 64)
+        self.assertFalse(st["small_device"])
+        self.assertIn("another build", " ".join(st["problems"]))
+
+    def test_build_drift_names_the_device_whose_app_changed(self):
+        small = Device("android", "emulator-5562", "fresh-eyes-small")
+        self.fake_devices(listed=(PIXEL, small))
+        pre = preflight.check(config(), "quick", fix=False)
+        self.assertEqual(preflight.build_drift(pre), [])
+        with mock.patch.object(devices, "app_build", lambda dev, app: None if dev.id == small.id else "b" * 64):
+            self.assertEqual(preflight.build_drift(pre), ["android emulator-5562: bbbbbbbbbbbb -> none (not "
+                                                          "installed or unreachable)"])
 
     def test_ios_needs_the_maestro_driver(self):
         sim = Device("ios", "1EB9BE1B", "fresh-eyes iPhone 17")
