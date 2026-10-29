@@ -36,6 +36,9 @@ Android emulator or iOS simulator.
 - iOS: Xcode with an iOS simulator runtime, and the [Maestro](https://maestro.dev) MCP server. fresh-eyes
   creates the simulators `fresh-eyes iPhone 17` and `fresh-eyes iPhone 16e`.
 - Your app built for the emulator/simulator and pointed at a staging or local backend.
+- A test account, if the app needs one: put the names of the environment variables that hold its email and
+  password into `accounts` in `.fresh-eyes/config.json` and export them before you start Claude Code. A signed-out
+  device then signs in by itself.
 
 fresh-eyes only changes devices whose names start with `fresh-eyes`. Your own emulators and phones are never
 touched.

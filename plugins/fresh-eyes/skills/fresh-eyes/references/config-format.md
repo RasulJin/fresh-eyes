@@ -58,6 +58,9 @@ noted. Example (generic values):
   `api_forbidden` host may be, otherwise mutating probes are disabled. Full mode needs a release build (bundle
   inside the app). Only `name` `staging` or `local` can enable mutation.
 - `accounts`: names of environment variables holding test credentials. Values never go into files or reports.
+  The first role is the one a navigator signs in with when it finds the app signed out. Export the variables in
+  the shell that starts Claude Code (a headless `claude -p` run inherits them); without them a signed-out
+  device's cells end blocked.
 - `builds.quick|full.<platform>`: `build` (command, run in `cwd`), `install` (optional), `start` (Metro),
   `metro_env` (env for Metro), `artifact` (built file to install).
 - `hooks`: optional project commands, run from the repo root: `seed` creates data for `empty`/`long-text`/`long-list`

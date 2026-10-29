@@ -107,7 +107,8 @@ words / nothing (= the current diff).
    `inspect_screen` on that simulator once, then call the navigator again with what it had left.
 7. Navigation: one `fresh-eyes:navigator` per platform (they may run in parallel), ≤15 cells per call, until
    `coverage.py next` is empty. Prompt: run folder, config path, platform, device id and name from preflight,
-   the cell ids.
+   the cell ids. A navigator that finds the app signed out signs in with `accounts` itself; cells blocked with
+   "signed out: <variable> not set" mean the user has to export that variable before the next run.
 8. Review: one `fresh-eyes:reviewer` per screen × platform with done cells (up to 4 in parallel). Prompt: the
    pack folders, `.fresh-eyes/spec.md` + the screen id and its `neighbors` ids (their rules often apply),
    `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the `references` and `language` from config. Journey cells get one reviewer per platform over `<run>/<platform>/journey/`;

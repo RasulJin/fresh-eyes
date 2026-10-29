@@ -38,7 +38,11 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 - Skip anything destructive outside the plan (log out, delete account, pay, send to real people).
 - `adb` is often not on PATH: use `nav.py`, `devices.py app --do launch|terminate|background`, or the full path
   `$HOME/Library/Android/sdk/platform-tools/adb` (or `$ANDROID_HOME/platform-tools/adb`).
-- Never print or write secrets. If the app is signed out, mark cells `blocked` with note "signed out".
+- Never print or write secrets. Signed out (a device restored from a snapshot or the small device often is):
+  sign in once per device with the first role in `config.json` → `accounts`, the way a person would (the start
+  screen's sign-in button, skip the onboarding hints), typing only with `nav.py type --env <email_env>` and
+  `--env <password_env>`. Never create an account. If `nav.py type` says the variable is not set, or signing in
+  fails, mark the cells `blocked` with note "signed out: <variable> not set" or "signed out: <why>".
 
 ## For each cell `<platform>/<screen>/<state>/<probe>`
 
