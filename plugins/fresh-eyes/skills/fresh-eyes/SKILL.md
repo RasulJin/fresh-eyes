@@ -163,6 +163,8 @@ the candidates, a model judges them; keywords never decide.
 4. `python3 $S/bench.py score --cases .fresh-eyes/bench/cases.json --sheet .fresh-eyes/bench/sheet.json --out
    .fresh-eyes/bench/score.json`: caught = matched in at least 2 of 3 attempts; a match on the fix build is a false
    positive; a CLEAN run that missed a planned case is a false CLEAN. Report these against the spec's targets.
+   Cases with `"kind": "control"` are intended behaviour on the same screens (`control` in the score): any
+   match on them is a false positive too.
 
 ## Report
 

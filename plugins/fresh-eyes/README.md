@@ -97,7 +97,8 @@ still live, and one run on a build with the fixes. Code collects, per case and r
 screen (and area), and a `fresh-eyes:judge` decides which of them, if any, is the case's defect; it is not told
 which runs had the fixes. A case is caught when it is matched in at least two of three attempts; a match on the
 fixed build is a false positive; `false_clean` lists runs whose verdict was CLEAN while a planned case went
-uncaught, and must stay empty.
+uncaught, and must stay empty. A case with `"kind": "control"` describes behaviour that is intended though it may look
+wrong (a tab bar without labels, dates allowed in the past); a run that flags it scores a false positive.
 
 ## Limits
 

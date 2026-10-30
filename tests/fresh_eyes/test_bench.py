@@ -79,6 +79,29 @@ class SheetScoreTest(unittest.TestCase):
         data["entries"][1]["match"] = False  # a near miss judged as another defect
         self.assertFalse(score(data, roles)[0]["BUG-357"]["caught"])
 
+    def test_a_control_is_checked_on_every_run_and_a_match_is_a_false_positive(self):
+        ctrl = dict(CASE, id="C-1", kind="control", expect={"description": "a right swipe on the menu does nothing",
+                                                             "bbox": None})
+        with tmpdir() as d:
+            runs = [run_with(d, "a%d" % i, [f()]) for i in range(2)]
+            data, roles = sheet([CASE, ctrl], runs, {"BUG-357": run_with(d, "b", [])})
+        control = [e for e in data["entries"] if roles[e["entry"]]["role"] == "control"]
+        self.assertEqual(len(control), 2)  # the fix run has nothing on the screen: no entry
+        self.assertTrue(data["cases"]["C-1"].startswith("INTENDED"))
+        for e in data["entries"]:
+            e["match"] = False
+        control[0]["match"] = control[0]["candidates"][0]["ref"]
+        scores, fps = score(data, roles)
+        self.assertEqual((fps["control"], sorted(scores)), ("1/2", ["BUG-357"]))
+
+    def test_a_run_that_never_planned_the_screen_is_not_an_attempt(self):
+        with tmpdir() as d:
+            menu, trips = run_with(d, "a0", []), run_with(d, "a1", [f(screen="trip-map")], screen="trip-map")
+            write_json(os.path.join(menu, "coverage.json"), {"cells": [{"platform": "android", "screen": "side-menu"}]})
+            write_json(os.path.join(trips, "coverage.json"), {"cells": [{"platform": "android", "screen": "trip-map"}]})
+            data, roles = sheet([CASE], [menu, trips], {})
+        self.assertEqual([r["run"] for r in roles.values()], [menu])  # planned and found nothing: still a miss
+
     def test_summary_counts(self):
         scores = {"BUG-357": {"caught": True}, "OCT-1": {"caught": False}}
         s = summary([CASE, dict(CASE, id="OCT-1", group="october")], scores, {"pairs": 0}, confirmed=4, rejected=1)

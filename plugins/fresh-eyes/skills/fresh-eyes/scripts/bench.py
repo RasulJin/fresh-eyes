@@ -2,13 +2,15 @@
 """Score fresh-eyes runs against known bugs the way the spec's benchmark asks: code finds the candidates, a model
 judges them.
 
-cases.json: [{"id", "screen", "also_screens", "platform", "kind": "bug", "group": "live"|"october"|...,
+cases.json: [{"id", "screen", "also_screens", "platform", "kind": "bug"|"control", "group": "live"|"october"|...,
               "expect": {"description": "what a person sees", "bbox": [x,y,w,h]|null}}]
+            a "control" case is intended behaviour that must not be flagged; it is checked on every run.
 sheet: for every case and run (the attempts on the build with the bug, the run on the build with the fix), the
        confirmed/unsure findings on the case's screen and platform, and area when a bbox is given (the code check).
        Which run is a fix run goes to <sheet>.roles.json, so the judge cannot lean on it.
 judge: one `fresh-eyes:judge` sets "match" on every entry: the ref of the finding that is the case's defect, or false.
-score: caught = matched in at least 2/3 of the attempts; a match on the fix build is a false positive; a run whose
+score: caught = matched in at least 2/3 of the attempts; a match on the fix build or on a control is a false
+       positive; a run whose
        code verdict was CLEAN while it missed a case it planned is a false CLEAN (the number that must stay 0).
 
 CLI: bench.py sheet --cases cases.json --runs RUN [RUN ...] [--fix-runs ID=RUN ...] --out sheet.json
@@ -55,20 +57,38 @@ def load_run_findings(run, cases):
     return {c["id"]: by_platform.get(c["platform"], []) for c in cases}
 
 
+def _planned(run):
+    """(platform, screen) of the run's coverage cells; None when the run has no coverage.json."""
+    path = os.path.join(run, "coverage.json")
+    return {(c["platform"], c["screen"]) for c in read_json(path)["cells"]} if os.path.exists(path) else None
+
+
+def _plans(case, planned):
+    return planned is None or any((case["platform"], s) in planned
+                                  for s in [case["screen"]] + case.get("also_screens", []))
+
+
 def sheet(cases, runs, fix_runs):
     """(sheet for the judge, roles kept apart from it)."""
     entries, roles = [], {}
-    todo = [(c, r, "attempt") for c in cases if c.get("kind", "bug") == "bug" for r in runs]
+    planned = {r: _planned(r) for r in runs}
+    # a run of another group never planned the case's screen: not an attempt at it, so not a miss
+    todo = [(c, r, "attempt") for c in cases if c.get("kind", "bug") == "bug" for r in runs if _plans(c, planned[r])]
     todo += [(c, fix_runs[c["id"]], "fix") for c in cases if c["id"] in fix_runs]
-    for k, (c, run, role) in enumerate(todo):
+    todo += [(c, r, "control") for c in cases if c.get("kind") == "control"
+             for r in runs + sorted(set(fix_runs.values()) - set(runs))]
+    for c, run, role in todo:
         found = candidates(c, load_run_findings(run, [c])[c["id"]])
-        eid = "e%d" % (k + 1)
+        if role == "control" and not found:  # nothing on that screen in this run: nothing to flag
+            continue
+        eid = "e%d" % (len(entries) + 1)
         roles[eid] = {"case": c["id"], "run": run, "role": role}
         entries.append({"entry": eid, "case": c["id"], "screen": c["screen"], "match": None,
                         "candidates": [{k2: fd.get(k2) for k2 in ("ref", "title", "actual", "severity", "verdict")}
                                        | {"evidence": (fd.get("evidence") or [None])[0], "run": run}
                                        for fd in found]})
-    descriptions = {c["id"]: (c.get("expect") or {}).get("description", "") for c in cases}
+    descriptions = {c["id"]: ("INTENDED, not a bug: " if c.get("kind") == "control" else "")
+                    + (c.get("expect") or {}).get("description", "") for c in cases}
     return {"cases": descriptions, "entries": entries}, roles
 
 
@@ -76,16 +96,21 @@ def score(judged, roles):
     open_ = [e["entry"] for e in judged["entries"] if e.get("match") is None]
     if open_:
         raise FEError("the sheet is not judged yet: %d entries without match (%s)" % (len(open_), ", ".join(open_[:5])))
-    hits, fps = {}, {}
+    hits, fps, control = {}, {}, [0, 0]
     for e in judged["entries"]:
         r = roles[e["entry"]]
+        if r["role"] == "control":
+            control[0] += 1 if e["match"] else 0
+            control[1] += 1
+            continue
         bucket = hits.setdefault(r["case"], [0, 0]) if r["role"] == "attempt" else fps.setdefault(r["case"], [0, 0])
         bucket[0] += 1 if e["match"] else 0
         bucket[1] += 1
     out = {cid: {"hits": h, "attempts": n, "caught": h * 3 >= 2 * n > 0,
                  "fix_flagged": "%d/%d" % tuple(fps[cid]) if cid in fps else None}
            for cid, (h, n) in hits.items()}
-    return out, {"pairs": sum(f[0] for f in fps.values()), "fix_runs": sum(f[1] for f in fps.values())}
+    return out, {"pairs": sum(f[0] for f in fps.values()), "fix_runs": sum(f[1] for f in fps.values()),
+                 "control": "%d/%d" % tuple(control)}
 
 
 def summary(cases, scores, fps, confirmed=0, rejected=0):
@@ -130,9 +155,7 @@ def false_clean(judged, roles, cases):
         cov = read_json(cov_path)
         if coverage.verdict(cov, findings, "en", reviewed)["code"] != "CLEAN":
             continue
-        planned = {(c["platform"], c["screen"]) for c in cov["cells"]}
-        ids = [i for i in ids if any((by_id[i]["platform"], s) in planned
-                                     for s in [by_id[i]["screen"]] + by_id[i].get("also_screens", []))]
+        ids = [i for i in ids if _plans(by_id[i], _planned(run))]
         if ids:
             bad.append({"run": run, "missed": ids})
     return bad

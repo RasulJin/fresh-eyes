@@ -24,6 +24,8 @@ For every entry:
    Same defect: the same thing wrong in the same place, seen the way the description says (a cut label is a
    cut label, a stacked sheet a stacked sheet). Not a match: another problem with the same element, a finding
    that only mentions the area, or a generic one ("several small issues") that does not name this defect.
+   A description that starts with "INTENDED, not a bug" is behaviour the project chose: match the candidate
+   that reports that behaviour as a defect.
 3. Add `"why"`: one line, quoting the words of the candidate that decided it, or what was missing.
 
 Judge every entry the same way; you are not told which runs had the bug and which had it fixed, and you must
