@@ -34,8 +34,8 @@ def make_pack(root, cell, sub=True, **meta):
     if cell["probe"] == "swipe-inside":  # snapped with --before, and the swipe moved the list
         base.update(before=path + "-before", moved=0.4)
     write_json(os.path.join(path, "meta.json"), dict(base, **meta))
-    if sub and cell["probe"] in REQUIRED_SUBPACKS:
-        write_json(os.path.join(path, REQUIRED_SUBPACKS[cell["probe"]], "meta.json"), {"platform": cell["platform"]})
+    for need in REQUIRED_SUBPACKS.get(cell["probe"], ()) if sub else ():
+        write_json(os.path.join(path, need, "meta.json"), {"platform": cell["platform"]})
     if sub and cell["probe"] == "scenario":
         steps = full_steps(cell.get("forms", []))
         write_json(os.path.join(path, "steps.json"), steps)
@@ -123,6 +123,22 @@ class PlanTest(unittest.TestCase):
         self.assertIn("empty", whats)
         self.assertIn("small-screen", whats)
 
+    def test_theme_mismatch_needs_the_apps_own_theme_switch(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(states=["default", "theme-mismatch"], probes=[])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        self.assertNotIn("theme-mismatch", {c["state"] for c in cov["cells"]})
+        self.assertIn("app_theme", " ".join(u["why"] for u in cov["unchecked"]))
+        cfg["app_theme"] = "Settings → Theme: Light / Dark"
+        self.assertEqual(sum(c["state"] == "theme-mismatch" for c in plan(cfg, BOTH_OK_MUT_OFF, "full")["cells"]), 2)
+
+    def test_drag_interrupt_is_android_only_and_a_gap_on_ios(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(states=["default"], probes=["drag-interrupt"])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        self.assertEqual([c["platform"] for c in cov["cells"] if c["probe"] == "drag-interrupt"], ["android"])
+        self.assertIn("ios/profile-trips/drag-interrupt", [u["what"] for u in cov["unchecked"]])
+
     def test_quick_lists_neighbors_and_extra_screens_as_unchecked(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0]["neighbors"] = ["profile-posts"]
@@ -180,14 +196,16 @@ class StatusTest(unittest.TestCase):
 
     def test_done_needs_the_probes_required_snap(self):
         cfg = copy.deepcopy(ONE_SCREEN)
-        cfg["screens"][0]["probes"] = ["rapid-tap", "keyboard-open", "search", "tap-outside"]
+        cfg["screens"][0]["probes"] = ["rapid-tap", "keyboard-open", "search", "tap-outside", "drag-interrupt"]
         cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
         root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, root)
         for cell in [c for c in cov["cells"] if c["platform"] == "android" and c["probe"] != "none"]:
-            if cell["probe"] in REQUIRED_SUBPACKS:
-                with self.assertRaisesRegex(FEError, REQUIRED_SUBPACKS[cell["probe"]]):
-                    set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell, sub=False)])
+            for need in REQUIRED_SUBPACKS.get(cell["probe"], ()):  # each one is required, not any of them
+                pack = make_pack(root, cell)
+                shutil.rmtree(os.path.join(pack, need))
+                with self.assertRaisesRegex(FEError, "<pack>/%s" % need):
+                    set_status(cov, cell["id"], "done", evidence=[pack])
             set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell)])
             self.assertEqual(cell["status"], "done")
 

@@ -57,6 +57,10 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
    screen stops changing, snap the end with `--before <top pack>`, record both packs; if every item fits on one
    screen, mark the cell blocked with note "not enough items". `loading`/`error`: run `hooks.loading` / `hooks.error` from
    `config.json` (repo root) right before the snap, and undo it after if the hook says how.
+   `theme-mismatch`: `--what dark`, then pick the app's own Light theme the way `app_theme` in `config.json`
+   says, come back and snap without `--expect-differs` (done right, it looks like `default`); restore with
+   `--what light` and leave the app on Light. A `dark` cell where the app stays light (exit 4) while
+   `app_theme` is set: the app's own theme is pinned, so pick its Dark, snap again, then pick Light back.
 3. **Run the probe** exactly as `probes.md` says. Fast probes use `taps.py` (with `--coverage` and `--cell`).
    Wrap transitions and probes in `capture.py around ... -- <command>` so they are recorded.
 4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --out <run>/<platform>/<screen>/<state>-<probe>`

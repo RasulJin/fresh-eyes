@@ -83,4 +83,8 @@ noted. Example (generic values):
   modes; the scenario must go through each.
   `drag` (for `tap-outside`): surfaces a person drags or scrolls while a card or menu is open over them (a
   bottom sheet by its handle, a list); the probe drags each one with the overlay open.
+  `draggable` (for `drag-interrupt`): what a person drags on this screen and which way ("the open side menu,
+  leftwards to close it", "the Trips / Posts pager, sideways").
+- `app_theme`: how to pick the app's own Light and Dark theme, in words (where the control is, its labels);
+  without it the `theme-mismatch` state is reported as not checked. List `theme-mismatch` after `dark`.
 - `journeys[]`: end-to-end paths for full mode; `mutating: true` journeys only run when mutation is allowed.

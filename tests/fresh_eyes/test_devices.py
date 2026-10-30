@@ -109,6 +109,28 @@ class DevicesTest(unittest.TestCase):
         shells = [c[-1] for c in fake.calls if "input" in c[-1]]
         self.assertEqual(shells, ["input tap 10 20; sleep 0.1; input keyevent 4"])
 
+    def test_drag_back_presses_back_while_the_drag_runs(self):
+        fake = self.patch({})
+        devices.drag_then_back(Device("android", "emulator-5560", "fresh-eyes-pixel"), 700, 1200, 250, 1200, 2000, 700)
+        self.assertEqual([c[-1] for c in fake.calls if "input" in c[-1]],
+                         ["input swipe 700 1200 250 1200 2000 & sleep 0.7; input keyevent 4; wait"])
+
+    def test_swipe_tap_taps_the_moment_the_drag_ends(self):
+        fake = self.patch({})
+        devices.swipe_then_tap(Device("android", "emulator-5560", "fresh-eyes-pixel"), 700, 1200, 100, 1200, 540, 305)
+        self.assertEqual([c[-1] for c in fake.calls if "input" in c[-1]],
+                         ["input swipe 700 1200 100 1200 250; sleep 0.3; input tap 540 305"])
+
+    def test_drag_races_are_android_only_and_owned_only(self):
+        for answers, dev in (({"list devices -j": SIMCTL_JSON}, Device("ios", "AAA", "fresh-eyes iPhone 17")),
+                             ({"emu avd name": "Pixel_9\nOK\n"}, Device("android", "emulator-5554", "Pixel_9"))):
+            fake = self.patch(answers)
+            with self.assertRaisesRegex(FEError, "Android only" if dev.platform == "ios" else "Pixel_9"):
+                devices.drag_then_back(dev, 1, 2, 3, 4)
+            with self.assertRaises(FEError):
+                devices.swipe_then_tap(dev, 1, 2, 3, 4, 5, 6)
+            self.assertFalse(any("input" in " ".join(c) for c in fake.calls))
+
     def test_rapid_taps_zero_interval_has_no_sleep(self):
         fake = self.patch({})
         devices.rapid_taps(Device("android", "emulator-5560", "x"), 1, 2, 2, 0)

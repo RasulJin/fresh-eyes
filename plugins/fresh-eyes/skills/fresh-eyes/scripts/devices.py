@@ -377,6 +377,26 @@ def tap_then_back(dev, x, y, delay_ms=100):
                               "endY": info["heightPoints"] / 2, "duration": 0.25, "appIds": []}, base=base)
 
 
+def _android_touch(dev, what):
+    _require_owned(dev, "send input")
+    if dev.platform != "android":  # the iOS driver serializes touches: no Back while a drag is still running
+        raise FEError("%s is Android only here" % what)
+
+
+def drag_then_back(dev, x1, y1, x2, y2, ms=2000, back_at_ms=700):
+    """A slow drag with Back pressed while the finger is still down (`input` starts in ~10-40 ms on an emulator)."""
+    _android_touch(dev, "drag-back")
+    _shell(dev, "input swipe %d %d %d %d %d & sleep %g; input keyevent 4; wait"
+           % (x1, y1, x2, y2, ms, back_at_ms / 1000.0))
+
+
+def swipe_then_tap(dev, x1, y1, x2, y2, x, y, ms=250, delay_ms=300):
+    """A drag that closes something, then a tap behind it once the closing animation is over (delay_ms: the
+    motion ceiling; sooner, the tap lands in the animation and is eaten on a correct build too)."""
+    _android_touch(dev, "swipe-tap")
+    _shell(dev, "input swipe %d %d %d %d %d; sleep %g; input tap %d %d" % (x1, y1, x2, y2, ms, delay_ms / 1000.0, x, y))
+
+
 def swipe(dev, x1, y1, x2, y2, ms=300):
     _require_owned(dev, "send input")
     if dev.platform == "android":

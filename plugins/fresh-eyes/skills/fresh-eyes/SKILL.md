@@ -58,8 +58,10 @@ Goal: a working `.fresh-eyes/` for this project, confirmed by the user.
      screens where a person does something (forms, search, chat, create/edit) → `scenario`, with `task` and
      `forms`;
      overlays/maps/menus → `tap-outside`, `back-during-animation`; share/send buttons → `rapid-tap`;
+     drawers, pagers, draggable sheets → `drag-interrupt`, with `draggable`;
      long requests → `background-foreground`. Fill `reach` in plain words, `neighbors`, and `marker` (header
-     title or a testID from the route file; another screen must not show it).
+     title or a testID from the route file; another screen must not show it). When the app has its own theme
+     setting, fill `app_theme` and add `theme-mismatch` after `dark` on screens with maps, web views or charts.
 3. Build `.fresh-eyes/spec.md` by `$R/spec-format.md`. Delegate the reading to a general-purpose subagent
    (give it the source paths and the format file; it returns the path and a list of conflicts).
 4. `.fresh-eyes/known.md` (empty template), `.fresh-eyes/examples/`: copy screenshots of past bugs from the

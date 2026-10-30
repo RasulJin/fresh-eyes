@@ -123,7 +123,25 @@ Just look. `capture.py snap`. With `--keyboard` when an input is focused.
   `geometry.still_clipped` flags rows still cut. `coverage.py set` refuses a pack snapped without `--before`,
   and one where the swipe moved nothing (it missed the list): swipe inside the list itself. A container that
   truly does not scroll goes in `--note`.
-- For pagers also: slow drag (1.5–2.5 s) released before halfway; strong fling; under `capture.py around`.
+- Pagers, drawers and sheets get `drag-interrupt` for the slow drag and the races.
+
+### drag-interrupt
+- Reveals: invisible windows left after a drag closes something (the next tap is eaten), Back mid-drag reopening
+  it or leaving the content dead or shifted, pagers and drawers that jump past halfway or snap back.
+- Target: the screen's `draggable` in config (a drawer, a pager, a bottom sheet); x, y from a fresh `nav.py screen`.
+  Each step under `capture.py around`, snapped into its subpack (`coverage.py set` refuses the cell without
+  all three), and `<pack>/steps.json` as in `scenario` (`did`, `expect` written before you look):
+  1. `slow`: relaunch the app (`devices.py app --do terminate`, then `--do launch`), reach the screen and, as the
+     first touch, `nav.py swipe --ms 2000` over 40% of the surface, then again over 60%. Snap into
+     `<pack>/slow`. Oracle: under half it springs back, over half it moves on; it never sticks between.
+  2. `drag-back`: `taps.py drag-back --from X,Y --to X,Y --ms 2000 --back-at-ms 700` (Back while the finger is
+     still down), wait 1.5 s, snap into `<pack>/drag-back`, then tap the content behind and snap again. Oracle:
+     Back closed it (or Back did what it does without the drag), and the content answers the tap.
+  3. `swipe-tap`: with it open, `taps.py swipe-tap --from X,Y --to X,Y --x X --y Y --delay-ms M` (the drag that
+     closes it, then, M = config `motion_ceiling_ms`, default 300, after the finger lifts, a tap on something
+     behind it that visibly reacts: a card that opens), wait 1.5 s, snap into `<pack>/swipe-tap`. Oracle: the
+     tap landed: by then the closing animation is over. A tap that only works a moment later is a BUG.
+- Android only: the iOS driver cannot press Back while a drag is still running.
 
 ### tap-everything
 - Reveals: dead taps, wrong destinations, labels that lie ("Follow" opening the profile), disabled controls

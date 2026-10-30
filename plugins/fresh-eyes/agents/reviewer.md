@@ -43,7 +43,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    before the step? Results must belong to the latest input (nothing stale), what was saved must show where the
    step says and nothing unasked-for may appear, invalid input must be refused, a stopped or failed action must
    say so, a retry must not duplicate. `logcat.txt`: an error or a crash during the scenario is a BUG even when
-   the screen looks fine; a flood of one warning is one finding.
+   the screen looks fine; a flood of one warning is one finding. A `drag-interrupt` pack is judged the same
+   way, against the oracle of each step in probes.md (a tap behind that did not land is a BUG).
 4. Go beyond the candidates through the checklist sections and the UX rubric. Compare with the spec rules and
    with the examples. Check consistency against sibling packs (header vs tab bar icon, the same control in two
    states, light vs dark).

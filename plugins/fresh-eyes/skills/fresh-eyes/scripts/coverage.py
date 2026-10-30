@@ -39,6 +39,8 @@ PROBES = {
     "search": {"mutating": False, "platforms": BOTH},  # type a query, run a read-only search, look at the results
     "scenario": {"mutating": False, "platforms": BOTH},  # the screen's task end to end; writes only if mutation is on
     "swipe-inside": {"mutating": False, "platforms": BOTH},
+    # Back while a finger still drags, a tap right after a drag closes: two touches at once, adb only
+    "drag-interrupt": {"mutating": False, "platforms": ["android"]},
     "tap-everything": {"mutating": False, "platforms": BOTH},
     "rotate": {"mutating": False, "platforms": BOTH},
     "offline": {"mutating": False, "platforms": ["android"]},
@@ -47,19 +49,20 @@ PROBES = {
     "double-submit": {"mutating": True, "platforms": BOTH},
 }
 # snaps inside the pack a done cell needs: a navigator skips a probe's extra steps unless the cell depends on them
-REQUIRED_SUBPACKS = {"rapid-tap": "afterback", "keyboard-open": "return", "search": "typed"}
+REQUIRED_SUBPACKS = {"rapid-tap": ("afterback",), "keyboard-open": ("return",), "search": ("typed",),
+                     "drag-interrupt": ("slow", "drag-back", "swipe-tap")}
 # a scenario does the task, changes an input after the result, tries an invalid input, interrupts an action,
 # and checks what was kept
 SCENARIO_KINDS = {"task", "change", "invalid", "interrupt", "check"}
 # probes after which the app has no reason to be on another screen: their pack must show the screen's marker
 # (not swipe-inside: scrolling takes headers, and with them most markers, off screen)
 ON_SCREEN_PROBES = {"none", "keyboard-open"}
-STATES = ["default", "empty", "loading", "error", "offline", "long-text", "long-list", "dark", "font-xl",
-          "small-screen", "keyboard"]
+STATES = ["default", "empty", "loading", "error", "offline", "long-text", "long-list", "dark", "theme-mismatch",
+          "font-xl", "small-screen", "keyboard"]
 STATE_PLATFORMS = {"offline": ["android"]}
-NOT_AUTOMATED = {"offline"}  # on the other platform this is a gap to report, not "not applicable"
+NOT_AUTOMATED = {"offline", "drag-interrupt"}  # on the other platform this is a gap to report, not "not applicable"
 STATE_NEEDS = {"empty": "seed", "long-text": "seed", "long-list": "seed", "loading": "hook", "error": "hook",
-               "small-screen": "small_device"}
+               "small-screen": "small_device", "theme-mismatch": "app_theme"}
 STATUSES = ("todo", "done", "failed", "blocked", "na")
 LABELS = {
     "ru": {"BLOCK": "НЕ ВЫПУСКАТЬ", "ISSUES": "ЕСТЬ ПРОБЛЕМЫ", "INCOMPLETE": "НЕ ПРОВЕРЕНО ДО КОНЦА",
@@ -126,6 +129,8 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
                     why = "needs hooks.%s (nothing can produce this state otherwise)" % state
                 elif need == "small_device" and not small:
                     why = "needs a small device"
+                elif need == "app_theme" and not config.get("app_theme"):
+                    why = "needs app_theme in config (how to pick the app's own light theme)"
                 if why:
                     unchecked.append({"what": "%s/%s/%s" % (p, sid, state), "why": why})
                     continue
@@ -237,9 +242,9 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         problems = [pr for pr in (_evidence_problem(e) for e in packs) if pr] or \
             ([] if packs else ["no evidence pack given"])
         problems += ["%s is not under <run>/<platform>/<screen>/" % e for e in packs if pack_key(e) is None]
-        need = REQUIRED_SUBPACKS.get(c["probe"])
-        if need and packs and not any(os.path.isfile(os.path.join(e, need, "meta.json")) for e in packs):
-            problems.append("a %s cell needs the snap <pack>/%s (see probes.md)" % (c["probe"], need))
+        problems += ["a %s cell needs the snap <pack>/%s (see probes.md)" % (c["probe"], need)
+                     for need in REQUIRED_SUBPACKS.get(c["probe"], ())
+                     if packs and not any(os.path.isfile(os.path.join(e, need, "meta.json")) for e in packs)]
         back = os.path.join(packs[0], "return", "meta.json") if packs else ""
         if c["probe"] == "keyboard-open" and os.path.isfile(back) and read_json(back).get("keyboard_up"):
             problems.append("the keyboard is still up in <pack>/return, so the state after it closes was never seen: "

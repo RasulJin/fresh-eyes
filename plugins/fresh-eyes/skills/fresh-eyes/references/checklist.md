@@ -76,7 +76,11 @@ under the last row, the header and tab bar stay; loading more, if the list pages
 Longest realistic strings and many items: last row fully reachable, no truncation of meaning, fields grow.
 
 ### dark
-Dark theme (and system/app theme mismatch). Contrast, images, maps and system bars follow the theme.
+Dark theme. Contrast, images, maps and system bars follow the theme.
+
+### theme-mismatch
+The phone in dark theme, the app set to its own light theme. Everything follows the app's theme: a map, web
+view, chart, keyboard, native sheet or status bar in the phone's dark theme under a light app is a BUG.
 
 ### font-xl
 Largest accessibility font size. Nothing overlaps or clips; buttons stay inside the screen.
