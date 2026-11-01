@@ -1,7 +1,7 @@
 import unittest
 
 import tests.fresh_eyes.helpers  # noqa: F401  (sys.path)
-from geometry import (moved_fraction, overlaps, partially_visible, repeated_strings, run_all, small_targets, still_clipped,
+from geometry import (held_short, moved_fraction, overlaps, partially_visible, repeated_strings, run_all, small_targets, still_clipped,
                       truncation_candidates, under_keyboard)
 
 SCREEN = [1080, 2400]
@@ -192,3 +192,30 @@ class RunAllTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HeldShortTest(unittest.TestCase):
+    """KDD #352: the trips grid held to a shorter tab's height, its last row a strip with blank under it."""
+    def grid(self, list_h):
+        outer = node("outer", [0, 236, 1080, 1912], cls="android.widget.ScrollView", rid="profile-scroll")
+        inner = node("inner", [0, 468, 1080, list_h], parent="outer", cls="android.widget.ScrollView")
+        body = node("body", [0, 468, 1080, list_h], parent="inner", cls="android.view.ViewGroup")
+        bottom = 468 + list_h
+        cells = [node("c%d" % k, [47 + 509 * (k % 2), y, 477, min(506, bottom - y)], parent="body",
+                      cls="android.view.ViewGroup", rid="journal-cell")
+                 for k, y in enumerate([1123, 1123, 1665, 1665])]
+        return [ROOT, outer, inner, body] + cells
+
+    def test_last_row_cut_at_a_short_list_is_flagged(self):
+        c = held_short(self.grid(1328), SCREEN)
+        self.assertEqual([x["node_ids"] for x in c], [["c2", "c3"]])
+        self.assertIn("blank", c[0]["detail"])
+        self.assertIn("held_short", [x["check"] for x in run_all(self.grid(1328), {"screen_wh": SCREEN})])
+
+    def test_row_cut_by_the_screen_edge_is_not(self):
+        self.assertEqual(held_short(self.grid(1680), SCREEN), [])
+
+    def test_row_cut_above_a_tab_bar_is_not(self):
+        nodes = self.grid(1328)
+        nodes.append(node("tab", [0, 1800, 216, 186], cls="android.widget.Button", label="Лента"))
+        self.assertEqual(held_short(nodes, SCREEN), [])

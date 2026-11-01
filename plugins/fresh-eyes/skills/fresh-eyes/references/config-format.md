@@ -85,6 +85,8 @@ noted. Example (generic values):
   bottom sheet by its handle, a list); the probe drags each one with the overlay open.
   `draggable` (for `drag-interrupt`): what a person drags on this screen and which way ("the open side menu,
   leftwards to close it", "the Trips / Posts pager, sideways").
+  `pages` (for `swipe-inside`): the other pages of the pager or tab set this screen is a page of, by their tab
+  labels ("the Posts tab", "the Saved tab"); the probe opens each, comes back and scrolls to the end.
 - `app_theme`: how to pick the app's own Light and Dark theme, in words (where the control is, its labels);
   without it the `theme-mismatch` state is reported as not checked. List `theme-mismatch` after `dark`.
 - `journeys[]`: end-to-end paths for full mode; `mutating: true` journeys only run when mutation is allowed.

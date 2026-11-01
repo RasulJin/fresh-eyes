@@ -113,6 +113,47 @@ def still_clipped(before, after, screen_wh):
     return result
 
 
+def _vertical_scroll(n):
+    return n["cls"].endswith(("ScrollView", "RecyclerView", "ListView")) and "Horizontal" not in n["cls"]
+
+
+def held_short(nodes, screen_wh, px_per_dp=2.625):
+    """A list inside a scroll that ends above it with its last row cut to a strip: the list is held to a height
+    it had before (laid out while loading, or while a shorter tab was open). The hierarchy reports bounds already
+    clipped, so the row only shows as much shorter than its siblings, cut exactly at the list's edge."""
+    by_id = {n["id"]: n for n in nodes}
+    rows = defaultdict(list)
+    for n in nodes:
+        if n["rid"] and n.get("parent") in by_id:
+            rows[(n["parent"], n["rid"])].append(n)
+    result = []
+    for (parent, rid), sibs in rows.items():
+        if len(sibs) < 3:
+            continue
+        heights = sorted(s["bounds"][3] for s in sibs)
+        usual = heights[len(heights) // 2]
+        scrolls = [by_id[a] for a in _ancestors(sibs[0], by_id) if _vertical_scroll(by_id[a])]
+        if len(scrolls) < 2:
+            continue
+        inner, outer = scrolls[0], scrolls[1]
+        bottom = inner["bounds"][1] + inner["bounds"][3]
+        blank = outer["bounds"][1] + outer["bounds"][3] - bottom
+        cut = [s for s in sibs if s["bounds"][3] < 0.6 * usual and abs(s["bounds"][1] + s["bounds"][3] - bottom) <= 2]
+        # The band under the list is really empty: a tab bar or a footer there means the screen edge cut the row.
+        # Only what starts under the list counts (backgrounds span the screen); off-screen pages are beside it.
+        ix0, ix1 = inner["bounds"][0], inner["bounds"][0] + inner["bounds"][2]
+        filled = any(n["bounds"][1] >= bottom - 2 and n["bounds"][1] < bottom + blank - 24
+                     and min(n["bounds"][0] + n["bounds"][2], ix1) > max(n["bounds"][0], ix0)
+                     for n in nodes if n["bounds"][2] > 0 and n["bounds"][3] > 0)
+        if cut and blank >= 48 * px_per_dp and not filled:
+            x0, y0 = min(s["bounds"][0] for s in cut), min(s["bounds"][1] for s in cut)
+            x1 = max(s["bounds"][0] + s["bounds"][2] for s in cut)
+            result.append(_cand("held_short", [s["id"] for s in cut], [x0, y0, x1 - x0, bottom - y0],
+                                "%s cut to %d%% at its list's bottom edge, %d px of blank under the list"
+                                % (rid, round(cut[0]["bounds"][3] * 100.0 / usual), blank), "high"))
+    return result
+
+
 def moved_fraction(before, after):
     """Share of the elements found in both snaps whose bounds changed: 0 means the gesture moved nothing."""
     pairs = _pair_by_key(_app_only(before), _app_only(after))
@@ -275,7 +316,7 @@ def run_all(nodes, ctx, before=None):
     before = _app_only(before) if before is not None else None
     screen = ctx["screen_wh"]
     result = partially_visible(nodes, screen) + overlaps(nodes, screen_wh=screen) + truncation_candidates(nodes) \
-        + repeated_strings(nodes)
+        + repeated_strings(nodes) + held_short(nodes, screen, ctx.get("px_per_dp") or 2.625)
     if ctx.get("px_per_dp") and ctx.get("min_dp"):
         result += small_targets(nodes, ctx["px_per_dp"], ctx["min_dp"])
     if ctx.get("keyboard_top") is not None:

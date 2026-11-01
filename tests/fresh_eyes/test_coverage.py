@@ -226,6 +226,24 @@ class StatusTest(unittest.TestCase):
         set_status(cov, cell["id"], "done", evidence=[pack], note="the grid fits, it does not scroll")
         self.assertEqual(cell["status"], "done")
 
+    def test_swipe_inside_comes_back_from_each_listed_page(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(probes=["swipe-inside"], pages=["вкладка «Посты»", "вкладка «Сохранённые»"])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        cell = next(c for c in cov["cells"] if c["probe"] == "swipe-inside")
+        self.assertEqual(cell["pages"], ["вкладка «Посты»", "вкладка «Сохранённые»"])
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        pack = make_pack(root, cell)
+        write_json(os.path.join(pack, "meta.json"), {"platform": "android", "before": pack + "-b", "moved": 0.4})
+        write_json(os.path.join(pack, "page-1", "meta.json"), {"platform": "android", "before": pack + "-1b"})
+        write_json(os.path.join(pack, "page-2", "meta.json"), {"platform": "android"})
+        with self.assertRaisesRegex(FEError, "Сохранённые"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "page-2", "meta.json"), {"platform": "android", "before": pack + "-2b"})
+        set_status(cov, cell["id"], "done", evidence=[pack])
+        self.assertEqual(cell["status"], "done")
+
     def test_tap_outside_drags_each_listed_surface_with_the_overlay_open(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0].update(probes=["tap-outside"], drag=["шторка маршрута"])

@@ -167,6 +167,8 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
             c["forms"] = list(by_id[c["screen"]]["forms"])
         if c["probe"] == "tap-outside" and by_id[c["screen"]].get("drag"):
             c["drag"] = list(by_id[c["screen"]]["drag"])
+        if c["probe"] == "swipe-inside" and by_id[c["screen"]].get("pages"):
+            c["pages"] = list(by_id[c["screen"]]["pages"])
     if passes == 2:  # one pass catches ~75-80% of what two independent passes do: a release gets a second one
         cells += [dict(c, id=c["id"] + "#2", evidence=[], **{"pass": 2}) for c in cells
                   if not c["screen"].startswith("recheck-")]
@@ -257,6 +259,12 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         elif swiped is not None and swiped.get("moved") == 0 and not note:
             problems.append("the swipe moved nothing on screen: swipe inside the list or grid itself, not on a "
                             "header, and longer; if it really does not scroll, pass --note saying so")
+        # A page laid out while a shorter one was open can stay cut to its height (a grid with blank under it).
+        for k, page in enumerate(c.get("pages", []), 1):
+            meta = os.path.join(packs[0], "page-%d" % k, "meta.json") if packs else ""
+            if packs and not (os.path.isfile(meta) and "before" in read_json(meta)):
+                problems.append("«%s» opened by its tab and left by this screen's tab, the content swiped to its "
+                                "end, snapped into <pack>/page-%d with --before (config pages)" % (page, k))
         if c["probe"] == "scenario" and packs:
             problems += ["a scenario cell needs: %s (see probes.md)" % p for p in _scenario_problems(packs[0], c)]
         problems += ["a drag of «%s» with the overlay open, snapped into <pack>/drag-%d (config drag)" % (d, k)

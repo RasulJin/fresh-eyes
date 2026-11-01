@@ -58,7 +58,8 @@ Goal: a working `.fresh-eyes/` for this project, confirmed by the user.
      screens where a person does something (forms, search, chat, create/edit) → `scenario`, with `task` and
      `forms`;
      overlays/maps/menus → `tap-outside`, `back-during-animation`; share/send buttons → `rapid-tap`;
-     drawers, pagers, draggable sheets → `drag-interrupt`, with `draggable`;
+     drawers, pagers, draggable sheets → `drag-interrupt`, with `draggable`; a page of a pager or tab set
+     also gets `pages` (the other tabs) for `swipe-inside`;
      long requests → `background-foreground`. Fill `reach` in plain words, `neighbors`, and `marker` (header
      title or a testID from the route file; another screen must not show it). When the app has its own theme
      setting, fill `app_theme` and add `theme-mismatch` after `dark` on screens with maps, web views or charts.
