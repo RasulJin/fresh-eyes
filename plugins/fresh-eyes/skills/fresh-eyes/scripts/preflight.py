@@ -2,10 +2,15 @@
 """Check (and with --fix, repair) everything that would hide bugs or make a run unsafe, before a run starts.
 
 Writes preflight.json: {ok, platforms:{p:{ok, device, name, owned, small_device, app, app_installed, build,
-soft_keyboard, animations, problems}}, env:{name, verified, api_host}, mutating_allowed, tools:{...}, unchecked:[...]}
+soft_keyboard, animations, problems}}, env:{name, verified, api_host}, mutating_allowed, tools:{...},
+source:{ref, root}|null, unchecked:[...]}
 build: sha256 of the installed app; `coverage.py verdict` compares it again at the end of the run.
+source: where the code the tested build was made from lives (`--source built` after building it from this checkout,
+`--source <git ref>` for an installed build made elsewhere: exported to .fresh-eyes/cache/src-<sha>; Metro builds
+are the working tree). Reviewers look up hit areas and comments only there; unknown → not looked up.
 
-CLI: preflight.py --project DIR --mode quick|full [--fix] [--brief] [--platforms android,ios] --out preflight.json
+CLI: preflight.py --project DIR --mode quick|full [--fix] [--brief] [--platforms android,ios] [--source built|REF]
+     --out preflight.json
 """
 import argparse
 import json
@@ -198,7 +203,8 @@ def _env(config, mode, states, project=".", fix=False):
     env = config.get("env") or {}
     expected = env.get("api_expected")
     forbidden = env.get("api_forbidden") or []
-    res = {"name": env.get("name"), "verified": False, "api_host": None, "problems": []}
+    res = {"name": env.get("name"), "verified": False, "api_host": None, "problems": [], "metro": False}
+    metro = set()
     ok = [p for p, st in states.items() if st["ok"]]
     if not expected or not ok:
         res["problems"].append("no api_expected in config or no ready platform")
@@ -217,6 +223,7 @@ def _env(config, mode, states, project=".", fix=False):
                 if not ports:
                     raise FEError("no running Metro and no bundle inside the app")
                 bundles = [("Metro :%d" % port, _metro_bundle(p, port)) for port in ports]
+                metro.add(p)
         except (FEError, OSError, subprocess.SubprocessError) as e:
             res["problems"].append("%s: cannot read the bundle the app runs: %s" % (p, e))
             verified = False
@@ -237,6 +244,7 @@ def _env(config, mode, states, project=".", fix=False):
         verified = verified and good
     res["verified"] = verified
     res["api_host"] = expected if verified else None
+    res["metro"] = metro == set(ok)  # every app runs this checkout's JS; one release build makes it unknown
     return res
 
 
@@ -255,7 +263,38 @@ def build_drift(pre):
     return drift
 
 
-def check(config, mode, fix=False, project=".", only=None):
+def _git(project, *args):
+    return subprocess.run(["git", "-C", project] + list(args), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          universal_newlines=True, check=True).stdout.strip()
+
+
+def _source(project, ref, metro):
+    """The code the tested build was made from. The checkout can be on another commit than an installed release
+    build, and a hit area or a comment read from the wrong version decides a finding wrongly. None: unknown."""
+    if not ref:
+        return {"ref": "working tree (Metro)", "root": project} if metro else None
+    try:
+        head = _git(project, "rev-parse", "HEAD")
+        sha = head if ref == "built" else _git(project, "rev-parse", "--verify", ref + "^{commit}")
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise FEError("--source %s is not a commit here: %s" % (ref, getattr(e, "stderr", "") or e))
+    if sha == head:
+        return {"ref": sha, "root": project}
+    root = os.path.join(project, ".fresh-eyes", "cache", "src-" + sha[:12])
+    if not os.path.isdir(root):  # a plain export, so there is no worktree to register or clean up
+        tmp = root + ".part"
+        shutil.rmtree(tmp, ignore_errors=True)
+        os.makedirs(tmp)
+        archive = subprocess.Popen(["git", "-C", project, "archive", sha], stdout=subprocess.PIPE)
+        subprocess.run(["tar", "-x", "-C", tmp], stdin=archive.stdout, check=True)
+        archive.stdout.close()
+        if archive.wait():
+            raise FEError("git archive %s failed" % sha)
+        os.rename(tmp, root)
+    return {"ref": sha, "root": root}
+
+
+def check(config, mode, fix=False, project=".", only=None, source=None):
     wants_small = any("small-screen" in s.get("states", []) for s in config.get("screens", []))
     platforms = {}
     for p in config.get("platforms", ["android", "ios"]):
@@ -269,13 +308,17 @@ def check(config, mode, fix=False, project=".", only=None):
     env = _env(config, mode, platforms, project, fix)
     unchecked = ["%s: %s" % (p, "; ".join(s["problems"])) for p, s in platforms.items() if not s["ok"]]
     unchecked += env["problems"]
+    src = _source(project, source, env["metro"])
+    if src is None:
+        unchecked.append("the code of the installed build is unknown (preflight --source built|<git ref>): hit "
+                         "areas and code comments were not looked up")
     tools = {"ffmpeg": bool(shutil.which("ffmpeg")), "ffprobe": bool(shutil.which("ffprobe")),
              "adb": os.path.exists(devices.adb_path()), "xcrun": bool(shutil.which("xcrun")),
              "maestro": _maestro_path()}
     return {"ok": bool(ok_platforms) and tools["ffmpeg"] and tools["ffprobe"], "mode": mode, "platforms": platforms,
             "env": {k: env[k] for k in ("name", "verified", "api_host")},
             "mutating_allowed": bool(env["verified"] and env["name"] in ("staging", "local")),
-            "tools": tools, "unchecked": unchecked}
+            "tools": tools, "source": src, "unchecked": unchecked}
 
 
 def _brief(res):
@@ -284,6 +327,8 @@ def _brief(res):
         lines.append("  %s: %s %s" % (p, "ready" if s["ok"] else "not ready", s.get("name") or ""))
     lines.append("  backend: %s, verified=%s, mutating=%s" % (res["env"]["name"], res["env"]["verified"],
                                                               res["mutating_allowed"]))
+    if res.get("source"):
+        lines.append("  source: %s" % res["source"]["ref"][:40])
     missing = [k for k, v in res["tools"].items() if not v]
     if missing:
         lines.append("  missing tools: %s" % ", ".join(missing))
@@ -300,10 +345,12 @@ def cli_main():
     ap.add_argument("--brief", action="store_true")
     ap.add_argument("--out", required=True)
     ap.add_argument("--platforms", help="comma list to check now, e.g. android")
+    ap.add_argument("--source", help="`built` (built from this checkout in this run) or the git ref the installed "
+                                     "build was made from")
     a = ap.parse_args()
     try:
         res = check(read_json(os.path.join(a.project, ".fresh-eyes", "config.json")), a.mode, a.fix, a.project,
-                    a.platforms.split(",") if a.platforms else None)
+                    a.platforms.split(",") if a.platforms else None, a.source)
     except (FEError, OSError, ValueError) as e:
         res = {"ok": False, "mode": a.mode, "platforms": {}, "env": {"name": None, "verified": False,
                                                                      "api_host": None},

@@ -19,7 +19,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 ## Input (from the orchestrator)
 
 - One screen folder `<run>/<platform>/<screen>/` (its `findings*.json`), `.fresh-eyes/spec.md`, `known.md`, the
-  project `language`; for the journey folder also the findings files of the screens its findings concern.
+  project `language`, `source_root` (the code this build was made from, or `none`); for the journey folder
+  also the findings files of the screens its findings concern.
 - The prompt says `first pass` or `second pass`. On the second pass the folder's `requests.json` entries are
   marked `done` (or `failed`) and point to `<pack>-recheck` folders. Only look at the findings still pending.
 
@@ -32,8 +33,11 @@ For each finding with `verdict: "pending"`:
      `swipe-inside` pack; the "overlap" is an intended badge; the "flash" is a deliberate crossfade;
    - it is listed in `known.md`, is OS chrome, a dev overlay or test data shown correctly;
    - the spec rule does not say what the finding claims.
-   A finding that rests on a rule marked `⚠ conflict` / `⚠ конфликт` (or any conflict the user has not decided) is never
-   `rejected`: when the evidence shows the issue, it is `unsure` with a note that the owner decides.
+   A finding that rests on a rule marked `⚠ conflict` / `⚠ конфликт` (or any conflict the user has not decided)
+   is never `rejected`: when the evidence shows the issue, it is `unsure` with a note that the owner decides.
+   The same goes for a finding a question asks about (a `questions[]` entry whose `finding` is its id; a
+   question on its subject without `finding`: set it): never `confirmed`, `unsure` with `verify_note` "owner
+   decides: <question>".
    A frame that clearly shows the defect stays evidence when a resnap or repeat does not show it again: the bug
    may be intermittent (timing, state left by an earlier step). Then the finding is `unsure`, severity kept,
    `verify_note` "intermittent: seen in <pack>, not reproduced in <recheck pack>" — never `rejected`. Reject
@@ -53,8 +57,12 @@ to the run, e.g. `"same_as": "android/post-detail/findings-2.json#f3"`, and stil
 other folders are read-only: set `same_as` and rule only on findings in your own folder. Write `verify_note` in the project language.
 
 Judge from the evidence, not from the app's source code: no hunting for causes or file:line (whoever fixes the
-bug does that). The one exception: a single lookup of a hit area (`hitSlop`) or a screen-reader label, which a
-frame cannot show.
+bug does that). The exceptions are single lookups, and only in `source_root` (the checkout can be another
+version than the build): a hit area (`hitSlop`, padding, a 48 dp wrapper) or a screen-reader label, which a
+frame cannot show; and, before confirming that the app shows other words or lacks an element the spec asks for,
+a comment beside that text or element saying the choice is deliberate (a data limit, a decision): then the
+rule is a conflict, `unsure` plus a question with `finding`. No `source_root`: no lookups, and a target drawn
+under the minimum whose hit area no frame shows is `unsure` ("hit area not checked: no source for this build").
 
 Before you confirm a finding, read its `steps` as the person who will fix it would: from the app's start, one
 action per item, buttons by their on-screen text, ending with what to look at. If they name cells, packs, step

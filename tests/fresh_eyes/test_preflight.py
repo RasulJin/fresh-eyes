@@ -1,6 +1,7 @@
 import contextlib
 import io
 import os
+import subprocess
 import unittest
 from unittest import mock
 
@@ -8,7 +9,7 @@ from tests.fresh_eyes.helpers import tmpdir
 import devices
 import preflight
 from devices import Device
-from fe_common import write_json
+from fe_common import FEError, write_json
 
 PIXEL = Device("android", "emulator-5560", "fresh-eyes-pixel")
 STAGING = "https://api-staging.example.com"
@@ -146,6 +147,36 @@ class PreflightTest(unittest.TestCase):
         self.assertTrue(preflight.check(config(), "quick", fix=False)["env"]["verified"])  # release: no restart
         self.bundle(installed="x " + STAGING + " " + PROD)
         self.assertFalse(preflight.check(config(), "full", fix=False)["env"]["verified"])
+
+    def test_source_is_the_code_the_build_was_made_from(self):
+        self.fake_devices()
+        self.bundle(installed="x " + STAGING)
+        with tmpdir() as repo:
+            git = lambda *a: subprocess.run(["git", "-C", repo] + list(a), check=True, stdout=subprocess.PIPE,
+                                            universal_newlines=True).stdout.strip()
+            git("init", "-q")
+            git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "a")
+            with open(os.path.join(repo, "Btn.tsx"), "w") as fh:
+                fh.write("hitSlop={4}")
+            git("add", "Btn.tsx")
+            git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "b")
+            built = git("rev-parse", "HEAD")
+            git("rm", "-q", "Btn.tsx")
+            git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "c")  # the checkout moved on
+
+            res = preflight.check(config(), "full", project=repo)
+            self.assertIsNone(res["source"])  # an installed build of unknown origin: no code lookups
+            self.assertIn("code of the installed build is unknown", " ".join(res["unchecked"]))
+            self.assertEqual(preflight.check(config(), "full", project=repo, source="built")["source"]["root"], repo)
+            src = preflight.check(config(), "full", project=repo, source=built[:8])["source"]
+            self.assertEqual(src["ref"], built)
+            with open(os.path.join(src["root"], "Btn.tsx")) as fh:
+                self.assertEqual(fh.read(), "hitSlop={4}")  # the build's version, not the checkout's
+            self.assertEqual(preflight.check(config(), "full", project=repo, source=built)["source"], src)
+            with self.assertRaises(FEError):
+                preflight._source(repo, "no-such-ref", False)
+        self.bundle(metro="x " + STAGING)
+        self.assertEqual(preflight.check(config(), "quick", fix=True)["source"]["ref"], "working tree (Metro)")
 
     def test_full_mode_needs_a_release_build(self):
         self.fake_devices()

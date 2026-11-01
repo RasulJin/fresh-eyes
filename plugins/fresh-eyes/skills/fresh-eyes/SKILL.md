@@ -86,7 +86,9 @@ words / nothing (= the current diff).
 2. Make the build current: for each platform, if Metro is not running with the config's `metro_env`, start
    `builds.quick.<p>.start` in the background with that env; if the app is missing, run `builds.quick.<p>.build`
    (background; minutes).
-3. `python3 $S/preflight.py --project . --mode quick --fix --brief --out $RUN/preflight.json`. If iOS reports
+3. `python3 $S/preflight.py --project . --mode quick --fix --brief [--source built|<ref>] --out $RUN/preflight.json`
+   (`built` when step 2 built the app here; the commit the user names for an installed build made elsewhere;
+   nothing when Metro serves it). Reviewers read code only from its `source.root`. If iOS reports
    "no Maestro iOS driver", call the Maestro MCP `inspect_screen` on that simulator once and run preflight
    again. If no platform is ready, stop: tell the user what is missing; the verdict is INCOMPLETE.
 4. Screens:
@@ -114,11 +116,14 @@ words / nothing (= the current diff).
    "signed out: <variable> not set" mean the user has to export that variable before the next run.
 8. Review: one `fresh-eyes:reviewer` per screen × platform with done cells (up to 4 in parallel). Prompt: the
    pack folders, `.fresh-eyes/spec.md` + the screen id and its `neighbors` ids (their rules often apply),
-   `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the `references` and `language` from config. Journey cells get one reviewer per platform over `<run>/<platform>/journey/`;
+   `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the `references` and `language` from config, `source_root`
+   (`source.root` from preflight.json, or `none`). Journey cells get one reviewer per platform over
+   `<run>/<platform>/journey/`;
    its findings carry the real screen they concern. More than ~8 packs for one screen: split them between
    reviewers, each writing its own `findings-<k>.json` in the screen folder.
 9. Verify: one `fresh-eyes:verifier` per screen folder that has pending findings (up to 4 in parallel); the
-   prompt is `first pass`, that folder, `.fresh-eyes/spec.md`, `.fresh-eyes/known.md`, `language`. The journey
+   prompt is `first pass`, that folder, `.fresh-eyes/spec.md`, `.fresh-eyes/known.md`, `language`,
+   `source_root`. The journey
    folder's verifier also gets the findings files of the screens its findings concern (to mark duplicates). Folders whose verifier
    answered `needs: requests`: one navigator per platform in requests mode with their `requests.json` paths;
    when every entry has `done` or `failed`, a fresh verifier per such folder with `second pass`.
@@ -131,7 +136,8 @@ words / nothing (= the current diff).
 ## full
 
 Goal: before a release, everything from a fresh install. Same as quick, with these differences:
-- `--mode full`: release builds from `builds.full`; preflight checks the API inside the installed app's bundle.
+- `--mode full`: release builds from `builds.full`; preflight checks the API inside the installed app's bundle
+  and gets `--source built` after that build (or the commit the user names when told to test what is installed).
 - Screens: all of `config.screens`; also walk every `journeys[]` entry end to end (mutating journeys only
   when preflight allowed mutation).
 - Fresh install on the owned devices: `devices.py app --do clear` (Android wipes the data; iOS uninstalls, so
@@ -176,7 +182,8 @@ build/backend/devices, the coverage map, "not checked and why" (preflight `unche
 blocked cells with notes, unmapped files, platform gaps from `$R/platforms.md`), confirmed bugs, each with its
 numbered steps, expected and actual copied from the finding (a finding the verdict lists in `merged` goes under
 the one its `same_as` points to; any other finding is its own item), improvements,
-"look with your own eyes" (unsure), questions. Link evidence crops by path. Keep it scannable.
+"look with your own eyes" (unsure, and the findings the verdict lists in `asked`, next to their question),
+questions. Link evidence crops by path. Keep it scannable.
 
 Then stop our devices, `python3 $S/devices.py stop --platform <p>` for each platform of the run: an emulator
 holds ~2.5 GB of RAM, and the next run boots it again.

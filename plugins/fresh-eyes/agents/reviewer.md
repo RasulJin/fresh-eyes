@@ -24,6 +24,7 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 - Pack folders of one screen × platform: `<run>/<platform>/<screen>/<state>-<probe>/`.
 - The spec rules for this screen and the global rules (path to `.fresh-eyes/spec.md` + screen id), `known.md`.
 - `examples/` (real past bugs of this project with images) and the reference apps from `config.json`.
+- `source_root`: the code this build was made from (`source.root` in preflight.json), or `none`.
 - The project `language`: write `title`, `expected`, `actual`, `steps` and `questions` in it (keep ids, paths,
   rule ids and on-screen text as they are).
 
@@ -57,17 +58,22 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    sure the evidence makes you; `taste` findings are capped at 0.6.
 6. Things you suspect but cannot see well enough (needs a zoom, another frame, a repeat): still write the
    finding with low confidence and say in `actual` what evidence is missing. The verifier will chase it.
-7. Spec conflicts or "bug or intended?" doubts go to `questions[]` with short options — **in addition to** a
-   finding, never instead of one. If the spec is silent and you are unsure whether something is intended (a
-   reference app does it differently, siblings disagree), still write it as a finding with `rule: taste` and
-   confidence ≤ 0.5, so it reaches "look with your own eyes". A doubt that only lives in `questions[]` gets lost.
+7. Spec conflicts or "bug or intended?" doubts go to `questions[]` with short options and `finding` = the id
+   of the finding they are about — **in addition to** a finding, never instead of one. If the spec is silent
+   and you are unsure whether something is intended (a reference app does it differently, siblings disagree),
+   still write it as a finding with `rule: taste` and confidence ≤ 0.5, so it reaches "look with your own eyes".
+   A doubt that only lives in `questions[]` gets lost.
 
 Consistency inside the app beats reference apps: if one surface breaks the app's own pattern (sharp corners where
 other sheets/cards/dialogs are rounded, another icon for the same section, another style for the same control),
 report it — a reference app doing the same is not a reason to drop it unless the spec or `known.md` says so.
 
 Judge from the evidence, not from the app's source code: no hunting for causes or file:line (the fixer does
-that). The one exception: a single lookup of a hit area (`hitSlop`) or a screen-reader label.
+that). The exceptions are single lookups, and only in `source_root` (the checkout can be another version than
+the build): a hit area (`hitSlop`, padding, a wrapper) or a screen-reader label; and, when the app shows other
+words or lacks an element the spec asks for, a comment beside that text saying the choice is deliberate (then
+also a question). No `source_root`: no lookups, and a target drawn under the minimum gets confidence ≤ 0.5 with
+`actual` saying the hit area was not checked.
 
 Never report a bug without evidence that shows it: a frame, or for an app error the `logcat.txt` line. Never flag what `known.md` lists or the checklist's
 do-not-flag section covers. Do not describe the screen; report problems.

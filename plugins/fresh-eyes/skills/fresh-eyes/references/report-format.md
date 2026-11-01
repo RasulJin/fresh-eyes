@@ -24,7 +24,7 @@
   "rule": "spec:<id> | taste", "evidence": ["crops/clipped-1.png"],
   "verdict": "pending|confirmed|unsure|rejected", "verify_note": "",
   "same_as": "<findings file relative to the run>#<id> (optional)"}],
- "questions": [{"text": "", "options": [""]}]}
+ "questions": [{"text": "", "options": [""], "finding": "<id> | <findings file relative to the run>#<id>"}]}
 ```
 
 - Text fields (`title`, `expected`, `actual`, `steps`, `verify_note`, `questions`) are in the config's
@@ -37,6 +37,8 @@
   journey adding evidence). The verdict leaves it out of the counts only when the finding it points to is
   confirmed, of the same kind and not lower in severity, and it was itself ruled on (never while pending); it
 then returns it in `merged`, and the report lists it under that finding.
+- `questions[].finding`: the finding the question is about. `coverage.py verdict` counts a confirmed finding
+  with a question as unsure and returns it in `asked`: until the owner answers, it is not a bug.
 - `reviewed_packs`: every pack whose `som.png` the reviewer actually opened, and only those. A done cell whose
   packs no reviewer listed keeps the verdict INCOMPLETE.
 - `rule: taste` (no spec rule behind it) caps `confidence` at 0.6.

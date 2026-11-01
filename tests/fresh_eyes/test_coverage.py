@@ -493,6 +493,29 @@ class VerdictTest(unittest.TestCase):
         findings, _ = _load_findings([path], self.root)
         self.assertEqual(findings[0]["_file"], os.path.join("android", "a", "findings-2.json"))
 
+    def test_a_finding_with_an_open_question_is_unsure_not_confirmed(self):
+        packs = done_all(self.cov, self.root)
+        os.makedirs(os.path.join(self.root, "android", "a"))
+        os.makedirs(os.path.join(self.root, "android", "journey"))
+        own = os.path.join(self.root, "android", "a", "findings.json")
+        other = os.path.join(self.root, "android", "journey", "findings.json")
+        write_json(own, {"findings": [dict(finding("medium"), id="f1", title="«Купить» vs «Забронировать»"),
+                                      dict(finding("medium"), id="f2")],
+                         "questions": [{"text": "Which label?", "options": ["a", "b"], "finding": "f1"},
+                                       {"text": "Unlinked", "options": ["a"]}]})
+        write_json(other, {"findings": [], "questions": [{"text": "Intended?", "options": ["a"],
+                                                           "finding": "android/a/findings.json#f2"}]})
+        findings, _ = _load_findings([own, other], self.root)
+        self.assertEqual([f["verdict"] for f in findings], ["unsure", "unsure"])
+        v = verdict(self.cov, findings, "en", packs)
+        self.assertEqual(v["code"], "INCOMPLETE")  # a medium bug the owner has not ruled on keeps CLEAN away
+        self.assertNotIn("confirmed medium", " ".join(v["reasons"]))
+        self.assertIn("2 findings wait on the owner's answer", " ".join(v["reasons"]))
+        self.assertEqual(v["asked"], ["android/a/findings.json#f1", "android/a/findings.json#f2"])
+        write_json(own, {"findings": [dict(finding("medium"), id="f1")], "questions": [{"text": "q"}]})
+        findings, _ = _load_findings([own], self.root)  # a question without `finding` changes nothing
+        self.assertEqual(findings[0]["verdict"], "confirmed")
+
     def test_unreviewed_evidence_blocks_clean(self):
         packs = done_all(self.cov, self.root)
         self.assertEqual(verdict(self.cov, [], "en")["code"], "INCOMPLETE")  # no reviewer at all

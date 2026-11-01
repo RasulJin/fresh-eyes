@@ -342,6 +342,10 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=()):
     if doubtful:
         reasons.append("%d high/medium findings need a human look (unsure): %s"
                        % (len(doubtful), "; ".join(f.get("title", "") for f in doubtful[:3])))
+    asked = [f for f in findings if f.get("_asked")]
+    if asked:
+        reasons.append("%d findings wait on the owner's answer to a question, counted as unsure: %s"
+                       % (len(asked), "; ".join(f.get("title", "") for f in asked[:3])))
     if merged:
         reasons.append("%d duplicate findings merged" % len(merged))
     if cov.get("unchecked"):
@@ -360,7 +364,8 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=()):
     else:
         code = "CLEAN"
     return {"code": code, "label": labels[code], "reasons": reasons,
-            "merged": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in merged]}
+            "merged": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in merged],
+            "asked": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in asked]}
 
 
 _RANK = {"low": 0, "medium": 1, "high": 2}
@@ -467,18 +472,29 @@ def screens_from_diff(repo, base, config):
 
 
 def _load_findings(paths, run="."):
-    """All findings (each tagged with its file relative to the run, for same_as) and all reviewed pack paths."""
-    findings, reviewed = [], []
+    """All findings (each tagged with its file relative to the run, for same_as) and all reviewed pack paths.
+    A confirmed finding that a question asks about (its `finding`: "f3", or "<file>#f3" in another file) turns
+    unsure: the run asked the owner whether it is a bug, so it cannot also call it one."""
+    findings, reviewed, asked = [], [], []
     for p in paths:
         try:
             data = read_json(p)
         except (OSError, ValueError) as e:
             raise FEError("cannot read findings file %s: %s" % (p, e))
         items = data.get("findings", []) if isinstance(data, dict) else data
+        rel = os.path.relpath(p, run)
         for f in items:
-            f["_file"] = os.path.relpath(p, run)
+            f["_file"] = rel
         findings += items
         reviewed += data.get("reviewed_packs", []) if isinstance(data, dict) else []
+        for q in (data.get("questions") or []) if isinstance(data, dict) else []:
+            if isinstance(q, dict) and q.get("finding"):
+                file, _, fid = q["finding"].rpartition("#")
+                asked.append((os.path.normpath(file or rel), fid, q.get("text", "")))
+    for f in findings:
+        if f.get("verdict") == "confirmed" and any(f.get("id") == fid and os.path.normpath(f["_file"]) == file
+                                                   for file, fid, _ in asked):
+            f["verdict"], f["_asked"] = "unsure", True
     return findings, reviewed
 
 
