@@ -120,9 +120,16 @@ def set_status(path, item_id, status, note, line=None, template="ru-backlog"):
     _write(path, "\n".join(lines))
 
 
+# Image names stay Latin: git quotes non-ASCII paths, and the rest of a backlog's images are Latin.
+RU_LATIN = dict(zip("абвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+                    ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s",
+                     "t", "u", "f", "kh", "ts", "ch", "sh", "shch", "", "y", "", "e", "yu", "ya"]))
+
+
 def attach(src, images_dir, item_id, slug, relative_to):
     os.makedirs(images_dir, exist_ok=True)
-    clean = re.sub(r"[^\w]+", "-", slug.lower()).strip("-")[:40] or "evidence"
+    latin = "".join(RU_LATIN.get(ch, ch) for ch in slug.lower())
+    clean = re.sub(r"[^a-z0-9]+", "-", latin).strip("-")[:40].strip("-") or "evidence"
     dst = os.path.join(images_dir, "%s-%s%s" % (item_id.lower(), clean, os.path.splitext(src)[1] or ".png"))
     shutil.copyfile(src, dst)
     return os.path.relpath(dst, relative_to)

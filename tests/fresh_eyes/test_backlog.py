@@ -131,7 +131,7 @@ class BacklogTest(unittest.TestCase):
         with tmpdir() as d:
             src = make_png(os.path.join(d, "crop.png"), 10, 10)
             rel = attach(src, os.path.join(d, "qa-backlog"), "BUG-54", "Сетка обрезана", d)
-            self.assertEqual(rel, os.path.join("qa-backlog", "bug-54-сетка-обрезана.png"))
+            self.assertEqual(rel, os.path.join("qa-backlog", "bug-54-setka-obrezana.png"))
             self.assertTrue(os.path.exists(os.path.join(d, rel)))
 
     def test_append_attaches_crop_under_the_new_id(self):
@@ -140,8 +140,8 @@ class BacklogTest(unittest.TestCase):
             src = make_png(os.path.join(d, "runs", "crop.png"), 10, 10)
             item = append(p, FINDING, "ru-backlog", "2026-10-19", src, os.path.join(d, "qa-backlog"))
             self.assertEqual(item, "BUG-54")
-            self.assertTrue(os.path.exists(os.path.join(d, "qa-backlog", "bug-54-сетка-обрезана.png")))
-            self.assertIn("доказательство: qa-backlog/bug-54-сетка-обрезана.png", read(p))
+            self.assertTrue(os.path.exists(os.path.join(d, "qa-backlog", "bug-54-setka-obrezana.png")))
+            self.assertIn("доказательство: qa-backlog/bug-54-setka-obrezana.png", read(p))
 
     def test_unknown_status_refused(self):
         with tmpdir() as d:
