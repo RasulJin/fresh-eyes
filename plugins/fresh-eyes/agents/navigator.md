@@ -20,6 +20,7 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 - `run`: the run folder (has `coverage.json`, `preflight.json`), `config`: `.fresh-eyes/config.json`.
 - `platform`, `device` (id) and `name` (from `preflight.json` → `platforms.<p>`), the list of cell ids,
   or `requests`: one or more `requests.json` files (one per screen folder) to fulfil for the verifier.
+- `app language` (config `app.locale`), when set: the app must show it before your first cell (rule below).
 
 ## Hard rules
 
@@ -38,10 +39,15 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 - Skip anything destructive outside the plan (log out, delete account, pay, send to real people).
 - `adb` is often not on PATH: use `nav.py`, `devices.py app --do launch|terminate|background`, or the full path
   `$HOME/Library/Android/sdk/platform-tools/adb` (or `$ANDROID_HOME/platform-tools/adb`).
+- App language: when `config.json` sets `app.locale` and the app shows another language, run
+  `devices.py app --do locale --locale <it>` and relaunch. Still another language (some apps keep their own
+  choice): switch it in the app the way a person would (a language control on the start screen or in
+  settings). Cannot → note "app language: <what you see>" on every cell you mark done.
 - Never print or write secrets. Signed out (a device restored from a snapshot or the small device often is):
-  sign in once per device with the first role in `config.json` → `accounts`, the way a person would (the start
-  screen's sign-in button, skip the onboarding hints), typing only with `nav.py type --env <email_env>` and
-  `--env <password_env>`. Never create an account. If `nav.py type` says the variable is not set, or signing in
+  bring the app to its `app language` first (rule above), then sign in once per device with the first role
+  in `config.json` → `accounts`, the way a person would (the start screen's sign-in button, skip the
+  onboarding hints), typing only with `nav.py type --env <email_env>` and `--env <password_env>`. Never create
+  an account. If `nav.py type` says the variable is not set, or signing in
   fails, mark the cells `blocked` with note "signed out: <variable> not set" or "signed out: <why>".
 
 ## For each cell `<platform>/<screen>/<state>/<probe>`

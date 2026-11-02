@@ -112,7 +112,7 @@ words / nothing (= the current diff).
    `inspect_screen` on that simulator once, then call the navigator again with what it had left.
 7. Navigation: one `fresh-eyes:navigator` per platform (they may run in parallel), ≤15 cells per call, until
    `coverage.py next` is empty. Prompt: run folder, config path, platform, device id and name from preflight,
-   the cell ids. A navigator that finds the app signed out signs in with `accounts` itself; cells blocked with
+   the cell ids, and `app language: <app.locale>` when config sets it. A navigator that finds the app signed out signs in with `accounts` itself; cells blocked with
    "signed out: <variable> not set" mean the user has to export that variable before the next run.
 8. Review: one `fresh-eyes:reviewer` per screen × platform with done cells (up to 4 in parallel). Prompt: the
    pack folders, `.fresh-eyes/spec.md` + the screen id and its `neighbors` ids (their rules often apply),
@@ -141,7 +141,8 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
 - Screens: all of `config.screens`; also walk every `journeys[]` entry end to end (mutating journeys only
   when preflight allowed mutation).
 - Fresh install on the owned devices: `devices.py app --do clear` (Android wipes the data; iOS uninstalls, so
-  follow with `--do install --artifact <builds.full.ios.artifact>`), then launch. Sign-in: the navigator types
+  follow with `--do install --artifact <builds.full.ios.artifact>`), then `--do locale --locale <app.locale>` when
+  config sets it, then launch. Sign-in: the navigator types
   `nav.py type --env <accounts.<role>.email_env>` and `--env <…password_env>` (the values live in the user's
   environment, never in prompts or files). No `accounts` in config → keep the installed state instead of
   clearing, and say so in the report.
@@ -181,7 +182,7 @@ the candidates, a model judges them; keywords never decide.
 build/backend/devices, the coverage map, "not checked and why" (preflight `unchecked`, plan `unchecked`,
 blocked cells with notes, unmapped files, platform gaps from `$R/platforms.md`), confirmed bugs, each with its
 numbered steps, expected and actual copied from the finding (a finding the verdict lists in `merged` goes under
-the one its `same_as` points to; any other finding is its own item), improvements,
+the one its `same_as` points to, or the confirmed one with the same `log` line; any other finding is its own item), improvements,
 "look with your own eyes" (unsure, and the findings the verdict lists in `asked`, next to their question),
 questions. Link evidence crops by path. Keep it scannable.
 

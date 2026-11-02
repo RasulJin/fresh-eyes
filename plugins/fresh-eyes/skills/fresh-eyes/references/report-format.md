@@ -21,7 +21,7 @@
   "title": "", "screen": "", "platform": "",
   "check": "<geometry check | motion flag | spec rule id | taste>",
   "som": [3], "bbox": [0, 0, 0, 0], "expected": "", "actual": "", "steps": [""], "found_by": "",
-  "rule": "spec:<id> | taste", "evidence": ["crops/clipped-1.png"],
+  "rule": "spec:<id> | taste", "evidence": ["crops/clipped-1.png"], "log": "<logcat.txt line (app errors only)>",
   "verdict": "pending|confirmed|unsure|rejected", "verify_note": "",
   "same_as": "<findings file relative to the run>#<id> (optional)"}],
  "questions": [{"text": "", "options": [""], "finding": "<id> | <findings file relative to the run>#<id>"}]}
@@ -37,6 +37,9 @@
   journey adding evidence). The verdict leaves it out of the counts only when the finding it points to is
   confirmed, of the same kind and not lower in severity, and it was itself ruled on (never while pending); it
 then returns it in `merged`, and the report lists it under that finding.
+- `log`: for an app error seen in `logcat.txt`, its most specific line copied as is without the repeat count
+  (the exception message, not a stack frame or a bare `Unhandled SoftException`). The verdict counts one line
+  once across screens: the most severe confirmed copy stays, the others are returned in `merged`.
 - `questions[].finding`: the finding the question is about. `coverage.py verdict` counts a confirmed finding
   with a question as unsure and returns it in `asked`: until the owner answers, it is not a bug.
 - `reviewed_packs`: every pack whose `som.png` the reviewer actually opened, and only those. A done cell whose

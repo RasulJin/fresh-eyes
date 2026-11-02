@@ -7,7 +7,7 @@ noted. Example (generic values):
 {
   "platforms": ["android", "ios"],
   "language": "en",
-  "app": {"android_id": "com.example.app", "ios_id": "com.example.app", "expo_root": "apps/mobile"},
+  "app": {"android_id": "com.example.app", "ios_id": "com.example.app", "expo_root": "apps/mobile", "locale": "en-US"},
   "env": {
     "name": "staging",
     "api_expected": "https://api-staging.example.com",
@@ -52,7 +52,9 @@ noted. Example (generic values):
 - `platforms`: which platforms the project targets. Missing platforms are not reported as unchecked.
 - `language`: report and backlog language (`ru`, `en`).
 - `app.*_id`: bundle id / package; `app.expo_root`: where `app/` (Expo Router) lives; screen routes are
-  relative to it, and the `@/` import alias resolves to it.
+  relative to it, and the `@/` import alias resolves to it. `app.locale` (optional, a tag like `ru-RU`): the
+  language the app is tested in, the one the spec's texts and screen markers are written in; a wiped app is set
+  to it before launch, whatever the device language.
 - `env`: the backend the run must use. Preflight reads the JS bundle the app really runs (inside the app
   installed on the device, or the one Metro serves it): `api_expected`'s host must be in it and no
   `api_forbidden` host may be, otherwise mutating probes are disabled. Full mode needs a release build (bundle

@@ -8,8 +8,8 @@ CLI:
   devices.py stop --platform android|ios      (shuts down every running fresh-eyes device of that platform)
   devices.py screenshot --platform P --device ID --out PNG
   devices.py set --platform P --device ID --name NAME --what dark|light|font-xl|font-default|offline|online|...
-  devices.py app --platform P --device ID --name NAME --app BUNDLE --do launch|terminate|clear|background|install
-                 [--artifact APK_OR_APP]   (iOS clear uninstalls: install again before launch)
+  devices.py app --platform P --device ID --name NAME --app BUNDLE --do launch|terminate|clear|background|install|locale
+                 [--artifact APK_OR_APP] [--locale TAG]   (iOS clear uninstalls: install again before launch)
 """
 import argparse
 import glob
@@ -519,6 +519,23 @@ def clear_app(dev, app_id):
         _simctl("uninstall", dev.id, app_id)
 
 
+_LOCALE = re.compile(r"^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$")
+
+
+def set_app_locale(dev, app_id, locale):
+    """The app's own language (Android 13+ per-app locale, iOS app defaults), so a wiped app opens in the language
+    the spec's texts are in, whatever the device's language. An in-app choice the app saved still wins."""
+    _require_owned(dev, "set the app language")
+    _app_id(app_id)
+    if not _LOCALE.match(locale or ""):
+        raise FEError("invalid locale %r (a tag like ru-RU)" % locale)
+    if dev.platform == "android":
+        _shell(dev, "cmd locale set-app-locales %s --locales %s" % (app_id, locale))
+    else:
+        _simctl("spawn", dev.id, "defaults", "write", app_id, "AppleLanguages", "-array", locale)
+        _simctl("spawn", dev.id, "defaults", "write", app_id, "AppleLocale", locale.replace("-", "_"))
+
+
 def set_dark(dev, on):
     _require_owned(dev, "change appearance")
     if dev.platform == "android":
@@ -686,8 +703,9 @@ def main():
     p.add_argument("--name", required=True); p.add_argument("--what", required=True, choices=sorted(SETTINGS))
     p = sub.add_parser("app"); p.add_argument("--platform", required=True); p.add_argument("--device", required=True)
     p.add_argument("--name", required=True); p.add_argument("--app", required=True)
-    p.add_argument("--do", required=True, choices=sorted(APP_ACTIONS) + ["install"])
+    p.add_argument("--do", required=True, choices=sorted(APP_ACTIONS) + ["install", "locale"])
     p.add_argument("--artifact", help="with --do install: the .apk / .app to install")
+    p.add_argument("--locale", help="with --do locale: the app language, e.g. ru-RU")
     a = ap.parse_args()
     if a.cmd == "list":
         out = [dict(d._asdict(), owned=is_owned(d)) for d in list_devices()]
@@ -703,6 +721,9 @@ def main():
             raise FEError("--do install needs --artifact")
         install(Device(a.platform, a.device, a.name), a.artifact)
         out = {"app": a.app, "do": a.do}
+    elif a.cmd == "app" and a.do == "locale":
+        set_app_locale(Device(a.platform, a.device, a.name), a.app, a.locale)
+        out = {"app": a.app, "do": a.do, "locale": a.locale}
     elif a.cmd == "app":
         APP_ACTIONS[a.do](Device(a.platform, a.device, a.name), a.app)
         out = {"app": a.app, "do": a.do}

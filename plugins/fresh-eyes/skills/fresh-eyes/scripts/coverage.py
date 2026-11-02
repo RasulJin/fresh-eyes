@@ -310,6 +310,14 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=()):
     labels = LABELS.get(language, LABELS["en"])
     merged = [f for f in findings if _merged(f, findings)]
     findings = [f for f in findings if not any(f is m for m in merged)]
+    first = {}
+    for f in sorted(findings, key=lambda f: -_RANK.get(f.get("severity"), 0)):  # the most severe copy counts
+        key = _log_key(f)
+        if key in first:
+            merged.append(f)
+        elif key:
+            first[key] = f
+    findings = [f for f in findings if not any(f is m for m in merged)]
     bugs = [f for f in findings if f.get("verdict") == "confirmed" and f.get("kind", "BUG") == "BUG"]
     high = [f for f in bugs if f.get("severity") == "high"]
     medium = [f for f in bugs if f.get("severity") == "medium"]
@@ -384,6 +392,16 @@ def _merged(f, findings):
                     and t.get("kind", "BUG") == f.get("kind", "BUG")
                     and _RANK.get(t.get("severity"), 0) >= _RANK.get(f.get("severity"), 0))
     return False
+
+
+def _log_key(f):
+    """One app error in the log is one defect, however many screens' reviewers report it: the same `log` line,
+    counts and ids aside."""
+    line = f.get("log")
+    if not line or f.get("verdict") != "confirmed":
+        return None
+    line = re.sub(r"^\s*\d+ x ", "", line)  # logcat.txt's repeat count
+    return f.get("kind", "BUG"), " ".join(re.sub(r"0x[0-9a-f]+|\d+", "#", line.lower()).split())
 
 
 _SYMBOL = {"done": "✓", "failed": "✗", "na": "—", "todo": "?", "blocked": "?"}

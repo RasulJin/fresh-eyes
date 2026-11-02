@@ -62,6 +62,23 @@ class DevicesTest(unittest.TestCase):
             devices.clear_app(Device("android", "emulator-5554", "Pixel_8"), "com.example.app")
         self.assertFalse(any("pm clear" in " ".join(c) for c in fake.calls))
 
+    def test_app_locale_is_set_per_app_on_owned_devices_only(self):
+        fake = self.patch({})
+        devices.set_app_locale(Device("android", "emulator-5560", "fresh-eyes-pixel"), "com.example.app", "ru-RU")
+        self.assertIn("cmd locale set-app-locales com.example.app --locales ru-RU", " ".join(fake.calls[-1]))
+        fake = self.patch({"list devices -j": SIMCTL_JSON})
+        devices.set_app_locale(Device("ios", "AAA", "fresh-eyes iPhone 17"), "com.example.app", "ru-RU")
+        writes = [" ".join(c) for c in fake.calls if "defaults" in c]
+        self.assertTrue(any("AppleLanguages -array ru-RU" in w for w in writes))
+        self.assertTrue(any("AppleLocale ru_RU" in w for w in writes))
+        for bad in ("ru;rm -rf /", ""):
+            with self.assertRaises(FEError):
+                devices.set_app_locale(Device("android", "emulator-5560", "fresh-eyes-pixel"), "com.example.app", bad)
+        fake = self.patch({"emu avd name": "Pixel_8\nOK\n"})
+        with self.assertRaises(FEError):
+            devices.set_app_locale(Device("android", "emulator-5554", "Pixel_8"), "com.example.app", "ru-RU")
+        self.assertFalse(any("locale" in " ".join(c) for c in fake.calls))
+
     def test_owned_label_on_a_foreign_emulator_is_refused(self):
         fake = self.patch({"emu avd name": "My_QA_Device\nOK\n"})
         for fn in (lambda d: devices.set_dark(d, True), lambda d: devices.tap(d, 10, 10),

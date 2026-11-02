@@ -485,6 +485,24 @@ class VerdictTest(unittest.TestCase):
         for group in ([a, b], [a, b, c], [dup]):  # each other, a chain, a target not passed
             self.assertEqual(verdict(self.cov, group, "en", packs)["merged"], [])
 
+    def test_one_log_error_on_many_screens_counts_once(self):
+        packs = done_all(self.cov, self.root)
+
+        def f(fid, file, sev="low", log="E/UIManagerHelper: Fabric View [-1] does not have SurfaceId", **kw):
+            return dict(dict(id=fid, kind="BUG", severity=sev, verdict="confirmed", title=fid, _file=file,
+                             check="logcat", log=log), **kw)
+        a = f("f4", "android/vio-guide/findings.json")
+        b = f("f3", "android/flight-search/findings-2.json", sev="medium",
+              log="  2 x E/UIManagerHelper: Fabric View [-7] does not have SurfaceId")
+        c = f("f2", "android/post-detail/findings-2.json")
+        other = f("f5", "android/feed/findings.json", log="W/ReactNativeJS: [Reanimated] view 677 unmounted")
+        v = verdict(self.cov, [a, b, c, other], "en", packs)
+        self.assertEqual(sorted(v["merged"]), ["android/post-detail/findings-2.json#f2",
+                                               "android/vio-guide/findings.json#f4"])  # the medium one stays
+        self.assertIn("1 confirmed medium", v["reasons"])
+        for kept in ([dict(b, verdict="rejected"), a], [dict(b, kind="IMP"), a], [dict(b, log=None), a]):
+            self.assertEqual(verdict(self.cov, kept, "en", packs)["merged"], [])
+
     def test_load_findings_tags_files_relative_to_the_run(self):
         os.makedirs(os.path.join(self.root, "android", "a"))
         path = os.path.join(self.root, "android", "a", "findings-2.json")
