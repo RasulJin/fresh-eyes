@@ -61,6 +61,10 @@ touched.
 /fresh-eyes full twice           # two independent passes, findings merged: one pass misses about a quarter
 ```
 
+Testing a build you installed yourself: say which commit it came from ("test what is installed, it was built
+from abc123"), so reviewers read that code. Set `app.locale` in the config when the app must be tested in a
+language other than the device's.
+
 A long run asks for many tool calls. `init` prints the allow-rules to add to `.claude/settings.local.json`.
 
 Files it keeps in your repo: `.fresh-eyes/config.json`, `spec.md`, `known.md`, `examples/` (commit them);
