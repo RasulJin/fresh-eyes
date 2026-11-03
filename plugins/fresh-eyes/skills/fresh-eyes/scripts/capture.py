@@ -24,6 +24,7 @@ import sys
 import time
 from collections import Counter, defaultdict
 
+import composition
 import devices
 import fe_common
 import nav
@@ -39,6 +40,7 @@ MAX_CROPS = 12
 MAX_MARKS = 60
 STATE_MIN_CHANGE = 0.03  # share of the app area a dark/font state must change
 CORNER_CROP = 96  # px around a corner, zoomed x2 for the reviewer
+GAP_CONTEXT = 160  # px of content above and below a blank band, so its crop shows what it separates
 
 
 def _hierarchy(dev, hierarchy_file, source):
@@ -110,6 +112,7 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
     candidates = run_all(nodes, ctx, before_nodes)
     app_nodes = [n for n in nodes if not n["rid"].startswith("com.android.systemui")]
     candidates += corner_candidates(shot, app_nodes, [w, h])
+    candidates += composition.run_all(shot, app_nodes, ctx["px_per_dp"] or 2.625, kb_top)
     write_json(os.path.join(out, "candidates.json"), candidates)
     downscale(shot, os.path.join(out, "screen_1000.png"))
     full_som = os.path.join(out, ".som_full.png")
@@ -131,7 +134,8 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
                     crop(shot, os.path.join(out, "crops", "sharp_corners-%d-%s.png" % (k, corner)),
                          [cx, cy, CORNER_CROP, CORNER_CROP], pad=CORNER_CROP // 2, zoom=2)
             else:
-                crop(shot, os.path.join(out, "crops", "%s-%d.png" % (c["check"], k)), c["bbox"])
+                crop(shot, os.path.join(out, "crops", "%s-%d.png" % (c["check"], k)), c["bbox"],
+                     pad=GAP_CONTEXT if c["check"] == "blank_gap" else 8)
         except FEError:
             continue  # bbox fully off-screen: nothing to show, the candidate still stands
     if before:

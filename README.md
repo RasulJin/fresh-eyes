@@ -6,8 +6,9 @@ then writes what it finds to your backlog with a screenshot and steps to reprodu
 Scripted UI tests check that a button exists and a flow completes. fresh-eyes looks at what a person would
 notice: text cut off mid-word at a large font, a sheet that opens twice after a double tap, a menu that stays
 open after Back, a field hidden under the keyboard, a dark theme that only half switches, an icon that means
-something else on the next screen, a tap target smaller than a finger, an error in the log while the screen
-looks fine. It also proposes UX improvements, kept apart from bugs.
+something else on the next screen, a tap target smaller than a finger, buttons drawn almost touching, a blank
+band between blocks, a block far bigger than its content, an error in the log while the screen looks fine. It
+also proposes improvements, small ones too (a word, a gap, a step that could go), kept apart from bugs.
 
 Built for Expo / React Native apps (Expo Router screens). Navigation and capture work with any app on an
 Android emulator or iOS simulator.

@@ -35,6 +35,28 @@ How a picky QA engineer + product designer looks at one screen. Used by the revi
 - **Contrast / theme**: pale on pale, white on white, a dark map in a light app, colors that ignore the theme.
 - **Language**: mixed languages on one screen, broken plurals ("1 comments"), wrong date words ("0 days ago").
 
+## Composition (the screen at arm's length)
+
+Before the details, look at `screen_1000.png` whole (the marks on `som.png` hide the spacing), the way a designer
+squints at a screen. Measure with what the frame
+gives (dp from candidates, sizes against the screen) and write the change with numbers, never "improve spacing".
+
+- **Crowded controls**: buttons, chips or icons drawn closer than 8 dp or touching; several actions of equal
+  weight packed into one row or corner. A `crowded` candidate gives the gap between the drawn shapes (hit-area
+  padding does not count). BUG medium when a mis-tap is likely (a destructive action next to a common one, a gap
+  under 4 dp); otherwise IMP: which to space apart, merge into a menu or demote to a secondary style.
+- **Blank areas**: a band of empty space between pieces that belong together, or a block (card, drop zone,
+  header, sheet) whose content fills less than half of it. A `blank_gap` candidate gives the height in dp; the
+  app's own gaps between sections (usually 16-32 dp) are the yardstick. Not a defect: space under the last item
+  of a short screen, around a vertically centred empty state, inside an input.
+- **Oversized blocks**: a hero image, banner, card, button or sheet taking far more of the screen than its content
+  or importance needs, pushing the main content below the fold. Name the size it should have.
+- **Weight and rhythm**: equal gaps between equal siblings, one primary action per area, size follows importance
+  (the main action is not smaller than a secondary one, a title is not smaller than its caption).
+- **Button looks**: buttons in one row share height, radius and style; the label is centred with room around it;
+  a secondary style next to a primary one reads as a choice, not an accident; no default system control on a
+  branded screen.
+
 ## Behaviour defects (need an action, video or two frames)
 
 - **Double fire**: rapid taps open two sheets / send twice / navigate twice. Oracle: dismiss once, nothing left.
@@ -105,8 +127,17 @@ f. **One system**: same component for the same job, same icon for the same entit
 g. **Motion**: purposeful, short (within the spec's ceiling), interruptible, follows the finger, respects
    reduce-motion; no animation on very frequent actions (tab switches).
 h. **Affordances**: what looks tappable is tappable; disabled looks disabled; the label equals the action.
+i. **Composition**: clear groups, even spacing, no crammed corner, no dead space, sizes that follow importance
+   (Composition above).
+j. **Less work**: a step, tap, field or confirmation that could go; a sensible default; a shortcut the reference
+   apps have.
 
 An IMP must name the concrete change ("show the price note once above the list") and the reason.
+
+Propose freely. After the defects, go through a-j once more as this app's product designer and write every
+change you would make, small ones too: a word, an icon, an order, a default, a gap, a size. An IMP is a
+proposal: the owner accepts or declines it, and a declined one goes to `known.md` and is not raised again, so a
+proposal left out costs more than one written.
 
 ## Severity
 

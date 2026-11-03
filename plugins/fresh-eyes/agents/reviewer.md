@@ -40,6 +40,7 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 2. Decide every script candidate explicitly. A `partially_visible` item that a `swipe-inside` pack shows fully
    is fine; `clipped`, `under_keyboard` and `overlap` deserve a careful look at the crop. `keyboard_missing`:
    an input was focused but no keyboard is up; a real bug unless the crop shows a keyboard intro/onboarding.
+   `blank_gap` and `crowded` are measured on pixels: judge them on the crop by the checklist's Composition rules.
 3. A scenario pack is judged step by step against its `steps.json`: does each frame match the `expect` written
    before the step? Results must belong to the latest input (nothing stale), what was saved must show where the
    step says and nothing unasked-for may appear, invalid input must be refused, a stopped or failed action must
@@ -48,7 +49,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    way, against the oracle of each step in probes.md (a tap behind that did not land is a BUG).
 4. Go beyond the candidates through the checklist sections and the UX rubric. Compare with the spec rules and
    with the examples. Check consistency against sibling packs (header vs tab bar icon, the same control in two
-   states, light vs dark).
+   states, light vs dark). Then look once more as this app's designer: every change you would make (spacing,
+   sizes, words, order, icons, defaults, a step to drop) is an IMP, small ones too.
 5. For each problem write a finding: `kind` BUG (defect) or IMP (improvement with a concrete change),
    `severity` per the checklist, `som` numbers and an evidence crop path, `expected` vs `actual`, `rule` =
    `spec:<rule id>` or `taste`. `steps` is for the person who will fix it: from the app's start screen, one
