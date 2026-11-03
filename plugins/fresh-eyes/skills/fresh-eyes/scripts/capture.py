@@ -3,13 +3,15 @@
 
 snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json, som.png (+som.json),
         crops/<check>-<k>.png (native resolution), meta.json. Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs.
+        --pages: then scrolls the screen's list half a screen at a time, a pack per page in scroll-<k>/, and back
+        to the top (meta.json: scroll_pages, scroll_restored).
 around: records the screen around an action command, then motion analysis: video.mp4, motion.json,
         sheet_*.png, around.json.
 logs:   Android only: the app's warnings and errors since the last `logs --clear`, plus crashes, repeats
         collapsed: logcat.txt.
 
 CLI:
-  capture.py snap --platform P --device ID --out PACK [--before PACK] [--keyboard] [--expect-differs PACK]
+  capture.py snap --platform P --device ID --out PACK [--before PACK] [--keyboard] [--expect-differs PACK] [--pages]
                   [--hierarchy-file F --hierarchy-source maestro|uiautomator|xctest]  (default: read the device)
   capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms 500] -- CMD ...
   capture.py logs --platform android --device ID --out PACK --package PKG [--clear]
@@ -41,6 +43,10 @@ MAX_MARKS = 60
 STATE_MIN_CHANGE = 0.03  # share of the app area a dark/font state must change
 CORNER_CROP = 96  # px around a corner, zoomed x2 for the reviewer
 GAP_CONTEXT = 160  # px of content above and below a blank band, so its crop shows what it separates
+PAGES = 4  # a long screen: the first viewport and up to 4 more
+PAGE_STEP = 0.5  # each drag moves half the list: a blank band up to half a viewport lies whole in some frame
+PAGE_MS = 800  # a slow drag, so the list stops where the finger does
+TOUCH_SLOP_DP = 8  # the drag a list eats before it starts to move
 
 
 def _hierarchy(dev, hierarchy_file, source):
@@ -146,6 +152,61 @@ def snap(platform, device_id, out, hierarchy_file=None, hierarchy_source=None, b
     return 0
 
 
+def main_list(nodes, screen_h):
+    """The screen's vertical list: the innermost scroll container at least half the screen tall."""
+    lists = [n for n in nodes if n["cls"].endswith(composition.SCROLLS) and "Horizontal" not in n["cls"]
+             and n["bounds"][3] >= screen_h / 2]
+    return max(lists, key=lambda n: n["depth"], default=None)
+
+
+def _shift(a, b, box):
+    """How far the list moved up from snap a to snap b, in px: the y change of texts wholly inside the list
+    (a sticky header stays put and is not counted)."""
+    def tops(nodes):
+        inside = [n for n in nodes if (n["text"] or n["label"]) and n["bounds"][1] > box[1]
+                  and n["bounds"][1] + n["bounds"][3] < box[1] + box[3]]
+        seen = Counter(n["text"] or n["label"] for n in inside)
+        return {n["text"] or n["label"]: n["bounds"][1] for n in inside if seen[n["text"] or n["label"]] == 1}
+    ta, tb = tops(a), tops(b)
+    moved = Counter(ta[k] - tb[k] for k in ta if k in tb and ta[k] != tb[k])
+    return moved.most_common(1)[0][0] if moved else 0
+
+
+def pages(platform, device_id, out, max_pages=PAGES):
+    """After a snap into `out`: scroll its main list page by page, a pack each in scroll-<k>/, then the same
+    distances back, so the next cell starts at the top. The checks see the whole screen, not its first viewport."""
+    dev = Device(platform, device_id, "")
+    meta = read_json(os.path.join(out, "meta.json"))
+    lst = main_list(read_json(os.path.join(out, "nodes.json")), meta["screen_wh"][1])
+    shifts = []
+    if lst is not None:
+        x, y, w, h = lst["bounds"]
+        cx, low, high = x + w // 2, y + int(h * (0.5 + PAGE_STEP / 2)), y + int(h * (0.5 - PAGE_STEP / 2))
+        slop = round(TOUCH_SLOP_DP * (meta.get("px_per_dp") or 2.625))
+        prev = out
+        for k in range(1, max_pages + 1):
+            devices.swipe(dev, cx, low, cx, high, PAGE_MS)
+            time.sleep(nav.SETTLE_S)
+            page = os.path.join(out, "scroll-%d" % k)
+            if snap(platform, device_id, page) != 0 or changed_fraction(
+                    os.path.join(page, "screen.png"), os.path.join(prev, "screen.png")) < 0.01:
+                shutil.rmtree(page, ignore_errors=True)
+                break  # the end of the list
+            moved = _shift(read_json(os.path.join(prev, "nodes.json")), read_json(os.path.join(page, "nodes.json")),
+                           lst["bounds"])
+            shifts.append(moved or low - high - slop)  # no text to measure by: assume a full step
+            prev = page
+        for moved in reversed(shifts):  # a longer drag back would overscroll the top into pull-to-refresh
+            devices.swipe(dev, cx, high, cx, high + moved + slop, PAGE_MS)
+        time.sleep(nav.SETTLE_S)
+    top = devices.screenshot(dev, os.path.join(out, ".top.png"))
+    meta.update(scroll_pages=len(shifts), scroll_restored=changed_fraction(top, os.path.join(out, "screen.png"))
+                < STATE_MIN_CHANGE)
+    os.remove(top)
+    write_json(os.path.join(out, "meta.json"), meta)
+    return meta
+
+
 def around(platform, device_id, out, action, settle=2.5, ceiling_ms=DEFAULT_CEILING_MS):
     dev = Device(platform, device_id, "")
     os.makedirs(out, exist_ok=True)
@@ -220,6 +281,7 @@ def main():
                                                                                      "maestro-cli", "xctest"])
     s.add_argument("--before"); s.add_argument("--keyboard", action="store_true")
     s.add_argument("--expect-differs", help="pack whose screen must differ (state cells: the default pack)")
+    s.add_argument("--pages", action="store_true", help="then a pack per scrolled page in scroll-<k>/")
     r = sub.choices["around"]
     r.usage = "capture.py around --platform P --device ID --out PACK [--settle S] [--ceiling-ms MS] -- CMD ..."
     r.add_argument("--settle", type=float, default=2.5); r.add_argument("--ceiling-ms", type=int,
@@ -227,16 +289,20 @@ def main():
     g = sub.choices["logs"]
     g.add_argument("--package", required=True); g.add_argument("--clear", action="store_true")
     a = ap.parse_args(argv)
+    out = {}
     if a.cmd == "snap":
         code = snap(a.platform, a.device, a.out, a.hierarchy_file, a.hierarchy_source, a.before, a.keyboard,
                     a.expect_differs)
+        if code == 0 and a.pages:
+            m = pages(a.platform, a.device, a.out)
+            out = {k: m[k] for k in ("scroll_pages", "scroll_restored")}
     elif a.cmd == "logs":
         code = logs(a.platform, a.device, a.out, a.package, a.clear)
     else:
         if not action:
             raise FEError("around needs an action command after --")
         code = around(a.platform, a.device, a.out, action, a.settle, a.ceiling_ms)
-    print(json.dumps({"exit": code, "pack": a.out}))
+    print(json.dumps(dict({"exit": code, "pack": a.out}, **out)))
     return code
 
 

@@ -280,3 +280,78 @@ class OrderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _node(i, cls, bounds, depth=1, text=""):
+    return {"id": "n%d" % i, "parent": None, "depth": depth, "cls": cls, "text": text, "label": "", "rid": "",
+            "bounds": bounds, "clickable": False, "focused": False, "enabled": True}
+
+
+class PagesTest(unittest.TestCase):
+    def test_main_list_is_the_innermost_tall_vertical_scroll(self):
+        nodes = [_node(0, "android.widget.ScrollView", [0, 0, 1080, 2400], 0),
+                 _node(1, "android.widget.ScrollView", [0, 63, 1080, 2085], 2),
+                 _node(2, "android.widget.HorizontalScrollView", [0, 0, 1080, 2400], 4),
+                 _node(3, "android.widget.ScrollView", [0, 300, 1080, 300], 5)]
+        self.assertEqual(capture.main_list(nodes, 2400)["id"], "n1")
+        self.assertIsNone(capture.main_list(nodes[3:], 2400))
+
+    def test_scrolls_page_by_page_to_the_end_and_back_to_the_top(self):
+        W, H, CONTENT, SLOP = 360, 800, 1800, 8  # px_per_dp 1: the list eats 8 px of each drag
+        state = {"off": 0, "pulled": 0}  # pulled: px dragged past the top (pull-to-refresh)
+        rows = range(100, CONTENT, 200)
+
+        def visible():
+            return [(k, y - state["off"]) for k, y in enumerate(rows) if 0 < y - state["off"] < H - 100]
+
+        def frame(dst):  # a sticky header that never moves, rows that do
+            make_png(dst, W, H, rects=[(0, 0, W, 60, (200, 200, 200), 0)] +
+                     [(20, y, 320, 100, (40, 40, 40), 8) for _, y in visible()])
+            return dst
+
+        def fake_snap(platform, device_id, out, *a, **kw):
+            os.makedirs(out, exist_ok=True)
+            frame(os.path.join(out, "screen.png"))
+            nodes = [_node(0, "android.widget.ScrollView", [0, 0, W, H], 1),
+                     _node(1, "android.widget.TextView", [0, 10, 100, 40], 2, "Back"),
+                     _node(2, "android.widget.TextView", [100, 10, 160, 40], 2, "Header"),
+                     _node(3, "android.widget.TextView", [260, 10, 100, 40], 2, "Share")]
+            nodes += [_node(4 + k, "android.widget.TextView", [20, y, 320, 100], 2, "row %d" % k)
+                      for k, y in visible()]
+            with open(os.path.join(out, "nodes.json"), "w") as f:
+                json.dump(nodes, f)
+            with open(os.path.join(out, "meta.json"), "w") as f:
+                json.dump({"screen_wh": [W, H], "px_per_dp": 1.0}, f)
+            return 0
+
+        def swipe(dev, x1, y1, x2, y2, ms=300):
+            d = y1 - y2
+            step = (abs(d) - SLOP) * (1 if d > 0 else -1)
+            state["pulled"] = max(state["pulled"], -(state["off"] + step))
+            state["off"] = max(0, min(CONTENT - H, state["off"] + step))
+
+        with tmpdir() as d, mock.patch.object(capture, "snap", fake_snap), \
+                mock.patch.object(devices, "swipe", swipe), \
+                mock.patch.object(devices, "screenshot", lambda dev, dst: frame(dst)), \
+                mock.patch.object(capture.time, "sleep", lambda s: None):
+            pack = os.path.join(d, "default-none")
+            fake_snap("android", "emulator-5560", pack)
+            meta = capture.pages("android", "emulator-5560", pack)
+            self.assertEqual((meta["scroll_pages"], meta["scroll_restored"]), (3, True))
+            self.assertEqual((state["off"], state["pulled"]), (0, 0))  # the same distances back: no pull past the top
+            self.assertEqual(sorted(n for n in os.listdir(pack) if n.startswith("scroll-")),
+                             ["scroll-1", "scroll-2", "scroll-3"])
+            self.assertEqual(read_json(os.path.join(pack, "meta.json"))["scroll_pages"], 3)
+            self.assertFalse(os.path.exists(os.path.join(pack, ".top.png")))
+
+    def test_a_screen_without_a_list_gets_no_pages(self):
+        with tmpdir() as d, mock.patch.object(devices, "screenshot", fake_screenshot):
+            pack = os.path.join(d, "p")
+            os.makedirs(pack)
+            shutil.copyfile(os.path.join(FIXTURES, "settings.png"), os.path.join(pack, "screen.png"))
+            with open(os.path.join(pack, "nodes.json"), "w") as f:
+                json.dump([_node(0, "android.widget.FrameLayout", [0, 0, 1080, 2400])], f)
+            with open(os.path.join(pack, "meta.json"), "w") as f:
+                json.dump({"screen_wh": [1080, 2400]}, f)
+            meta = capture.pages("android", "emulator-5560", pack)
+        self.assertEqual((meta["scroll_pages"], meta["scroll_restored"]), (0, True))

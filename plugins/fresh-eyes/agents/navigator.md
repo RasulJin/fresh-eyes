@@ -70,7 +70,7 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 3. **Run the probe** exactly as `probes.md` says. Fast probes use `taps.py` (with `--coverage` and `--cell`).
    Wrap transitions and probes in `capture.py around ... -- <command>` so they are recorded.
 4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --out <run>/<platform>/<screen>/<state>-<probe>`
-   (add `--keyboard` when an input is focused, `--before <pack>` for before/after probes like
+   (add `--pages` on `default/none`, see probes.md; `--keyboard` when an input is focused, `--before <pack>` for before/after probes like
    `swipe-inside` and `keyboard-open`; `--expect-differs <default pack>` for state cells like dark/font-xl —
    exit code 4 means the state had not applied yet: wait 2 s and snap again, at most 3 times, then mark the
    cell blocked with note "state did not apply"). Exit code 3 means blocked (no hierarchy): retry once, then mark blocked.

@@ -11,7 +11,10 @@ iOS input goes through the Maestro XCTest driver, which serializes touches: rapi
 (enough for double-submit windows, not for a sub-100 ms race), and Back is a left-edge swipe.
 
 ### none
-Just look. `capture.py snap`. With `--keyboard` when an input is focused.
+Just look. `capture.py snap`. With `--keyboard` when an input is focused. On the `default` state add `--pages`:
+the snap then scrolls the screen's list half a screen at a time into `scroll-<k>/` and back, so the checks see
+the whole screen, not its first viewport. `"scroll_restored": false` in its output: swipe the list back to
+the top with `nav.py swipe` (slow, short drags) before the next cell.
 
 ### rapid-tap
 - Reveals: double sheets/dialogs, double send, double navigation (stacked screens).

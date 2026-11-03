@@ -33,7 +33,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 1. For each pack, look first, read second: `som.png`, then `crops/*.png`, then `sheet_*.png`; then read
    `candidates.json`, `meta.json`, `hierarchy.txt`, `motion.json`, `taps.json`, `around.json`. The `som.png` of
    every pack is mandatory, and a pack's sub-folders with a `meta.json` (`afterback/`, `return/`, `typed/`,
-   `form-after/`, journey and scenario `step-N/`) are packs too; keep within ~30 images in total (crops and
+   `form-after/`, journey and scenario `step-N/`, `scroll-N/`) are packs too; `scroll-N/` is the same screen
+   scrolled N half-screens down: judge what the first frame could not show, and a row cut at its top or bottom
+   edge is the scroll, not a defect; keep within ~30 images in total (crops and
    contact sheets before full screenshots).
    If the budget runs out, stop: list only the packs you opened in `reviewed_packs` — the orchestrator sends the
    rest to another reviewer. Never list a pack you did not look at.
