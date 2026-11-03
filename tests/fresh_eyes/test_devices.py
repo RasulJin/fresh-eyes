@@ -366,6 +366,14 @@ class AvdTest(unittest.TestCase):
                     devices.ensure_owned("android", "small", boot_timeout=30)
         self.assertIn("-no-snapshot-save", seen)
 
+    def test_ensure_says_whether_it_booted_the_device(self):
+        dev = Device("android", "emulator-5560", "fresh-eyes-pixel")
+        with mock.patch.object(devices, "ensure_owned", return_value=dev):
+            with mock.patch.object(devices, "list_devices", return_value=[dev]):
+                self.assertFalse(devices.ensure("android")["booted"])  # someone's running emulator stays up
+            with mock.patch.object(devices, "list_devices", return_value=[]):
+                self.assertTrue(devices.ensure("android")["booted"])
+
     def test_ensure_owned_fails_fast_when_emulator_exits(self):
         from tests.fresh_eyes.helpers import tmpdir
         import os

@@ -4,7 +4,7 @@ device whose name does not start with "fresh-eyes" (the user's own devices are r
 
 CLI:
   devices.py list
-  devices.py ensure --platform android|ios [--kind default|small]
+  devices.py ensure --platform android|ios [--kind default|small]   ("booted": false = it was already running)
   devices.py stop --platform android|ios      (shuts down every running fresh-eyes device of that platform)
   devices.py screenshot --platform P --device ID --out PNG
   devices.py set --platform P --device ID --name NAME --what dark|light|font-xl|font-default|offline|online|...
@@ -218,6 +218,14 @@ def ensure_owned(platform, kind="default", boot_timeout=240):
         _simctl("bootstatus", udid, "-b", timeout=boot_timeout)
         return Device("ios", udid, name)
     raise FEError("unknown platform %s" % platform)
+
+
+def ensure(platform, kind="default"):
+    """ensure_owned, plus whether this call booted the device: one that was already running is someone's (a build
+    installed on it, a sign-in) and stays up after the run, since the emulator does not save its state."""
+    running = {d.id for d in list_devices()}
+    dev = ensure_owned(platform, kind)
+    return dict(dev._asdict(), booted=dev.id not in running)
 
 
 def stop_owned(platform):
@@ -710,7 +718,7 @@ def main():
     if a.cmd == "list":
         out = [dict(d._asdict(), owned=is_owned(d)) for d in list_devices()]
     elif a.cmd == "ensure":
-        out = ensure_owned(a.platform, a.kind)._asdict()
+        out = ensure(a.platform, a.kind)
     elif a.cmd == "stop":
         out = {"stopped": stop_owned(a.platform)}
     elif a.cmd == "set":

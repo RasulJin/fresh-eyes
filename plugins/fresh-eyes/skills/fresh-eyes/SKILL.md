@@ -186,8 +186,9 @@ the one its `same_as` points to, or the confirmed one with the same `log` line; 
 "look with your own eyes" (unsure, and the findings the verdict lists in `asked`, next to their question),
 questions. Link evidence crops by path. Keep it scannable.
 
-Then stop our devices, `python3 $S/devices.py stop --platform <p>` for each platform of the run: an emulator
-holds ~2.5 GB of RAM, and the next run boots it again.
+Then stop the devices this run booted (`ensure` printed `"booted": true`), `python3 $S/devices.py stop --platform
+<p>`: an emulator holds ~2.5 GB of RAM. One that was already running stays up: it boots without saving state, so a
+stop throws away a build or a sign-in someone put on it.
 
 ## After the report
 
