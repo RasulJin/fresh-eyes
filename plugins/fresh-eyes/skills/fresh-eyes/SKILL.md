@@ -1,7 +1,6 @@
 ---
 name: fresh-eyes
-description: Tests a running iOS/Android app like a picky human QA engineer and designer — visual, motion, interaction and UX bugs — and writes them to the backlog.
-disable-model-invocation: true
+description: Tests a running iOS/Android app like a picky human QA engineer and designer — visual, motion, interaction and UX bugs — and writes them to the backlog. Start a run only when the user asks for one: a quick run costs about $10–15, a full one several hours.
 argument-hint: "init | quick [BUG-N | screens | what changed] [twice] | full [twice] [--resume] | bench"
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
 ---

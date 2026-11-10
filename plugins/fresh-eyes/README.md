@@ -72,8 +72,8 @@ Files it keeps in your repo: `.fresh-eyes/config.json`, `spec.md`, `known.md`, `
 
 ## Cost
 
-The skill is invoked only by you (`disable-model-invocation`), so it adds about 230 tokens to a session until
-you call it. During a run the orchestrator keeps screenshots and videos out of the main conversation;
+Claude can start a run itself, but its description tells it to do so only when you ask. Until a run starts,
+the skill adds its name and description to the session. During a run the orchestrator keeps screenshots and videos out of the main conversation;
 subagents exchange files and reply in at most ten lines. Screens reach the navigator as compact text
 (~1.5k characters), not as hierarchy JSON or images.
 
