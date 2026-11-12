@@ -3,10 +3,11 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
-from tests.fresh_eyes.helpers import tmpdir
+from tests.fresh_eyes.helpers import SCRIPTS, tmpdir
 from fe_common import FEError, read_json, write_json
 from coverage import (PROBES, REQUIRED_SUBPACKS, SCENARIO_KINDS, STATES, _load_findings, coverage_map, next_cells,
                       plan, prune, screens_from_diff, set_status, verdict)
@@ -82,7 +83,27 @@ class PlanTest(unittest.TestCase):
         pre = {"platforms": {"android": {"ok": True}, "ios": {"ok": False}}, "mutating_allowed": False}
         cov = plan(ONE_SCREEN, pre, "full")
         self.assertTrue(all(c["platform"] == "android" for c in cov["cells"]))
-        self.assertTrue(any(u["what"].startswith("ios") for u in cov["unchecked"]))
+        self.assertTrue(any(u["what"].startswith("ios") and u["gap"] for u in cov["unchecked"]))
+
+    def test_unchecked_items_say_whether_another_run_can_check_them(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(states=["default", "empty", "loading", "small-screen", "theme-mismatch"],
+                                 probes=["edit-delete-restore"], neighbors=["feed"])
+        cfg["screens"] += [{"id": s, "route": s, "states": ["default"], "probes": []} for s in "feed a b c d".split()]
+        cfg["journeys"] = [{"id": "reply", "steps": "x", "screens": ["profile-trips"], "mutating": True}]
+        pre = {"platforms": {"android": {"ok": True}, "ios": {"ok": False}}, "mutating_allowed": False}
+        cov = plan(cfg, pre, "quick", ["profile-trips", "a", "b", "c", "d"])
+        self.assertEqual(sorted(u["what"] for u in cov["unchecked"] if not u.get("gap")),
+                         ["d: all states", "feed: all states"])  # the quick limit and a neighbor: a rerun checks them
+        gaps = " ".join(u["what"] for u in cov["unchecked"] if u.get("gap"))
+        for what in ("ios: all screens", "/empty", "/loading", "/small-screen", "/theme-mismatch",
+                     "/edit-delete-restore", "journey/reply"):
+            self.assertIn(what, gaps)
+
+    def test_plan_carries_the_motion_ceiling(self):
+        self.assertEqual(plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full")["motion_ceiling_ms"], 300)
+        self.assertEqual(plan(dict(ONE_SCREEN, motion_ceiling_ms=250), BOTH_OK_MUT_OFF, "full")["motion_ceiling_ms"],
+                         250)
 
     def test_plan_respects_config_platforms(self):
         cfg = dict(ONE_SCREEN, platforms=["android"])
@@ -137,7 +158,7 @@ class PlanTest(unittest.TestCase):
         cfg["screens"][0].update(states=["default"], probes=["drag-interrupt"])
         cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
         self.assertEqual([c["platform"] for c in cov["cells"] if c["probe"] == "drag-interrupt"], ["android"])
-        self.assertIn("ios/profile-trips/drag-interrupt", [u["what"] for u in cov["unchecked"]])
+        self.assertIn(("ios/profile-trips/drag-interrupt", True), [(u["what"], u["gap"]) for u in cov["unchecked"]])
 
     def test_quick_lists_neighbors_and_extra_screens_as_unchecked(self):
         cfg = copy.deepcopy(ONE_SCREEN)
@@ -565,8 +586,54 @@ class VerdictTest(unittest.TestCase):
 
     def test_unchecked_items_block_clean(self):
         packs = done_all(self.cov, self.root)
-        self.cov["unchecked"] = [{"what": "ios", "why": "no device"}]
+        self.cov["unchecked"] = [{"what": "feed: all states", "why": "over the quick limit of 4 screens"}]
         self.assertEqual(verdict(self.cov, [], "en", packs)["code"], "INCOMPLETE")
+
+    def test_permanent_gaps_never_block_clean(self):
+        packs = done_all(self.cov, self.root)
+        self.cov["unchecked"] = [{"what": "ios: all screens", "why": "no ready device or build", "gap": True}]
+        v = verdict(self.cov, [], "en", packs)
+        self.assertEqual(v["code"], "CLEAN")
+        self.assertIn("1 permanent gaps", v["reasons"])
+
+    def test_confirmed_medium_is_issues_even_when_incomplete(self):
+        packs = done_all(self.cov, self.root)
+        set_status(self.cov, self.cov["cells"][0]["id"], "todo")
+        v = verdict(self.cov, [dict(finding("medium"), backlog_id="BUG-53")], "en", packs)
+        self.assertEqual(v["code"], "ISSUES")
+        self.assertIn("1 confirmed medium", v["reasons"])
+        self.assertIn("1 cells not done", v["reasons"])
+
+    def test_a_pending_imp_is_a_proposal_and_keeps_clean(self):
+        packs = done_all(self.cov, self.root)
+        self.assertEqual(verdict(self.cov, [finding("low", "pending", kind="IMP")], "en", packs)["code"], "CLEAN")
+
+    def test_spec_findings_on_a_stale_screen_are_unsure(self):
+        packs = done_all(self.cov, self.root)
+
+        def f(fid, rule, screen="profile-trips"):
+            return dict(finding("high"), id=fid, rule=rule, screen=screen, _file="android/%s/findings.json" % screen)
+        fs = [f("f1", "spec:profile-trips#1"), f("f2", "taste"), f("f3", "spec:feed#2", "feed"),
+              f("f4", "spec:profile-trips#3", "journey")]  # a journey citing a stale section's rule
+        v = verdict(self.cov, fs, "en", packs, spec_stale={"updated": "2026-11-01", "stale_screens": ["profile-trips"]})
+        self.assertEqual([x["verdict"] for x in fs], ["unsure", "confirmed", "confirmed", "unsure"])
+        self.assertEqual(v["stale"], ["android/profile-trips/findings.json#f1", "android/journey/findings.json#f4"])
+        self.assertEqual(v["code"], "BLOCK")  # the taste one and the fresh section's one stay confirmed
+        self.assertIn("2 confirmed high", " ".join(v["reasons"]))
+        self.assertIn("profile-trips", " ".join(v["reasons"]))
+
+    def test_verdict_cli_reads_spec_stale_next_to_coverage(self):
+        packs = done_all(self.cov, self.root)
+        cov_path = os.path.join(self.root, "coverage.json")
+        write_json(cov_path, self.cov)
+        write_json(os.path.join(self.root, "spec-stale.json"),
+                   {"updated": "2026-11-01", "base": "abc", "stale_screens": ["profile-trips"]})
+        path = os.path.join(self.root, "android", "profile-trips", "findings.json")
+        write_json(path, {"reviewed_packs": packs, "findings": [dict(finding("low"), id="f1", screen="profile-trips",
+                                                                     rule="spec:profile-trips#1")]})
+        out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "coverage.py"), "verdict", "--cov", cov_path,
+                              "--findings", path], stdout=subprocess.PIPE, check=True).stdout
+        self.assertEqual(json.loads(out)["stale"], ["android/profile-trips/findings.json#f1"])
 
     def test_verdict_high_blocks_even_incomplete(self):
         v = verdict(self.cov, [finding("high")], "ru")

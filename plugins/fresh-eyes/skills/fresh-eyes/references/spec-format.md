@@ -26,6 +26,29 @@ Reference: <design file / reference app screen>
 Rules are **checkable sentences** ("replies open inline under the comment, without navigating to a Thread
 screen"), not wishes ("nice replies"). Each rule has an id, a source and a date.
 
+Sections start at `## ` lines and the first word of the heading is the screen id from `config.json`, so keep
+screen headings as `## <screen-id> <name>` and the global one as exactly `## Global`.
+
+## `Updated:` and stale sections
+
+`Updated:` is the day the spec was last checked against the code, and the only date staleness reads: bump it
+whenever the rules are re-checked against the code (init, an update after a run), not for a typo fix.
+`spec.py stale --spec .fresh-eyes/spec.md --repo <repo> --config .fresh-eyes/config.json --out
+$RUN/spec-stale.json` takes the last commit of that day as the base and maps every code file changed since
+(commits, uncommitted and untracked files) to screens through routes and imports, as `coverage.py diff-screens`
+does. A spec dated today has no stale screens. The rules of a stale screen are kept, but `coverage.py verdict`
+turns a confirmed finding with a `spec:` rule on that screen, or citing that section, into `unsure` and returns
+it in `stale`; the report asks once per screen: "section <id> dated <Updated>, code changed since: are its
+rules current?". `taste` findings are not affected.
+
+## Slices
+
+Reviewers and verifiers read a slice, never the whole spec. `spec.py slice --spec .fresh-eyes/spec.md --screens
+<id> --out $RUN/spec/<id>.md --stale $RUN/spec-stale.json` writes the header (title, `Updated:`, notes before
+the first `## `), `## Global` and the section of each listed screen in spec order (a journey lists all its
+screens). A screen without a section becomes the line `## <id>: no section in spec.md`; a stale one gets
+`⚠ stale since <Updated>` under its heading.
+
 ## Assembling it (`/fresh-eyes init`)
 
 Read, newest first, and extract only statements about look and behaviour:

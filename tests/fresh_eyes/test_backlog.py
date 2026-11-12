@@ -3,7 +3,7 @@ import unittest
 
 from tests.fresh_eyes.helpers import make_png, tmpdir
 from fe_common import FEError
-from backlog import append, attach, next_id, render, set_status
+from backlog import append, attach, index, next_id, render, set_status
 
 BACKLOG = """# QA-бэклог
 
@@ -142,6 +142,17 @@ class BacklogTest(unittest.TestCase):
             self.assertEqual(item, "BUG-54")
             self.assertTrue(os.path.exists(os.path.join(d, "qa-backlog", "bug-54-setka-obrezana.png")))
             self.assertIn("доказательство: qa-backlog/bug-54-setka-obrezana.png", read(p))
+
+    def test_index_lists_open_entries_once(self):
+        text = BACKLOG + ("\n- **IMP-15** — в поиске нет крестика\n\n"
+                          "### BUG-60 · Подпись смещена — `open`\n- **Где** — Мастер, android, 2026-10-19 (fresh-eyes)\n\n"
+                          "### BUG-61 · Снят — `снят` (не баг)\n\n"
+                          "## Перепроверка\n- **BUG-22** (e-mail) — воспроизводится\n- **BUG-60** — всё ещё так\n")
+        self.assertEqual(index(text), ["BUG-53 · пост открывается как «Post not found»",
+                                       "IMP-15 · в поиске нет крестика",
+                                       "BUG-60 · Подпись смещена - Мастер"])
+        self.assertEqual(index(text, ["fixed"]), ["BUG-22 · на профиле e-mail", "IMP-12 · пересказ видео",
+                                                  "IMP-15 · в поиске нет крестика"])  # no status counts too
 
     def test_unknown_status_refused(self):
         with tmpdir() as d:

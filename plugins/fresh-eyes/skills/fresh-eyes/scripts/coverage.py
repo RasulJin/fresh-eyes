@@ -25,28 +25,27 @@ from collections import Counter, defaultdict, deque
 from fe_common import FEError, cli, locked, read_json, run, write_json
 
 PLATFORMS = ["android", "ios"]
-BOTH = ["android", "ios"]
 PROBES = {
-    "none": {"mutating": False, "platforms": BOTH},
-    "rapid-tap": {"mutating": False, "platforms": BOTH},
-    "tap-outside": {"mutating": False, "platforms": BOTH},
-    "back-during-animation": {"mutating": False, "platforms": BOTH},
-    "hardware-back": {"mutating": False, "platforms": BOTH},  # iOS: the left-edge swipe
+    "none": {"mutating": False, "platforms": PLATFORMS},
+    "rapid-tap": {"mutating": False, "platforms": PLATFORMS},
+    "tap-outside": {"mutating": False, "platforms": PLATFORMS},
+    "back-during-animation": {"mutating": False, "platforms": PLATFORMS},
+    "hardware-back": {"mutating": False, "platforms": PLATFORMS},  # iOS: the left-edge swipe
     "hardware-back-keyboard": {"mutating": False, "platforms": ["android"]},
-    "background-foreground": {"mutating": False, "platforms": BOTH},
-    "kill-relaunch": {"mutating": False, "platforms": BOTH},
-    "keyboard-open": {"mutating": False, "platforms": BOTH},
-    "search": {"mutating": False, "platforms": BOTH},  # type a query, run a read-only search, look at the results
-    "scenario": {"mutating": False, "platforms": BOTH},  # the screen's task end to end; writes only if mutation is on
-    "swipe-inside": {"mutating": False, "platforms": BOTH},
+    "background-foreground": {"mutating": False, "platforms": PLATFORMS},
+    "kill-relaunch": {"mutating": False, "platforms": PLATFORMS},
+    "keyboard-open": {"mutating": False, "platforms": PLATFORMS},
+    "search": {"mutating": False, "platforms": PLATFORMS},  # type a query, run a read-only search, look at the results
+    "scenario": {"mutating": False, "platforms": PLATFORMS},  # the screen's task end to end; writes only when allowed
+    "swipe-inside": {"mutating": False, "platforms": PLATFORMS},
     # Back while a finger still drags, a tap right after a drag closes: two touches at once, adb only
     "drag-interrupt": {"mutating": False, "platforms": ["android"]},
-    "tap-everything": {"mutating": False, "platforms": BOTH},
-    "rotate": {"mutating": False, "platforms": BOTH},
+    "tap-everything": {"mutating": False, "platforms": PLATFORMS},
+    "rotate": {"mutating": False, "platforms": PLATFORMS},
     "offline": {"mutating": False, "platforms": ["android"]},
-    "replay": {"mutating": False, "platforms": BOTH},  # quick BUG-N: replay the backlog entry's steps
-    "edit-delete-restore": {"mutating": True, "platforms": BOTH},
-    "double-submit": {"mutating": True, "platforms": BOTH},
+    "replay": {"mutating": False, "platforms": PLATFORMS},  # quick BUG-N: replay the backlog entry's steps
+    "edit-delete-restore": {"mutating": True, "platforms": PLATFORMS},
+    "double-submit": {"mutating": True, "platforms": PLATFORMS},
 }
 # snaps inside the pack a done cell needs: a navigator skips a probe's extra steps unless the cell depends on them
 REQUIRED_SUBPACKS = {"rapid-tap": ("afterback",), "keyboard-open": ("return",), "search": ("typed",),
@@ -103,7 +102,8 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
     plats = preflight.get("platforms", {})
     targets = config.get("platforms", PLATFORMS)
     ok = [p for p in targets if plats.get(p, {}).get("ok")]
-    unchecked += [{"what": "%s: all screens" % p, "why": "no ready device or build (see preflight)"}
+    # gap: no rerun of this config can check it; quick-limit and neighbor items are this run's choice
+    unchecked += [{"what": "%s: all screens" % p, "why": "no ready device or build (see preflight)", "gap": True}
                   for p in targets if p not in ok]
     hooks = config.get("hooks") or {}
     mutating = bool(preflight.get("mutating_allowed"))
@@ -117,9 +117,10 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
             for state in s.get("states", ["default"]):
                 if state not in STATES:
                     raise FEError("screen %s: unknown state %s" % (sid, state))
-                if p not in STATE_PLATFORMS.get(state, BOTH):
+                if p not in STATE_PLATFORMS.get(state, PLATFORMS):
                     if state in NOT_AUTOMATED:
-                        unchecked.append({"what": "%s/%s/%s" % (p, sid, state), "why": "not automated on %s" % p})
+                        unchecked.append({"what": "%s/%s/%s" % (p, sid, state), "why": "not automated on %s" % p,
+                                          "gap": True})
                     continue
                 need = STATE_NEEDS.get(state)
                 why = None
@@ -132,7 +133,7 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
                 elif need == "app_theme" and not config.get("app_theme"):
                     why = "needs app_theme in config (how to pick the app's own light theme)"
                 if why:
-                    unchecked.append({"what": "%s/%s/%s" % (p, sid, state), "why": why})
+                    unchecked.append({"what": "%s/%s/%s" % (p, sid, state), "why": why, "gap": True})
                     continue
                 cells.append(_cell(p, sid, state, "none"))
             for probe in s.get("probes", []):
@@ -140,11 +141,13 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
                     raise FEError("screen %s: unknown probe %s" % (sid, probe))
                 if probe == "none" or p not in PROBES[probe]["platforms"]:
                     if probe in NOT_AUTOMATED:
-                        unchecked.append({"what": "%s/%s/%s" % (p, sid, probe), "why": "not automated on %s" % p})
+                        unchecked.append({"what": "%s/%s/%s" % (p, sid, probe), "why": "not automated on %s" % p,
+                                          "gap": True})
                     continue
                 if PROBES[probe]["mutating"] and not preflight.get("mutating_allowed"):
                     unchecked.append({"what": "%s/%s/%s" % (p, sid, probe),
-                                      "why": "mutating probe disabled: backend not verified as staging/local"})
+                                      "why": "mutating probe disabled: backend not verified as staging/local",
+                                      "gap": True})
                     continue
                 cells.append(_cell(p, sid, "default", probe))
                 if probe == "scenario":  # writes (send, edit, delete) when the backend allows it, reads otherwise
@@ -155,7 +158,8 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
         for p in ok:
             if j.get("mutating") and not preflight.get("mutating_allowed"):
                 unchecked.append({"what": "%s/journey/%s" % (p, j["id"]),
-                                  "why": "mutating journey disabled: backend not verified as staging/local"})
+                                  "why": "mutating journey disabled: backend not verified as staging/local",
+                                  "gap": True})
                 continue
             cells.append({"id": "%s/journey/%s/journey" % (p, j["id"]), "platform": p, "screen": "journey",
                           "state": j["id"], "probe": "journey", "mutating": bool(j.get("mutating")),
@@ -173,7 +177,7 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
         cells += [dict(c, id=c["id"] + "#2", evidence=[], **{"pass": 2}) for c in cells
                   if not c["screen"].startswith("recheck-")]
     return {"run_id": time.strftime("%Y%m%d-%H%M") + "-" + mode, "mode": mode, "cells": cells,
-            "unchecked": unchecked}
+            "unchecked": unchecked, "motion_ceiling_ms": config.get("motion_ceiling_ms", 300)}
 
 
 def _find(cov, cell_id):
@@ -303,11 +307,21 @@ def pack_key(path):
     return None
 
 
-def verdict(cov, findings, language="en", reviewed=(), build_changed=()):
+def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_stale=None):
     """reviewed: pack paths some reviewer listed in reviewed_packs. A done cell none of whose packs was reviewed
-    is not checked; a finding still pending was never verified; build_changed (preflight.build_drift) means the
-    run did not test one build. None of them can end in CLEAN."""
+    is not checked; a BUG still pending was never verified; build_changed (preflight.build_drift) means the
+    run did not test one build. None of them can end in CLEAN. spec_stale (spec-stale.json): a confirmed `spec:`
+    finding on a screen, or citing a section, changed since the spec's Updated turns unsure."""
     labels = LABELS.get(language, LABELS["en"])
+    old = set((spec_stale or {}).get("stale_screens", []))
+    stale, sections = [], set()
+    for f in findings:
+        rule = f.get("rule") or ""
+        hit = old & {f.get("screen"), rule[5:].split("#")[0]}
+        if f.get("verdict") == "confirmed" and rule.startswith("spec:") and hit:
+            f["verdict"], f["_stale"] = "unsure", True
+            stale.append(f)
+            sections |= hit
     merged = [f for f in findings if _merged(f, findings)]
     findings = [f for f in findings if not any(f is m for m in merged)]
     first = {}
@@ -321,7 +335,8 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=()):
     bugs = [f for f in findings if f.get("verdict") == "confirmed" and f.get("kind", "BUG") == "BUG"]
     high = [f for f in bugs if f.get("severity") == "high"]
     medium = [f for f in bugs if f.get("severity") == "medium"]
-    pending = [f for f in findings if f.get("verdict", "pending") == "pending"]
+    # a pending IMP is a final proposal (the verifier skips IMPs); only a BUG waits on a ruling
+    pending = [f for f in findings if f.get("verdict", "pending") == "pending" and f.get("kind", "BUG") == "BUG"]
     # an intermittent bug the repeat missed ends unsure: a human has to look before anyone says CLEAN
     doubtful = [f for f in findings if f.get("verdict") == "unsure" and f.get("kind", "BUG") == "BUG"
                 and f.get("severity") in ("high", "medium")]
@@ -354,26 +369,34 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=()):
     if asked:
         reasons.append("%d findings wait on the owner's answer to a question, counted as unsure: %s"
                        % (len(asked), "; ".join(f.get("title", "") for f in asked[:3])))
+    if stale:
+        reasons.append("%d spec findings counted as unsure: section %s dated %s, code changed since"
+                       % (len(stale), ", ".join(sorted(sections)), spec_stale.get("updated", "?")))
     if merged:
         reasons.append("%d duplicate findings merged" % len(merged))
-    if cov.get("unchecked"):
-        reasons.append("%d items not checked" % len(cov["unchecked"]))
+    gaps = [u for u in cov.get("unchecked", []) if u.get("gap")]
+    unchecked = [u for u in cov.get("unchecked", []) if not u.get("gap")]
+    if unchecked:
+        reasons.append("%d items not checked" % len(unchecked))
+    if gaps:  # no rerun of this config checks them: reported, never blocking
+        reasons.append("%d permanent gaps" % len(gaps))
     if build_changed:
         reasons.append("the installed app is not the build preflight saw (another build, or the device is off), "
                        "findings may be about another build: %s" % "; ".join(build_changed))
     complete = (bool(cov["cells"]) and not open_cells and not unreviewed and not pending and not doubtful
-                and not cov.get("unchecked") and not build_changed)
+                and not unchecked and not build_changed)
     if high:
         code = "BLOCK"
-    elif medium:
-        code = "ISSUES" if complete else "INCOMPLETE"
+    elif medium:  # a confirmed medium is a finding whatever else the run missed
+        code = "ISSUES"
     elif not complete:
         code = "INCOMPLETE"
     else:
         code = "CLEAN"
     return {"code": code, "label": labels[code], "reasons": reasons,
             "merged": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in merged],
-            "asked": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in asked]}
+            "asked": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in asked],
+            "stale": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in stale]}
 
 
 _RANK = {"low": 0, "medium": 1, "high": 2}
@@ -590,7 +613,9 @@ def main():
         if os.path.exists(pf):  # the devices are still up: the report step stops them after the verdict
             import preflight
             drift = preflight.build_drift(read_json(pf))
-        print(json.dumps(verdict(read_json(a.cov), findings, a.language, reviewed, drift), ensure_ascii=False))
+        ss = os.path.join(os.path.dirname(os.path.abspath(a.cov)), "spec-stale.json")  # spec.py stale
+        ss = read_json(ss) if os.path.exists(ss) else None
+        print(json.dumps(verdict(read_json(a.cov), findings, a.language, reviewed, drift, ss), ensure_ascii=False))
     elif a.cmd == "map":
         print(coverage_map(read_json(a.cov), a.language))
     elif a.cmd == "prune":

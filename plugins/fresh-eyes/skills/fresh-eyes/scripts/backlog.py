@@ -2,11 +2,10 @@
 """Write confirmed findings into a project's Markdown backlog and update entry statuses.
 
 CLI:
-  backlog.py next-id --file F --prefix BUG|IMP
+  backlog.py index --file F --out OUT [--statuses open,in-progress,planned]
   backlog.py append --file F --finding finding.json [--template ru-backlog] [--date YYYY-MM-DD]
                     [--attach CROP --images-dir D]
   backlog.py set-status --file F --id BUG-12 --status verified --note TEXT [--line N] [--template ru-backlog]
-  backlog.py attach --src PNG --images-dir D --id BUG-54 --slug TEXT --relative-to DIR
 """
 import argparse
 import json
@@ -93,11 +92,48 @@ def append(path, finding, template, date=None, attach_src=None, images_dir=None)
     return item_id
 
 
+def _head(id_re):
+    """An entry starts at a `##`-`####` heading or a `- **ID**` bullet naming the id."""
+    return re.compile(r"^(?:#{2,4} (%s)(?=[ ·—])|- \*\*(%s)\*\*)" % (id_re, id_re))
+
+
+STATUS = re.compile(r"— `([^`\s]+)")  # the first `word` after a dash: `fixed (abc on main)` reads fixed
+WHERE = re.compile(r"^\s*- \*\*(?:Где|Where)\*\*\s*[—:-]*\s*(.*)")
+
+
+def index(text, statuses=("open", "in-progress", "planned")):
+    """`ID · title - where` per entry whose status is listed or missing. An id's first entry decides: later
+    bullets naming it are rechecks, not entries."""
+    lines, out, seen = text.split("\n"), [], set()
+    head = _head(r"(?:BUG|IMP)-\d+")
+    for i, line in enumerate(lines):
+        m = head.match(line)
+        if not m or (m.group(1) or m.group(2)) in seen:
+            continue
+        item_id = m.group(1) or m.group(2)
+        seen.add(item_id)
+        rest = line[m.end():]
+        st = STATUS.search(rest)
+        if st and st.group(1).lower() not in statuses:
+            continue
+        title = (rest[:st.start()] if st else rest).strip(" ·—")
+        where = ""
+        for body in lines[i + 1:]:
+            if body.startswith("#") or head.match(body):
+                break
+            w = WHERE.match(body)
+            if w:
+                where = w.group(1).split(",")[0].strip()
+                break
+        out.append("%s · %s" % (item_id, title) + (" - " + where if where else ""))
+    return out
+
+
 def set_status(path, item_id, status, note, line=None, template="ru-backlog"):
     if status not in KNOWN_STATUSES:
         raise FEError("status must be one of %s" % ", ".join(KNOWN_STATUSES))
     lines = _read(path).split("\n")
-    head = re.compile(r"^(?:#{2,4} %s(?=[ ·—])|- \*\*%s\*\*)" % (re.escape(item_id), re.escape(item_id)))
+    head = _head(re.escape(item_id))
     hits = [i + 1 for i, l in enumerate(lines) if head.match(l)]
     if not hits:
         raise FEError("%s not found in %s" % (item_id, path))
@@ -138,7 +174,9 @@ def attach(src, images_dir, item_id, slug, relative_to):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("next-id"); p.add_argument("--file", required=True); p.add_argument("--prefix", required=True)
+    p = sub.add_parser("index", help="open entries, one line each, for the verifier's dedup")
+    p.add_argument("--file", required=True); p.add_argument("--out", required=True)
+    p.add_argument("--statuses", default="open,in-progress,planned", help="comma list; an entry without one counts")
     p = sub.add_parser("append"); p.add_argument("--file", required=True)
     p.add_argument("--finding", required=True, help="path to a JSON file holding one finding")
     p.add_argument("--template", default="ru-backlog"); p.add_argument("--date")
@@ -146,19 +184,16 @@ def main():
     p = sub.add_parser("set-status"); p.add_argument("--file", required=True); p.add_argument("--id", required=True)
     p.add_argument("--status", required=True); p.add_argument("--note", required=True)
     p.add_argument("--line", type=int); p.add_argument("--template", default="ru-backlog")
-    p = sub.add_parser("attach"); p.add_argument("--src", required=True); p.add_argument("--images-dir", required=True)
-    p.add_argument("--id", required=True); p.add_argument("--slug", required=True)
-    p.add_argument("--relative-to", required=True)
     a = ap.parse_args()
-    if a.cmd == "next-id":
-        out = next_id(_read(a.file), a.prefix)
+    if a.cmd == "index":
+        lines = index(_read(a.file), a.statuses.split(","))
+        _write(a.out, "".join(l + "\n" for l in lines))
+        out = {"entries": len(lines), "out": a.out}
     elif a.cmd == "append":
         out = append(a.file, read_json(a.finding), a.template, a.date, a.attach, a.images_dir)
-    elif a.cmd == "set-status":
+    else:
         set_status(a.file, a.id, a.status, a.note, a.line, a.template)
         out = {"id": a.id, "status": a.status}
-    else:
-        out = attach(a.src, a.images_dir, a.id, a.slug, a.relative_to)
     print(json.dumps(out, ensure_ascii=False))
     return 0
 
