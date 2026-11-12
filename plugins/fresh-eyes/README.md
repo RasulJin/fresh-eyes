@@ -20,11 +20,15 @@ Android emulator or iOS simulator.
    screenshot, numbered marks, crops of everything the scripts found suspicious, video and motion analysis for
    transitions.
 4. **Reviewer** (Opus) looks at the evidence against your project's own spec (`.fresh-eyes/spec.md`, built
-   from your design files, decisions and commits) and writes findings.
+   from your design files, decisions and commits) and writes findings. When a screen's code changed after the
+   spec's `Updated` date, findings that rest on its rules come to you as questions, not as bugs.
 5. **Verifier** (Opus) tries to disprove each finding, asking the navigator for fresh frames or repeats when
-   the evidence is thin.
+   the evidence is thin. A bug your backlog already has open is reported as "still reproduces, BUG-N" and gets
+   a recheck line there instead of a duplicate entry.
 6. **Verdict** comes from code, never from a model: BLOCK, ISSUES, INCOMPLETE (something was not checked) or
-   CLEAN. A run never says "all good" while any planned cell is unchecked.
+   CLEAN. A run never says "all good" while any planned cell is unchecked. What your setup can never check (a
+   platform without a device, a state not automated there, a missing hook) is listed as a permanent gap and
+   does not hold the verdict at INCOMPLETE.
 7. You confirm which findings are real; those go to the backlog with a crop, and the rest go to
    `.fresh-eyes/known.md` so they are not raised again.
 

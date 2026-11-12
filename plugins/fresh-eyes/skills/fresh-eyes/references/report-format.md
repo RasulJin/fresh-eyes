@@ -4,10 +4,11 @@
 
 ```
 .fresh-eyes/runs/<YYYYMMDD-HHMM>-<mode>/
-  preflight.json  coverage.json  report.md
+  preflight.json  coverage.json  spec-stale.json  backlog-index.md  report.md
+  spec/<screen>.md  spec/journey.md         ← spec slices: global rules + the screen and its neighbors
   <platform>/<screen>/<state>-<probe>/      ← one evidence pack per cell
     screen.png screen_1000.png som.png som.json nodes.json hierarchy.txt candidates.json meta.json
-    crops/*.png  [video.mp4 motion.json sheet_*.png around.json]  [taps.json]
+    crops/*.png  [video.mp4 motion.json sheet_*.png around.json]  [taps.json]  [logcat.txt]
   <platform>/<screen>/findings.json         ← per screen × platform (reviewer, then verifier);
                                               findings-2.json … when packs were split between reviewers
   <platform>/<screen>/requests.json         ← optional: the verifier asks the navigator for fresh evidence
@@ -23,7 +24,7 @@
   "som": [3], "bbox": [0, 0, 0, 0], "expected": "", "actual": "", "steps": [""], "found_by": "",
   "rule": "spec:<id> | taste", "evidence": ["crops/clipped-1.png"], "log": "<logcat.txt line (app errors only)>",
   "verdict": "pending|confirmed|unsure|rejected", "verify_note": "",
-  "same_as": "<findings file relative to the run>#<id> (optional)"}],
+  "same_as": "<findings file relative to the run>#<id> (optional)", "backlog_id": "BUG-N (optional)"}],
  "questions": [{"text": "", "options": [""], "finding": "<id> | <findings file relative to the run>#<id>"}]}
 ```
 
@@ -42,10 +43,15 @@ then returns it in `merged`, and the report lists it under that finding.
   once across screens: the most severe confirmed copy stays, the others are returned in `merged`.
 - `questions[].finding`: the finding the question is about. `coverage.py verdict` counts a confirmed finding
   with a question as unsure and returns it in `asked`: until the owner answers, it is not a bug.
-- `reviewed_packs`: every pack whose `som.png` the reviewer actually opened, and only those. A done cell whose
-  packs no reviewer listed keeps the verdict INCOMPLETE.
+- `reviewed_packs`: every pack whose evidence the reviewer actually opened (its `som.png`, or its crops plus
+  `candidates.json`), and only those. A done cell whose packs no reviewer listed keeps the verdict INCOMPLETE.
+- `backlog_id`: the verifier sets it on a confirmed BUG that an open entry of `backlog-index.md` already
+  describes, with `verify_note` "already open: BUG-N". It still counts as a confirmed bug; the report lists it
+  under "still reproduces" and the backlog gets a recheck line instead of a new entry.
 - `rule: taste` (no spec rule behind it) caps `confidence` at 0.6.
-- The verifier sets `verdict` and `verify_note`; nothing reaches the backlog while `pending`.
+- The verifier sets `verdict` and `verify_note`. No BUG reaches the backlog while `pending`; IMPs are proposals
+  and go in when the owner picks them. The verifier only rejects an IMP the spec slice or `known.md`
+  contradicts; a `pending` IMP is final.
 
 ## `requests.json` (verifier → navigator, in the screen folder)
 
@@ -54,13 +60,23 @@ navigator adds `"done": "<path>"` or `"failed": "<why>"` to each entry.
 
 ## Verdict
 
-Computed only by `coverage.py verdict` (never by a model):
+Computed only by `coverage.py verdict` (never by a model); the first that applies wins:
 - any confirmed BUG of severity high → `BLOCK` (НЕ ВЫПУСКАТЬ);
-- confirmed medium with full coverage → `ISSUES` (ЕСТЬ ПРОБЛЕМЫ);
-- any cell not done/na, any unchecked item, any done cell whose packs no reviewer listed, any finding still
-  `pending`, any `unsure` BUG of severity high or medium (e.g. intermittent) → `INCOMPLETE`
-  (НЕ ПРОВЕРЕНО ДО КОНЦА);
-- otherwise `CLEAN` (ЧИСТО). IMP findings and low unsure ones never change the verdict.
+- any confirmed BUG of severity medium → `ISSUES` (ЕСТЬ ПРОБЛЕМЫ), even when something was not checked;
+- any cell not done (`na` too: drop that probe from the config), any done cell whose packs no reviewer listed,
+  any BUG still `pending`, any `unsure` BUG of severity high or medium (intermittent, asked, stale spec), a build
+  that changed during the run, any unchecked item of this run (quick's screen limit, skipped neighbors) →
+  `INCOMPLETE` (НЕ ПРОВЕРЕНО ДО КОНЦА);
+- otherwise `CLEAN` (ЧИСТО).
+
+Permanent gaps never block: plan items with `"gap": true`, which no run of this project as configured can
+check (a platform without a ready device or build, a state not automated on that platform, a missing hook,
+seed, `app_theme` or small device, mutation off). The verdict lists them as "N permanent gaps". IMPs never
+change the verdict, and neither do low unsure findings.
+
+Stale spec: when `spec-stale.json` lists a screen (its code changed after the spec's `Updated` date), a
+confirmed finding with `rule: spec:…` on it turns `unsure`, and the verdict's `stale` holds one question per
+such screen ("section <id> dated <Updated>, code changed since: are its rules current?").
 
 ## `report.md` (project language)
 
@@ -72,8 +88,11 @@ Build: <branch/commit>, backend: <api host or "not verified">, devices: <names>
 ## Coverage
 <coverage.py map output>
 
-### Not checked and why
+### Not checked in this run
 - <item> — <why>
+
+### Permanent gaps
+- <item> — <why this setup cannot check it>
 
 ## Bugs (confirmed)
 ### 1. <title>
@@ -84,6 +103,9 @@ Build: <branch/commit>, backend: <api host or "not verified">, devices: <names>
 **Expected:** … **Actual:** …
 Evidence: <crop path> · found by <found_by> · backlog <BUG-N>
 
+## Still reproduces
+- **<title>** (BUG-N), <platform>, <screen>, severity <s> · evidence <crop path>
+
 ## Improvements
 1. **<title>** — <what to change and why>, reference: <app/pattern>
 
@@ -92,6 +114,7 @@ Evidence: <crop path> · found by <found_by> · backlog <BUG-N>
 
 ## Look with your own eyes (unsure)
 - <title> — <why unsure> — <crop path>
+- <question from the verdict's `stale`>
 
 ## Questions
 - <spec conflicts and "bug or intended?" questions>
@@ -104,4 +127,6 @@ Evidence: <crop path> · found by <found_by> · backlog <BUG-N>
 
 `backlog.py` templates: `ru-backlog` (Где / Шаги / Ожидание / Факт / Заметки) and `en-backlog`
 (Where / Steps / Expected / Actual / Notes). New entries get the next free number and status `open`;
-`quick BUG-N` rechecks set `verified` or back to `open` with a recheck line under the heading.
+`quick BUG-N` rechecks set `verified` or back to `open` with a recheck line under the heading; a confirmed
+finding with `backlog_id` gets a recheck line and status `open` instead of a new entry. `backlog.py index` lists
+the entries whose heading status is `open`, `in-progress`, `planned` or empty, one line each, for the verifier.

@@ -20,14 +20,20 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 - `run`: the run folder (has `coverage.json`, `preflight.json`), `config`: `.fresh-eyes/config.json`.
 - `platform`, `device` (id) and `name` (from `preflight.json` → `platforms.<p>`), the list of cell ids,
   or `requests`: one or more `requests.json` files (one per screen folder) to fulfil for the verifier.
+- `package`: the app's Android package (`app.android_id`); every `capture.py snap` gets it.
 - `app language` (config `app.locale`), when set: the app must show it before your first cell (rule below).
 
 ## Hard rules
 
 - Only touch the device you were given. Its name starts with `fresh-eyes`; never use another device.
-- **Navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`, `swipe`,
-  `back`, `wait`; add `--platform ios` on iOS). It prints the screen as compact text after each action; when
-  a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
+- **Navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`, `swipe`;
+  add `--platform ios` on iOS). It prints the screen as compact text after each action; when
+  a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`. Back is
+  `taps.py back` with `--coverage` and `--cell`. To wait for a screen, run `nav.py screen` again.
+- **A crash**: the launcher or another app on the printed screen after an action means the app died. Snap
+  into the cell's pack first (`capture.py snap` with `--package` saves the crash log), record it done with
+  `--note "app crashed after <action>"`, and only then relaunch with `devices.py app --do launch`. Do not
+  redo that cell: a new snap would overwrite the crash.
 - Android non-ASCII typing: a Maestro **CLI** flow with `inputText`, always with `--device <your device id>`
   (slow, ~35 s).
 - iOS: `nav.py` talks to the Maestro driver the orchestrator started. If `nav.py` says "no Maestro iOS driver",
@@ -69,8 +75,8 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
    `app_theme` is set: the app's own theme is pinned, so pick its Dark, snap again, then pick Light back.
 3. **Run the probe** exactly as `probes.md` says. Fast probes use `taps.py` (with `--coverage` and `--cell`).
    Wrap transitions and probes in `capture.py around ... -- <command>` so they are recorded.
-4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --out <run>/<platform>/<screen>/<state>-<probe>`
-   (add `--pages` on `default/none`, see probes.md; `--keyboard` when an input is focused, `--before <pack>` for before/after probes like
+4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --package PKG --out <run>/<platform>/<screen>/<state>-<probe>`
+   (PKG: your `package`; add `--pages` on `default/none`, see probes.md; `--keyboard` when an input is focused, `--before <pack>` for before/after probes like
    `swipe-inside` and `keyboard-open`; `--expect-differs <default pack>` for state cells like dark/font-xl —
    exit code 4 means the state had not applied yet: wait 2 s and snap again, at most 3 times, then mark the
    cell blocked with note "state did not apply"). Exit code 3 means blocked (no hierarchy): retry once, then mark blocked.
@@ -91,7 +97,7 @@ Second pass: a cell id ending in `#2` belongs to an independent second pass. Its
 (`<state>-<probe>-p2`, journeys `<id>-journey-p2`); take your own path and do not open the first pass's packs.
 
 Scenario cells: follow `scenario` in probes.md with the screen's `task` from `config.json`; `PKG` there is
-`app.android_id`. Look first, touch second: snap after each action before you tap anything, so the frame shows
+your `package`. Look first, touch second: snap after each action before you tap anything, so the frame shows
 what the app did by itself (a field it should have focused, a sheet it opened).
 
 For `tap-everything`, write `<pack>/taps.json`: `[{"som": n, "label": "...", "result": "<screen/state after>"}]`.

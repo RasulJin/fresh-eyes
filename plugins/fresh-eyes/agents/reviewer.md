@@ -22,7 +22,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 ## Input (from the orchestrator)
 
 - Pack folders of one screen × platform: `<run>/<platform>/<screen>/<state>-<probe>/`.
-- The spec rules for this screen and the global rules (path to `.fresh-eyes/spec.md` + screen id), `known.md`.
+- The screen id and its spec slice `<run>/spec/<screen>.md`: the global rules and the sections of this screen
+  and its neighbors. A `⚠ stale since <date>` line under a section: its code changed later; judge by it as
+  written, the verdict asks the owner. Also `known.md`.
 - `examples/` (real past bugs of this project with images) and the reference apps from `config.json`.
 - `source_root`: the code this build was made from (`source.root` in preflight.json), or `none`.
 - The project `language`: write `title`, `expected`, `actual`, `steps` and `questions` in it (keep ids, paths,
@@ -30,15 +32,17 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 
 ## Method
 
-1. For each pack, look first, read second: `som.png`, then `crops/*.png`, then `sheet_*.png`; then read
-   `candidates.json`, `meta.json`, `hierarchy.txt`, `motion.json`, `taps.json`, `around.json`. The `som.png` of
-   every pack is mandatory, and a pack's sub-folders with a `meta.json` (`afterback/`, `return/`, `typed/`,
-   `form-after/`, journey and scenario `step-N/`, `scroll-N/`) are packs too; `scroll-N/` is the same screen
-   scrolled N half-screens down: judge what the first frame could not show, and a row cut at its top or bottom
-   edge is the scroll, not a defect; keep within ~30 images in total (crops and
-   contact sheets before full screenshots).
-   If the budget runs out, stop: list only the packs you opened in `reviewed_packs` — the orchestrator sends the
-   rest to another reviewer. Never list a pack you did not look at.
+1. For each pack, look first, read second: images (`som.png` where required, `crops/*.png`, `sheet_*.png`),
+   then `candidates.json`, `meta.json`, `hierarchy.txt`, `motion.json`, `taps.json`, `around.json`. A pack's
+   sub-folders with a `meta.json` (`afterback/`, `return/`, `typed/`, `form-after/`, journey and scenario
+   `step-N/`, `scroll-N/`) are packs too; `scroll-N/` is the same screen scrolled N half-screens down: judge what
+   the first frame could not show, and a row cut at its top or bottom edge is the scroll, not a defect.
+   Image budget, ~30 in total: `som.png` is required for the first pack of each state (`default-none`,
+   `dark-none`, …) and for the first sub-pack of a probe (`scroll-1/`, `step-1/`, or its only one). Judge every
+   other pack by its crops and `candidates.json`, and open its `som.png` only when they leave a doubt.
+   `reviewed_packs` lists the packs whose evidence you opened (`som.png`, or crops plus `candidates.json`). If
+   the budget runs out, stop there: the orchestrator sends the rest to another reviewer. Never list a pack you
+   did not look at.
 2. Decide every script candidate explicitly. A `partially_visible` item that a `swipe-inside` pack shows fully
    is fine; `clipped`, `under_keyboard` and `overlap` deserve a careful look at the crop. `keyboard_missing`:
    an input was focused but no keyboard is up; a real bug unless the crop shows a keyboard intro/onboarding.
@@ -49,6 +53,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    say so, a retry must not duplicate. `logcat.txt`: an error or a crash during the scenario is a BUG even when
    the screen looks fine; a flood of one warning is one finding, with its line in `log` (report-format.md). A `drag-interrupt` pack is judged the same
    way, against the oracle of each step in probes.md (a tap behind that did not land is a BUG).
+   Crash: a pack whose `meta.json` has `app_running: false` (in any probe) is a BUG high, with the crash line
+   from that pack's `logcat.txt` in `log` (the exception or fatal signal naming the app) and `steps` up to the
+   action before it. Never test data or a navigation slip, even when the frame shows the launcher.
 4. Go beyond the candidates through the checklist sections and the UX rubric. Compare with the spec rules and
    with the examples. Check consistency against sibling packs (header vs tab bar icon, the same control in two
    states, light vs dark). Then look once more as this app's designer: every change you would make (spacing,

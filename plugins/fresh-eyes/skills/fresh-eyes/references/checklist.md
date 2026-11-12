@@ -4,8 +4,9 @@ How a picky QA engineer + product designer looks at one screen. Used by the revi
 
 ## How to look
 
-1. Look at the pictures first: `som.png` (numbered elements), then `crops/*`, then `sheet_*.png` (motion), then
-   read `candidates.json`, `hierarchy.txt`, the spec excerpt and `known.md`.
+1. Look at the pictures first: `som.png` (numbered elements, where the reviewer's image budget asks for it),
+   then `crops/*`, then `sheet_*.png` (motion), then read `candidates.json`, `hierarchy.txt`, the spec slice and
+   `known.md`.
 2. Every candidate from the scripts gets an explicit yes/no with a reason. Scripts over-report on purpose.
 3. Then look beyond the candidates, section by section below. Most real bugs are not in `candidates.json`.
 4. Point at elements by Set-of-Mark number and crop path, never by coordinates you estimated.
@@ -136,8 +137,8 @@ An IMP must name the concrete change ("show the price note once above the list")
 
 Propose freely. After the defects, go through a-j once more as this app's product designer and write every
 change you would make, small ones too: a word, an icon, an order, a default, a gap, a size. An IMP is a
-proposal: the owner accepts or declines it, and a declined one goes to `known.md` and is not raised again, so a
-proposal left out costs more than one written.
+proposal: the owner takes it into the backlog or declines it, and a declined one goes to `known.md` and is not
+raised again, so a proposal left out costs more than one written.
 
 ## Severity
 
@@ -151,5 +152,6 @@ proposal left out costs more than one written.
 
 - The OS status bar, OS keyboard internals, emulator chrome, developer overlays (LogBox, perf monitors).
 - Anything listed in `known.md` (intentional behaviour confirmed by the user).
-- Content that is clearly test data, unless the screen shows it wrongly.
+- Content that is clearly test data, unless the screen shows it wrongly. A crash (`app_running: false` in the
+  pack's `meta.json`) is never test data: it is a BUG high.
 - Partially visible items at the edge of a scrollable list when a swipe brings them fully into view.

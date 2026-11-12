@@ -42,9 +42,12 @@ Then, in your app's repo:
 4. **Reviewer** compares the evidence with your project's own spec, built from your design files, decisions
    and commits, and writes findings.
 5. **Verifier** tries to disprove each finding and asks for fresh frames or a repeat when the evidence is thin.
-   A finding the run has to ask you about is never counted as confirmed.
+   A finding the run has to ask you about is never counted as confirmed. A bug your backlog already has open
+   comes back as "still reproduces, BUG-N" with a recheck line, not as a duplicate. When a screen's code changed
+   after the spec's `Updated` date, findings that rest on its rules become questions to you.
 6. **Verdict** comes from code, not from a model: BLOCK, ISSUES, INCOMPLETE or CLEAN. A run never says CLEAN
-   while any planned cell is unchecked.
+   while any planned cell is unchecked. What your setup can never check (a platform without a device, a state
+   not automated there, a missing hook) is listed as a permanent gap and does not block the verdict.
 7. You confirm which findings are real. Those go to the backlog; the rest go to `.fresh-eyes/known.md` and are
    not raised again.
 
