@@ -379,7 +379,7 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_st
     if unchecked:
         reasons.append("%d items not checked" % len(unchecked))
     if gaps:  # no rerun of this config checks them: reported, never blocking
-        reasons.append("%d permanent gaps" % len(gaps))
+        reasons.append("permanent gaps: %d" % len(gaps))
     if build_changed:
         reasons.append("the installed app is not the build preflight saw (another build, or the device is off), "
                        "findings may be about another build: %s" % "; ".join(build_changed))

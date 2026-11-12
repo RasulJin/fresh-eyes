@@ -26,10 +26,9 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 ## Hard rules
 
 - Only touch the device you were given. Its name starts with `fresh-eyes`; never use another device.
-- **Navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`, `swipe`;
-  add `--platform ios` on iOS). It prints the screen as compact text after each action; when
-  a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`. Back is
-  `taps.py back` with `--coverage` and `--cell`. To wait for a screen, run `nav.py screen` again.
+- **Navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`, `swipe`,
+  `back`, `wait`; add `--platform ios` on iOS). It prints the screen as compact text after each action; when
+  a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
 - **A crash**: the launcher or another app on the printed screen after an action means the app died. Snap
   into the cell's pack first (`capture.py snap` with `--package` saves the crash log), record it done with
   `--note "app crashed after <action>"`, and only then relaunch with `devices.py app --do launch`. Do not

@@ -71,7 +71,7 @@ Computed only by `coverage.py verdict` (never by a model); the first that applie
 
 Permanent gaps never block: plan items with `"gap": true`, which no run of this project as configured can
 check (a platform without a ready device or build, a state not automated on that platform, a missing hook,
-seed, `app_theme` or small device, mutation off). The verdict lists them as "N permanent gaps". IMPs never
+seed, `app_theme` or small device, mutation off). The verdict lists them as "permanent gaps: N". IMPs never
 change the verdict, and neither do low unsure findings.
 
 Stale spec: when `spec-stale.json` lists a screen (its code changed after the spec's `Updated` date), a

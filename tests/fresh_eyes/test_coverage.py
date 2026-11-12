@@ -594,7 +594,7 @@ class VerdictTest(unittest.TestCase):
         self.cov["unchecked"] = [{"what": "ios: all screens", "why": "no ready device or build", "gap": True}]
         v = verdict(self.cov, [], "en", packs)
         self.assertEqual(v["code"], "CLEAN")
-        self.assertIn("1 permanent gaps", v["reasons"])
+        self.assertIn("permanent gaps: 1", v["reasons"])
 
     def test_confirmed_medium_is_issues_even_when_incomplete(self):
         packs = done_all(self.cov, self.root)
