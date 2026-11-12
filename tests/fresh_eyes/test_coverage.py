@@ -230,6 +230,23 @@ class StatusTest(unittest.TestCase):
             set_status(cov, cell["id"], "done", evidence=[make_pack(root, cell)])
             self.assertEqual(cell["status"], "done")
 
+    def test_a_crash_pack_is_done_with_a_note_and_no_sub_snaps(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["probes"] = ["rapid-tap", "keyboard-open", "drag-interrupt"]
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        for cell in [c for c in cov["cells"] if c["platform"] == "android" and c["probe"] != "none"]:
+            pack = make_pack(root, cell, sub=False, app_running=False)
+            with self.assertRaisesRegex(FEError, "cannot be done"):  # a crash still needs the note saying so
+                set_status(cov, cell["id"], "done", evidence=[pack])
+            set_status(cov, cell["id"], "done", evidence=[pack], note="the app died after the tap")
+            self.assertEqual(cell["status"], "done")
+        alive = next(c for c in cov["cells"] if c["probe"] == "rapid-tap" and c["platform"] == "android")
+        alive["status"] = "todo"
+        with self.assertRaisesRegex(FEError, "<pack>/afterback"):  # a note alone does not excuse a running app
+            set_status(cov, alive["id"], "done", evidence=[make_pack(root, alive, sub=False)], note="looked fine")
+
     def test_swipe_inside_pack_must_show_what_the_swipe_moved(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0]["probes"] = ["swipe-inside"]

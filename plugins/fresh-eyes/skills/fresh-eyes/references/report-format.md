@@ -75,8 +75,11 @@ seed, `app_theme` or small device, mutation off). The verdict lists them as "per
 change the verdict, and neither do low unsure findings.
 
 Stale spec: when `spec-stale.json` lists a screen (its code changed after the spec's `Updated` date), a
-confirmed finding with `rule: spec:…` on it turns `unsure`, and the verdict's `stale` holds one question per
-such screen ("section <id> dated <Updated>, code changed since: are its rules current?").
+confirmed finding whose rule cites that screen's section (`spec:<id>…`) turns `unsure`. The verdict's `stale`
+lists those findings (file#id, like `asked`); the findings files still say `confirmed`, so the report and the
+backlog go by the verdict: they sit under "look with your own eyes", never under bugs and never in the backlog.
+Write one question per stale screen from the verdict's reason line (section ids and the `Updated` date):
+"section <id> dated <Updated>, code changed since: are its rules current?".
 
 ## `report.md` (project language)
 
@@ -114,7 +117,8 @@ Evidence: <crop path> · found by <found_by> · backlog <BUG-N>
 
 ## Look with your own eyes (unsure)
 - <title> — <why unsure> — <crop path>
-- <question from the verdict's `stale`>
+- <a finding the verdict lists in `stale`> — stale spec — <crop path>
+- <one question per stale screen, from the verdict's reason line>
 
 ## Questions
 - <spec conflicts and "bug or intended?" questions>

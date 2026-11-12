@@ -237,6 +237,42 @@ def _scenario_problems(pack, cell):
     return problems
 
 
+def _probe_problems(c, packs, note):
+    """What the cell's probe still owes besides a valid pack (sub-snaps, scenario steps, pages, drags, marker)."""
+    problems = ["a %s cell needs the snap <pack>/%s (see probes.md)" % (c["probe"], need)
+                for need in REQUIRED_SUBPACKS.get(c["probe"], ())
+                if packs and not any(os.path.isfile(os.path.join(e, need, "meta.json")) for e in packs)]
+    back = os.path.join(packs[0], "return", "meta.json") if packs else ""
+    if c["probe"] == "keyboard-open" and os.path.isfile(back) and read_json(back).get("keyboard_up"):
+        problems.append("the keyboard is still up in <pack>/return, so the state after it closes was never seen: "
+                        "close it with one taps.py back (with the keyboard up Back only hides it), wait, snap again")
+    swiped = read_json(os.path.join(packs[0], "meta.json")) \
+        if c["probe"] == "swipe-inside" and packs and os.path.isfile(os.path.join(packs[0], "meta.json")) else None
+    if swiped is not None and "before" not in swiped:
+        problems.append("a swipe-inside pack is snapped after the swipe with capture.py snap --before <the pack "
+                        "snapped before it>, so the scripts can tell what moved")
+    elif swiped is not None and swiped.get("moved") == 0 and not note:
+        problems.append("the swipe moved nothing on screen: swipe inside the list or grid itself, not on a "
+                        "header, and longer; if it really does not scroll, pass --note saying so")
+    # A page laid out while a shorter one was open can stay cut to its height (a grid with blank under it).
+    for k, page in enumerate(c.get("pages", []), 1):
+        meta = os.path.join(packs[0], "page-%d" % k, "meta.json") if packs else ""
+        if packs and not (os.path.isfile(meta) and "before" in read_json(meta)):
+            problems.append("«%s» opened by its tab and left by this screen's tab, the content swiped to its "
+                            "end, snapped into <pack>/page-%d with --before (config pages)" % (page, k))
+    if c["probe"] == "scenario" and packs:
+        problems += ["a scenario cell needs: %s (see probes.md)" % p for p in _scenario_problems(packs[0], c)]
+    problems += ["a drag of «%s» with the overlay open, snapped into <pack>/drag-%d (config drag)" % (d, k)
+                 for k, d in enumerate(c.get("drag", []), 1)
+                 if packs and not os.path.isfile(os.path.join(packs[0], "drag-%d" % k, "meta.json"))]
+    if c.get("marker") and c["probe"] in ON_SCREEN_PROBES and not note \
+            and all(_shows_marker(e, c["marker"]) is False for e in packs):
+        problems.append("the pack shows none of %s's markers %s, so it was snapped on another screen: snap it "
+                        "there; if it is that screen and it is broken (blank, an error), pass --note saying "
+                        "what it shows" % (c["screen"], c["marker"]))
+    return problems
+
+
 def set_status(cov, cell_id, status, evidence=None, note=""):
     if status not in STATUSES:
         raise FEError("status must be one of %s" % ", ".join(STATUSES))
@@ -248,37 +284,10 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         problems = [pr for pr in (_evidence_problem(e) for e in packs) if pr] or \
             ([] if packs else ["no evidence pack given"])
         problems += ["%s is not under <run>/<platform>/<screen>/" % e for e in packs if pack_key(e) is None]
-        problems += ["a %s cell needs the snap <pack>/%s (see probes.md)" % (c["probe"], need)
-                     for need in REQUIRED_SUBPACKS.get(c["probe"], ())
-                     if packs and not any(os.path.isfile(os.path.join(e, need, "meta.json")) for e in packs)]
-        back = os.path.join(packs[0], "return", "meta.json") if packs else ""
-        if c["probe"] == "keyboard-open" and os.path.isfile(back) and read_json(back).get("keyboard_up"):
-            problems.append("the keyboard is still up in <pack>/return, so the state after it closes was never seen: "
-                            "close it with one taps.py back (with the keyboard up Back only hides it), wait, snap again")
-        swiped = read_json(os.path.join(packs[0], "meta.json")) \
-            if c["probe"] == "swipe-inside" and packs and os.path.isfile(os.path.join(packs[0], "meta.json")) else None
-        if swiped is not None and "before" not in swiped:
-            problems.append("a swipe-inside pack is snapped after the swipe with capture.py snap --before <the pack "
-                            "snapped before it>, so the scripts can tell what moved")
-        elif swiped is not None and swiped.get("moved") == 0 and not note:
-            problems.append("the swipe moved nothing on screen: swipe inside the list or grid itself, not on a "
-                            "header, and longer; if it really does not scroll, pass --note saying so")
-        # A page laid out while a shorter one was open can stay cut to its height (a grid with blank under it).
-        for k, page in enumerate(c.get("pages", []), 1):
-            meta = os.path.join(packs[0], "page-%d" % k, "meta.json") if packs else ""
-            if packs and not (os.path.isfile(meta) and "before" in read_json(meta)):
-                problems.append("«%s» opened by its tab and left by this screen's tab, the content swiped to its "
-                                "end, snapped into <pack>/page-%d with --before (config pages)" % (page, k))
-        if c["probe"] == "scenario" and packs:
-            problems += ["a scenario cell needs: %s (see probes.md)" % p for p in _scenario_problems(packs[0], c)]
-        problems += ["a drag of «%s» with the overlay open, snapped into <pack>/drag-%d (config drag)" % (d, k)
-                     for k, d in enumerate(c.get("drag", []), 1)
-                     if packs and not os.path.isfile(os.path.join(packs[0], "drag-%d" % k, "meta.json"))]
-        if c.get("marker") and c["probe"] in ON_SCREEN_PROBES and not note \
-                and all(_shows_marker(e, c["marker"]) is False for e in packs):
-            problems.append("the pack shows none of %s's markers %s, so it was snapped on another screen: snap it "
-                            "there; if it is that screen and it is broken (blank, an error), pass --note saying "
-                            "what it shows" % (c["screen"], c["marker"]))
+        # a dead app cannot do the probe's later steps: its pack and the note are the cell (reviewed as a crash)
+        meta0 = os.path.join(packs[0], "meta.json") if packs else ""
+        crashed = bool(note) and os.path.isfile(meta0) and read_json(meta0).get("app_running") is False
+        problems += [] if crashed else _probe_problems(c, packs, note)
         if problems:
             raise FEError("cell %s cannot be done: %s. Retry, or mark it failed/blocked with --note"
                           % (cell_id, "; ".join(problems)))

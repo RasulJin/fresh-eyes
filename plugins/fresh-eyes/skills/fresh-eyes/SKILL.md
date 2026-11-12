@@ -200,8 +200,9 @@ the verdict), confirmed bugs, each with its
 numbered steps, expected and actual copied from the finding (a finding the verdict lists in `merged` goes under
 the one its `same_as` points to, or the confirmed one with the same `log` line; any other finding is its own item);
 a confirmed bug with `backlog_id` goes under "still reproduces (BUG-N)", not among the new ones; improvements,
-"look with your own eyes" (unsure, the findings the verdict lists in `asked` next to their question, and one
-question per screen in the verdict's `stale`), questions. Link evidence crops by path. Keep it scannable.
+"look with your own eyes" (unsure, the findings the verdict lists in `asked` next to their question, the ones
+it lists in `stale` with one question per stale screen from its reason line; neither goes under bugs or into the
+backlog), questions. Link evidence crops by path. Keep it scannable.
 
 Then stop the devices this run booted (`ensure` printed `"booted": true`), `python3 $S/devices.py stop --platform
 <p>`: an emulator holds ~2.5 GB of RAM. One that was already running stays up: it boots without saving state, so a
