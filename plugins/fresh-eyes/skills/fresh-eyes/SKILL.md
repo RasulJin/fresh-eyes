@@ -1,6 +1,6 @@
 ---
 name: fresh-eyes
-description: Tests a running iOS/Android app like a picky human QA engineer and designer — visual, motion, interaction and UX bugs — and writes them to the backlog. Start a run only when the user asks for one: a quick run costs about $10–15, a full one several hours.
+description: Tests a running iOS/Android app like a picky QA engineer and designer (visual, motion, interaction, UX bugs) and writes them to the backlog. Run only when the user asks: quick ~$10–15, full: hours.
 argument-hint: "init | quick [BUG-N | screens | what changed] [twice] | full [twice] [--resume] | bench"
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
 ---
@@ -80,7 +80,8 @@ Goal: after a fix or a feature, check what it touched and what it could break. A
 words / nothing (= the current diff).
 
 1. Slim older runs first: `python3 $S/coverage.py prune --runs .fresh-eyes/runs --keep 3` (runs before the last
-   three lose full-size screenshots and videos no finding links). Then `RUN=.fresh-eyes/runs/<YYYYMMDD-HHMM>-quick`
+   three keep their reports and the images findings link; the newest full run stays whole for `--resume`).
+   Then `RUN=.fresh-eyes/runs/<YYYYMMDD-HHMM>-quick`
    (mkdir). If `.fresh-eyes/config.json` is missing → run `init`.
 2. Make the build current: for each platform, if Metro is not running with the config's `metro_env`, start
    `builds.quick.<p>.start` in the background with that env; if the app is missing, run `builds.quick.<p>.build`
@@ -89,7 +90,8 @@ words / nothing (= the current diff).
    (`built` when step 2 built the app here; the commit the user names for an installed build made elsewhere;
    nothing when Metro serves it). Reviewers read code only from its `source.root`. If iOS reports
    "no Maestro iOS driver", call the Maestro MCP `inspect_screen` on that simulator once and run preflight
-   again. If no platform is ready, stop: tell the user what is missing; the verdict is INCOMPLETE.
+   again. If no platform is ready, or the computer's disk is nearly full (`disk_free_gb` under 15), stop: tell
+   the user what is missing or how much is free; the verdict is INCOMPLETE.
 4. Screens:
    - `BUG-N`: read the entry in the backlog (heading + its fields); its replay becomes the coverage cell
      `<platform>/recheck-BUG-N/default/replay` (step 5, `--recheck BUG-N`), reviewed against its "Expected"

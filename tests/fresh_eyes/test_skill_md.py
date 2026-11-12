@@ -19,8 +19,9 @@ class SkillMdTest(unittest.TestCase):
     def test_frontmatter(self):
         head = text().split("---")[1]
         self.assertIn("name: fresh-eyes", head)
-        self.assertIn("disable-model-invocation: true", head)
+        self.assertNotIn("disable-model-invocation", head)  # "run fresh-eyes" in words must work (0.5.7)
         desc = re.search(r"^description: (.+)$", head, flags=re.M).group(1)
+        self.assertIn("only when the user asks", desc)  # what keeps Claude from starting a paid run itself
         self.assertLessEqual(len(desc), 200)
 
     def test_hard_rules_on_top(self):

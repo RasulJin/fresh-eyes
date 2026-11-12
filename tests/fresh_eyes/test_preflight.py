@@ -2,6 +2,7 @@ import contextlib
 import io
 import os
 import subprocess
+import types
 import unittest
 from unittest import mock
 
@@ -53,7 +54,23 @@ class PreflightTest(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
         self.bundle(metro="x " + STAGING + " y")
+        self.disk(free_gb=100)
         return calls
+
+    def disk(self, free_gb):
+        p = mock.patch.object(preflight.shutil, "disk_usage", lambda path: types.SimpleNamespace(free=free_gb * 2 ** 30))
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_a_nearly_full_disk_stops_the_run(self):
+        self.fake_devices()
+        self.assertTrue(preflight.check(config(), "quick")["ok"])
+        self.disk(free_gb=8.6)
+        res = preflight.check(config(), "quick")
+        self.assertFalse(res["ok"])
+        self.assertTrue(res["platforms"]["android"]["ok"])
+        self.assertEqual(res["disk_free_gb"], 8.6)
+        self.assertTrue(any("8.6 GB free" in u for u in res["unchecked"]))
 
     def bundle(self, installed=None, metro=None):
         """What the app on the device runs: a release bundle inside the app, or what each running Metro serves

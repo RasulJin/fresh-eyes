@@ -3,7 +3,7 @@
 
 Writes preflight.json: {ok, platforms:{p:{ok, device, name, owned, small_device, app, app_installed, build,
 soft_keyboard, animations, problems}}, env:{name, verified, api_host}, mutating_allowed, tools:{...},
-source:{ref, root}|null, unchecked:[...]}
+source:{ref, root}|null, disk_free_gb, unchecked:[...]}
 build: sha256 of the installed app; `coverage.py verdict` compares it again at the end of the run.
 source: where the code the tested build was made from lives (`--source built` after building it from this checkout,
 `--source <git ref>` for an installed build made elsewhere: exported to .fresh-eyes/cache/src-<sha>; Metro builds
@@ -25,6 +25,8 @@ from urllib.parse import urlparse
 
 import devices
 from fe_common import FEError, read_json, write_json
+
+MIN_FREE_GB = 15  # at 8.6 GB free the emulator took seconds per call and a full run hung after 5 cells
 
 
 def _maestro_path():
@@ -315,7 +317,12 @@ def check(config, mode, fix=False, project=".", only=None, source=None):
     tools = {"ffmpeg": bool(shutil.which("ffmpeg")), "ffprobe": bool(shutil.which("ffprobe")),
              "adb": os.path.exists(devices.adb_path()), "xcrun": bool(shutil.which("xcrun")),
              "maestro": _maestro_path()}
-    return {"ok": bool(ok_platforms) and tools["ffmpeg"] and tools["ffprobe"], "mode": mode, "platforms": platforms,
+    free_gb = shutil.disk_usage(project).free / 2 ** 30
+    if free_gb < MIN_FREE_GB:
+        unchecked.append("the computer's disk has %.1f GB free (less than %d): emulators stall on a full disk and "
+                         "the run hangs; free space first" % (free_gb, MIN_FREE_GB))
+    return {"ok": bool(ok_platforms) and tools["ffmpeg"] and tools["ffprobe"] and free_gb >= MIN_FREE_GB,
+            "mode": mode, "platforms": platforms, "disk_free_gb": round(free_gb, 1),
             "env": {k: env[k] for k in ("name", "verified", "api_host")},
             "mutating_allowed": bool(env["verified"] and env["name"] in ("staging", "local")),
             "tools": tools, "source": src, "unchecked": unchecked}

@@ -516,23 +516,26 @@ def _load_findings(paths, run="."):
     return findings, reviewed
 
 
-BULKY = ("screen.png", "video.mp4")  # ~60% of a run; screen_1000.png, som.png, crops and sheets stay
+BULKY = (".png", ".jpg", ".mp4")  # ~97% of a run (a full one is ~0.5 GB); the json, txt and report stay
 
 
 def prune(runs_dir, keep=3):
-    """Runs older than the newest `keep` lose their full-size screenshots and videos, unless a finding links one.
-    Folder names start with the date, so name order is age order. Returns the bytes freed."""
+    """Runs older than the newest `keep` lose their images and videos, except those a finding links as evidence
+    (by run path or, written relative to a pack, by path ending). Folder names start with the date, so name order
+    is age order. Returns the bytes freed."""
     runs = sorted(d for d in glob.glob(os.path.join(runs_dir, "*")) if os.path.isdir(d))
+    resumable = [r for r in runs if r.endswith("-full")][-1:]  # `full --resume` still needs its packs
     freed = 0
-    for run in runs[:-keep] if keep > 0 else runs:
+    for run in [r for r in (runs[:-keep] if keep > 0 else runs) if r not in resumable]:
         linked = set()
         for f in glob.glob(os.path.join(run, "*", "*", "findings*.json")):
             for fd in read_json(f).get("findings", []):
-                linked.update(os.path.normpath(os.path.join(run, e)) for e in fd.get("evidence") or [])
+                linked.update(os.path.normpath(e) for e in fd.get("evidence") or [])
         for root, _, files in os.walk(run):
             for name in files:
-                path = os.path.normpath(os.path.join(root, name))
-                if name in BULKY and path not in linked:
+                path = os.path.join(root, name)
+                rel = os.path.relpath(path, run)
+                if name.endswith(BULKY) and not any(rel == e or rel.endswith(os.sep + e) for e in linked):
                     freed += os.path.getsize(path)
                     os.remove(path)
     return freed

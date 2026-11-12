@@ -600,26 +600,32 @@ class VerdictTest(unittest.TestCase):
 
 
 class PruneTest(unittest.TestCase):
-    def test_old_runs_lose_bulky_files_unless_a_finding_links_them(self):
+    def test_old_runs_keep_only_text_and_the_evidence_findings_link(self):
         with tmpdir() as d:
             def run(name, linked=False):
                 pack = os.path.join(d, name, "android", "feed", "default-none")
-                os.makedirs(pack)
-                for f in ("screen.png", "video.mp4", "screen_1000.png"):
+                os.makedirs(os.path.join(pack, "crops"))
+                for f in ("screen.png", "video.mp4", "screen_1000.png", "som.png", "meta.json", "crops/gap-1.png"):
                     with open(os.path.join(pack, f), "wb") as fh:
                         fh.write(b"x" * 10)
-                if linked:
+                if linked:  # one link by run path, one written relative to the pack
                     write_json(os.path.join(d, name, "android", "feed", "findings.json"),
-                               {"findings": [{"evidence": ["android/feed/default-none/screen.png"]}]})
+                               {"findings": [{"evidence": ["android/feed/default-none/screen_1000.png"]},
+                                             {"evidence": ["crops/gap-1.png"]}]})
                 return pack
-            packs = [run("20261020-1000-quick", linked=True), run("20261021-1000-quick"),
-                     run("20261022-1000-quick"), run("20261023-1000-quick")]
-            self.assertEqual(prune(d, keep=2), 30)
-            left = [sorted(os.listdir(p)) for p in packs]
-        self.assertEqual(left[0], ["screen.png", "screen_1000.png"])
-        self.assertEqual(left[1], ["screen_1000.png"])
-        self.assertEqual(left[2], ["screen.png", "screen_1000.png", "video.mp4"])
-        self.assertEqual(left[3], left[2])
+            packs = [run("20261019-1000-full"), run("20261020-1000-quick", linked=True),
+                     run("20261021-1000-quick"), run("20261022-1000-full"), run("20261023-1000-quick"),
+                     run("20261024-1000-quick")]
+            self.assertEqual(prune(d, keep=2), 10 * (5 + 3 + 5))
+            left = [sorted(os.path.relpath(os.path.join(r, f), p) for r, _, fs in os.walk(p) for f in fs)
+                    for p in packs]
+        everything = ["crops/gap-1.png", "meta.json", "screen.png", "screen_1000.png", "som.png", "video.mp4"]
+        self.assertEqual(left[0], ["meta.json"])
+        self.assertEqual(left[1], ["crops/gap-1.png", "meta.json", "screen_1000.png"])
+        self.assertEqual(left[2], ["meta.json"])
+        self.assertEqual(left[3], everything)  # the newest full run: `full --resume` may continue it
+        self.assertEqual(left[4], everything)
+        self.assertEqual(left[5], everything)
 
 
 class DiffScreensTest(unittest.TestCase):
