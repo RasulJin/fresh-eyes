@@ -18,7 +18,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 
 ## Input (from the orchestrator)
 
-- One screen folder `<run>/<platform>/<screen>/` (its `findings*.json`), `.fresh-eyes/spec.md`, `known.md`, the
+- One screen folder `<run>/<platform>/<screen>/` (its `findings*.json`), the screen's spec slice
+  `<run>/spec/<screen>.md`, `known.md`, `<run>/backlog-index.md` (open backlog entries, one line each), the
   project `language`, `source_root` (the code this build was made from, or `none`); for the journey folder
   also the findings files of the screens its findings concern.
 - The prompt says `first pass` or `second pass`. On the second pass the folder's `requests.json` entries are
@@ -26,7 +27,10 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 
 ## First pass
 
-For each finding with `verdict: "pending"`:
+IMPs are proposals for the owner, not claims: no rechecks or requests for them. Leave each `pending` (final
+for an IMP), except `rejected` with a note when the spec slice or `known.md` contradicts it.
+
+For each BUG with `verdict: "pending"`:
 1. Open its evidence crop(s); open the pack's `som.png` only when the crop lacks context. Read the spec rule.
 2. Try to disprove it:
    - the "truncated" text is actually complete in the crop; the "clipped" row scrolls fully into view in a
@@ -46,6 +50,7 @@ For each finding with `verdict: "pending"`:
    An app error from the log needs no frame: when the finding's evidence is a `logcat.txt` line (that file holds
    only the app's own process and crashes that name the app), confirm it if the line is there and is an error
    (`E/`, `F/`) or a crash; a warning only when it floods (hundreds of lines). Do not request a frame for it.
+   A pack with `app_running: false` in `meta.json` is a crash: a launcher on its frame is not "another app".
 3. If the evidence decides it → set `verdict` to `confirmed` or `rejected` with a one-line `verify_note`.
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
@@ -68,11 +73,17 @@ Before you confirm a finding, read its `steps` as the person who will fix it wou
 action per item, buttons by their on-screen text, ending with what to look at. If they name cells, packs, step
 numbers, scripts or coordinates, rewrite them from `found_by` and the frames.
 
+Backlog: read `backlog-index.md` once. A BUG you confirm that an open entry already describes (the same defect
+on the same screen, not a look-alike elsewhere) gets `"backlog_id": "BUG-N"` and `verify_note` "already open:
+BUG-N". It stays `confirmed`: the defect is real, the report lists it as still reproducing.
+
 Write each updated findings file back in place.
 
 ## Second pass
 
-Use the `-recheck` evidence. A finding whose request has neither `done` nor `failed` stays `pending` (the
+The orchestrator sends `second pass` to you, the first-pass verifier, so you keep what you already read; start
+from the folder's `requests.json`. A fresh verifier gets it only when the first one is gone: then read your
+inputs first. Use the `-recheck` evidence. A finding whose request has neither `done` nor `failed` stays `pending` (the
 evidence never came; the verdict then stays INCOMPLETE). Rule on every other pending finding: `confirmed` (reproduced, evidence
 attached), `rejected` (disproved, say how; a repeat that does not reproduce is not disproof, see first pass), or `unsure` (evidence still ambiguous: say what a human should look
 at). Adjust `severity` if the evidence shows a different impact, and say so in `verify_note`.

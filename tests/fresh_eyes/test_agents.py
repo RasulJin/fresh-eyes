@@ -43,6 +43,18 @@ class AgentsTest(unittest.TestCase):
         self.assertEqual(frontmatter("reviewer")[0]["model"], "opus")
         self.assertEqual(frontmatter("verifier")[0]["model"], "opus")
 
+    def test_backlog_dedup_and_image_budget(self):
+        self.assertIn("backlog_id", frontmatter("verifier")[1])
+        reviewer = " ".join(frontmatter("reviewer")[1].split())
+        self.assertNotIn("every pack is mandatory", reviewer)  # som.png only for the first pack of a state (0.5.9)
+        self.assertIn("app_running: false", reviewer)
+
+    def test_reviewer_and_verifier_read_a_spec_slice(self):
+        for name in ("reviewer", "verifier"):
+            body = frontmatter(name)[1]
+            self.assertNotIn(".fresh-eyes/spec.md", body, name)
+            self.assertIn("spec/<screen>.md", body, name)
+
     def test_bodies_reference_existing_files(self):
         root = os.path.join(PLUGIN, "skills", "fresh-eyes")
         for name in ("navigator", "reviewer", "verifier"):

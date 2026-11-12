@@ -46,6 +46,12 @@ class SkillMdTest(unittest.TestCase):
             self.assertIn(agent, body)
         self.assertIn("never pass `model`", body)
 
+    def test_run_steps_0_5_9(self):
+        # spec slices, backlog index for verifiers, second pass on the same verifier, crash log on every snap
+        body = text()
+        for word in ("spec.py slice", "spec.py stale", "backlog.py index", "SendMessage", "--package"):
+            self.assertIn(word, body, word)
+
 
 if __name__ == "__main__":
     unittest.main()

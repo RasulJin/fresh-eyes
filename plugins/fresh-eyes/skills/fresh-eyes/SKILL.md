@@ -92,6 +92,9 @@ words / nothing (= the current diff).
    "no Maestro iOS driver", call the Maestro MCP `inspect_screen` on that simulator once and run preflight
    again. If no platform is ready, or the computer's disk is nearly full (`disk_free_gb` under 15), stop: tell
    the user what is missing or how much is free; the verdict is INCOMPLETE.
+   Then `python3 $S/spec.py stale --spec .fresh-eyes/spec.md --repo . --config .fresh-eyes/config.json --out
+   $RUN/spec-stale.json`: screens whose code changed after the spec's `Updated` date (the verdict turns their
+   `spec:` findings into questions).
 4. Screens:
    - `BUG-N`: read the entry in the backlog (heading + its fields); its replay becomes the coverage cell
      `<platform>/recheck-BUG-N/default/replay` (step 5, `--recheck BUG-N`), reviewed against its "Expected"
@@ -113,21 +116,31 @@ words / nothing (= the current diff).
    `inspect_screen` on that simulator once, then call the navigator again with what it had left.
 7. Navigation: one `fresh-eyes:navigator` per platform (they may run in parallel), ≤15 cells per call, until
    `coverage.py next` is empty. Prompt: run folder, config path, platform, device id and name from preflight,
-   the cell ids, and `app language: <app.locale>` when config sets it. A navigator that finds the app signed out signs in with `accounts` itself; cells blocked with
+   the cell ids, `package: <app.android_id>` (it goes to every `capture.py snap --package`, which saves the
+   crash log when the app died), and `app language: <app.locale>` when config sets it. A navigator that finds
+   the app signed out signs in with `accounts` itself; cells blocked with
    "signed out: <variable> not set" mean the user has to export that variable before the next run.
-8. Review: one `fresh-eyes:reviewer` per screen × platform with done cells (up to 4 in parallel). Prompt: the
-   pack folders, `.fresh-eyes/spec.md` + the screen id and its `neighbors` ids (their rules often apply),
+8. Review: first, per screen with done cells, `python3 $S/spec.py slice --spec .fresh-eyes/spec.md --screens
+   <id>,<its neighbors> --stale $RUN/spec-stale.json --out $RUN/spec/<id>.md` (the global rules and those
+   sections; neighbors' rules often apply); journeys: `--screens` = the screens of the journeys walked, `--out
+   $RUN/spec/journey.md`. Then one `fresh-eyes:reviewer` per screen × platform with done cells (up to 4 in
+   parallel). Prompt: the pack folders, the screen id and its spec slice path (never `.fresh-eyes/spec.md`),
    `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the `references` and `language` from config, `source_root`
    (`source.root` from preflight.json, or `none`). Journey cells get one reviewer per platform over
    `<run>/<platform>/journey/`;
    its findings carry the real screen they concern. More than ~8 packs for one screen: split them between
    reviewers, each writing its own `findings-<k>.json` in the screen folder.
-9. Verify: one `fresh-eyes:verifier` per screen folder that has pending findings (up to 4 in parallel); the
-   prompt is `first pass`, that folder, `.fresh-eyes/spec.md`, `.fresh-eyes/known.md`, `language`,
-   `source_root`. The journey
+9. Verify: once per run, `python3 $S/backlog.py index --file <backlog.path> --out $RUN/backlog-index.md` (open
+   backlog entries, one line each; only verifiers get it, reviewers never see the backlog; no `backlog` in
+   config: skip it). Then one
+   `fresh-eyes:verifier` per screen folder that has pending findings (up to 4 in parallel); the prompt is
+   `first pass`, that folder, its spec slice, `.fresh-eyes/known.md`, `$RUN/backlog-index.md`, `language`,
+   `source_root`. Keep each verifier's agent id. The journey
    folder's verifier also gets the findings files of the screens its findings concern (to mark duplicates). Folders whose verifier
    answered `needs: requests`: one navigator per platform in requests mode with their `requests.json` paths;
-   when every entry has `done` or `failed`, a fresh verifier per such folder with `second pass`.
+   when every entry has `done` or `failed`, send `second pass` with SendMessage to that folder's first-pass
+   verifier (it keeps what it already read). A fresh verifier with `second pass` and the same inputs only when
+   that agent is gone.
 10. `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`
     and `python3 $S/coverage.py map --cov $RUN/coverage.json --language <config>`. If the verdict names done
     cells no reviewer looked at, send those packs to a reviewer (`findings-<k>.json`), verify, and rerun it.
@@ -180,12 +193,15 @@ the candidates, a model judges them; keywords never decide.
 ## Report
 
 `report.md` in the project language: the verdict line and reasons (verbatim from `coverage.py verdict`),
-build/backend/devices, the coverage map, "not checked and why" (preflight `unchecked`, plan `unchecked`,
-blocked cells with notes, unmapped files, platform gaps from `$R/platforms.md`), confirmed bugs, each with its
+build/backend/devices, the coverage map, "not checked in this run" (preflight `unchecked`, plan `unchecked`
+items without `gap`, blocked cells with notes, unmapped files) and apart from it "permanent gaps" (plan items
+with `"gap": true` and platform gaps from `$R/platforms.md`: this setup can never check them, they do not block
+the verdict), confirmed bugs, each with its
 numbered steps, expected and actual copied from the finding (a finding the verdict lists in `merged` goes under
-the one its `same_as` points to, or the confirmed one with the same `log` line; any other finding is its own item), improvements,
-"look with your own eyes" (unsure, and the findings the verdict lists in `asked`, next to their question),
-questions. Link evidence crops by path. Keep it scannable.
+the one its `same_as` points to, or the confirmed one with the same `log` line; any other finding is its own item);
+a confirmed bug with `backlog_id` goes under "still reproduces (BUG-N)", not among the new ones; improvements,
+"look with your own eyes" (unsure, the findings the verdict lists in `asked` next to their question, and one
+question per screen in the verdict's `stale`), questions. Link evidence crops by path. Keep it scannable.
 
 Then stop the devices this run booted (`ensure` printed `"booted": true`), `python3 $S/devices.py stop --platform
 <p>`: an emulator holds ~2.5 GB of RAM. One that was already running stays up: it boots without saving state, so a
@@ -193,16 +209,19 @@ stop throws away a build or a sign-in someone put on it.
 
 ## After the report
 
-1. Show the user a numbered list: confirmed bugs and improvements (title, screen, platform, severity, crop
-   path). Ask which are real and which are intended. Default if they just say ok: all confirmed are real.
-2. Real ones → backlog: write the finding to `$RUN/backlog-<k>.json`, then `python3 $S/backlog.py append
-   --file <backlog.path> --finding $RUN/backlog-<k>.json --template <template> --attach $RUN/<its main crop>
-   --images-dir <backlog.images_dir>` (assigns the id, copies the crop next to the backlog — run folders are
-   git-ignored — and links it). For `quick BUG-N`: `python3 $S/backlog.py set-status --file <backlog.path>
-   --id BUG-N --status verified|open --note "<date>, <device>, <build>: <result>, <evidence>"`.
-3. Intended ones → append to `.fresh-eyes/known.md`; record "rejected by user" counts in `report.md`
-   (this is the false-positive measure).
-4. For each real BUG write a regression flow `<maestro_dir>/fresh-eyes-<BUG-id>.yaml` (tag `fresh-eyes`): reach
+1. Show the user a numbered list: confirmed bugs (new and "still reproduces") and improvements (title, screen,
+   platform, severity, crop path). Ask which bugs are real or intended and which improvements to take. Default
+   if they just say ok: all confirmed bugs are real and every improvement goes in as a proposal.
+2. New real bugs and taken improvements → backlog: write the finding to `$RUN/backlog-<k>.json`, then `python3
+   $S/backlog.py append --file <backlog.path> --finding $RUN/backlog-<k>.json --template <template> --attach
+   $RUN/<its main crop> --images-dir <backlog.images_dir>` (assigns the BUG or IMP id, copies the crop next to
+   the backlog, since run folders are git-ignored, and links it). A real bug with `backlog_id` gets no new entry:
+   `python3 $S/backlog.py set-status --file <backlog.path> --id <backlog_id> --status open --note "<date>,
+   <device>, <build>: still reproduces, <evidence>"`. For `quick BUG-N`: the same `set-status` with `--status
+   verified|open` and `<result>` in the note.
+3. Intended bugs and declined improvements → append to `.fresh-eyes/known.md` (never raised again); record the
+   intended bugs as "rejected by user" counts in `report.md` (this is the false-positive measure).
+4. For each new real BUG write a regression flow `<maestro_dir>/fresh-eyes-<BUG-id>.yaml` (tag `fresh-eyes`): reach
    the state, run the probe, assert the expected state (`assertVisible` / `assertNotVisible` /
    `extendedWaitUntil`). Visual-only bugs get a comment that `quick` re-checks them.
 5. Propose a spec rule for bugs that revealed missing intent; write it only after the user agrees.
