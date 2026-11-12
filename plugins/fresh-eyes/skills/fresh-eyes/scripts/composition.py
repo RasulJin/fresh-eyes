@@ -9,8 +9,8 @@ import argparse
 import json
 from collections import Counter
 
-from fe_common import FFMPEG, cli, image_size, read_json, run
-from geometry import _ancestors
+from fe_common import cli, image_size, read_gray, read_json
+from geometry import _ancestors, _area, _intersect
 
 EDGE_TOL = 16     # gray step that counts as an edge
 EMPTY_EDGES = 6   # a blank row still crosses a card's two borders and their anti-aliasing
@@ -30,9 +30,7 @@ SCROLLS = ("ScrollView", "RecyclerView", "ListView", "Table", "CollectionView")
 def gray_dp(src, px_per_dp):
     w, h = image_size(src)
     gw, gh = max(1, round(w / px_per_dp)), max(1, round(h / px_per_dp))
-    data = run(FFMPEG + ["-i", src, "-vf", "scale=%d:%d:flags=area,format=gray" % (gw, gh), "-f", "rawvideo",
-                         "-frames:v", "1", "-"]).stdout
-    return gw, gh, data
+    return gw, gh, read_gray(src, gw, gh, "area")
 
 
 def _edges(data, gw, y):
@@ -117,6 +115,11 @@ def _inside(a, b):
     return a[0] >= b[0] and a[1] >= b[1] and a[2] <= b[2] and a[3] <= b[3]
 
 
+def _wh(box):
+    """Corners [x1, y1, x2, y2] to geometry's [x, y, w, h]."""
+    return [box[0], box[1], box[2] - box[0], box[3] - box[1]]
+
+
 def crowded(gray, nodes, px_per_dp):
     """Control pairs whose drawn shapes sit closer than CROWD_DP. Bounds alone mislead: padding for the hit
     area makes bounds touch while the pills stand apart, so the gap is measured between the drawn shapes."""
@@ -130,8 +133,7 @@ def crowded(gray, nodes, px_per_dp):
 
     def layered(a):  # a control stacked over another (a hidden page, a button under chips): its pixels are not its own
         return any(not _inside(a, b) and not _inside(b, a) and
-                   max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[1], b[1]))
-                   > 0.3 * min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1])) for _, b in boxes)
+                   _area(_intersect(_wh(a), _wh(b))) > 0.3 * min(_area(_wh(a)), _area(_wh(b))) for _, b in boxes)
     boxes = [(n, b) for n, b in boxes if not layered(b)]
     out = []
     for i, (na, a) in enumerate(boxes):

@@ -1,19 +1,13 @@
-#!/usr/bin/env python3
-"""Normalize a view hierarchy (uiautomator XML, Maestro MCP compact JSON, Maestro CLI JSON, Maestro iOS driver JSON)
-into flat nodes. Bounds are multiplied by `scale` (iOS sources are in points, screenshots in pixels).
+"""Normalize a view hierarchy (uiautomator XML, Maestro iOS driver JSON) into flat nodes, and compress them to
+text. Bounds are multiplied by `scale` (iOS sources are in points, screenshots in pixels).
 
 Node: {id, parent, depth, cls, text, label, rid, bounds:[x,y,w,h], clickable, focused, enabled}
-CLI:
-  hierarchy.py normalize --source uiautomator|maestro|maestro-cli|xctest --in FILE --out nodes.json [--scale S]
-  hierarchy.py compress --in nodes.json [--max-chars N]
 """
-import argparse
 import json
 import re
-import sys
 import xml.etree.ElementTree as ET
 
-from fe_common import FEError, cli, read_json, write_json
+from fe_common import FEError
 
 _BOUNDS = re.compile(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
 _PERCENT = re.compile(r"^\d+\s?%$")
@@ -78,50 +72,6 @@ def _from_uiautomator(raw, scale):
     return b.nodes
 
 
-def _from_maestro_compact(raw, scale):
-    data = json.loads(raw)
-    if not isinstance(data, dict) or "elements" not in data:
-        raise HierarchyError("maestro JSON has no 'elements'")
-    defaults = (data.get("ui_schema") or {}).get("defaults") or {}
-    b = _Builder(scale)
-
-    def flag(el, key, fallback):
-        return _truthy(el.get(key), _truthy(defaults.get(key), fallback))
-
-    def walk(items, parent, depth):
-        for el in items or []:
-            bounds = _bounds(el.get("b"))
-            pid = parent
-            if bounds is not None:
-                pid = b.add(parent, depth, bounds, el.get("cls"), el.get("txt"), el.get("a11y"), el.get("rid"),
-                            flag(el, "clickable", False), flag(el, "focused", False), flag(el, "enabled", True))
-            walk(el.get("c"), pid, depth + 1)
-
-    walk(data["elements"], None, 0)
-    return b.nodes
-
-
-def _from_maestro_cli(raw, scale):
-    data = json.loads(raw)
-    if not isinstance(data, dict) or "children" not in data:
-        raise HierarchyError("maestro CLI JSON has no 'children'")
-    b = _Builder(scale)
-
-    def walk(el, parent, depth):
-        a = el.get("attributes") or {}
-        bounds = _bounds(a.get("bounds"))
-        pid = parent
-        if bounds is not None:
-            pid = b.add(parent, depth, bounds, a.get("class"), a.get("text"), a.get("accessibilityText"),
-                        a.get("resource-id"), _truthy(a.get("clickable")), _truthy(a.get("focused")),
-                        _truthy(a.get("enabled"), True))
-        for child in el.get("children") or []:
-            walk(child, pid, depth + 1)
-
-    walk(data, None, 0)
-    return b.nodes
-
-
 # XCUIElement.ElementType raw values 0..82, in order.
 XCUI_TYPES = ("Any Other Application Group Window Sheet Drawer Alert Dialog Button RadioButton RadioGroup CheckBox "
               "DisclosureTriangle PopUpButton ComboBox MenuButton ToolbarButton Popover Keyboard Key NavigationBar "
@@ -178,8 +128,7 @@ def _from_xctest(raw, scale):
     return b.nodes
 
 
-_PARSERS = {"uiautomator": _from_uiautomator, "maestro": _from_maestro_compact, "maestro-cli": _from_maestro_cli,
-            "xctest": _from_xctest}
+_PARSERS = {"uiautomator": _from_uiautomator, "xctest": _from_xctest}
 
 
 def normalize(raw, source, scale=1.0):
@@ -227,28 +176,3 @@ def compress(nodes, max_chars=6000):
         size += len(line) + 1
     return "\n".join(out)
 
-
-def main():
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    n = sub.add_parser("normalize")
-    n.add_argument("--source", required=True, choices=sorted(_PARSERS))
-    n.add_argument("--in", dest="src", required=True)
-    n.add_argument("--out", required=True)
-    n.add_argument("--scale", type=float, default=1.0)
-    c = sub.add_parser("compress")
-    c.add_argument("--in", dest="src", required=True)
-    c.add_argument("--max-chars", type=int, default=6000)
-    args = ap.parse_args()
-    if args.cmd == "normalize":
-        with open(args.src, encoding="utf-8") as f:
-            nodes = normalize(f.read(), args.source, args.scale)
-        write_json(args.out, nodes)
-        print(json.dumps({"nodes": len(nodes), "out": args.out}))
-    else:
-        print(compress(read_json(args.src), args.max_chars))
-    return 0
-
-
-if __name__ == "__main__":
-    cli(main)
