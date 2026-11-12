@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
-"""Pixel tools for evidence: downscale, crop, corner radius, side-by-side, Set-of-Mark overlay, contact sheet.
+"""Pixel tools for evidence: downscale, crop, corner radius, Set-of-Mark overlay, contact sheet.
 
-CLI:
-  pixels.py downscale SRC DST [--long-side 1000]
+CLI (the rest is used from capture.py and motion.py):
   pixels.py crop SRC DST --bbox x,y,w,h [--pad 8] [--zoom 1]
-  pixels.py corner SRC --bbox x,y,w,h --corner tl|tr|bl|br
-  pixels.py side DST SRC [SRC ...] [--height 160]
-  pixels.py som SRC ITEMS.json DST          (items: candidates or nodes; prints the number→node mapping)
-  pixels.py tile DST SRC [SRC ...] [--cols 4] [--frame-h 300]
 """
 import argparse
 import json
@@ -15,7 +10,7 @@ import math
 import os
 import shutil
 
-from fe_common import FEError, FFMPEG, cli, image_size, read_json, read_rgb, run, write_png
+from fe_common import FEError, FFMPEG, cli, image_size, read_gray, read_rgb, run, write_png
 
 DIFF_TOL = 24  # max per-channel difference still counted as "background"
 
@@ -30,10 +25,7 @@ def _parent(dst):
 def changed_fraction(a, b, top=0.06, bottom=0.04, w=90, h=200):
     """Share of the app area (status and navigation bars cut off) that differs between two screenshots.
     A clock tick or a blinking cursor stays near 0; a theme or font change moves most of the screen."""
-    def gray(path):
-        return run(FFMPEG + ["-i", path, "-vf", "scale=%d:%d,format=gray" % (w, h), "-f", "rawvideo",
-                             "-frames:v", "1", "-"]).stdout
-    ga, gb = gray(a), gray(b)
+    ga, gb = read_gray(a, w, h), read_gray(b, w, h)
     rows = range(int(h * top), h - int(h * bottom))
     idx = [r * w + c for r in rows for c in range(w)]
     return sum(1 for i in idx if abs(ga[i] - gb[i]) > 24) / float(len(idx))
@@ -141,19 +133,6 @@ def corner_candidates(src, nodes, screen_wh, max_surfaces=5):
     return out
 
 
-def side_by_side(srcs, dst, height=160):
-    if len(srcs) < 2:
-        raise FEError("side_by_side needs at least two images")
-    _parent(dst)
-    args = []
-    for s in srcs:
-        args += ["-i", s]
-    chains = ";".join("[%d]scale=-2:%d[v%d]" % (i, height, i) for i in range(len(srcs)))
-    stack = "".join("[v%d]" % i for i in range(len(srcs))) + "hstack=inputs=%d" % len(srcs)
-    run(FFMPEG + args + ["-filter_complex", chains + ";" + stack, "-frames:v", "1", dst])
-    return dst
-
-
 def tile(srcs, dst, cols=4, frame_h=300):
     if not srcs:
         raise FEError("tile needs at least one image")
@@ -233,32 +212,11 @@ def _bbox_arg(s):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("downscale"); p.add_argument("src"); p.add_argument("dst")
-    p.add_argument("--long-side", type=int, default=1000)
     p = sub.add_parser("crop"); p.add_argument("src"); p.add_argument("dst")
     p.add_argument("--bbox", type=_bbox_arg, required=True); p.add_argument("--pad", type=int, default=8)
     p.add_argument("--zoom", type=int, default=1)
-    p = sub.add_parser("corner"); p.add_argument("src"); p.add_argument("--bbox", type=_bbox_arg, required=True)
-    p.add_argument("--corner", required=True, choices=sorted(_DIRS))
-    p = sub.add_parser("side"); p.add_argument("dst"); p.add_argument("srcs", nargs="+")
-    p.add_argument("--height", type=int, default=160)
-    p = sub.add_parser("som"); p.add_argument("src"); p.add_argument("items"); p.add_argument("dst")
-    p = sub.add_parser("tile"); p.add_argument("dst"); p.add_argument("srcs", nargs="+")
-    p.add_argument("--cols", type=int, default=4); p.add_argument("--frame-h", type=int, default=300)
     a = ap.parse_args()
-    if a.cmd == "downscale":
-        out = downscale(a.src, a.dst, a.long_side)
-    elif a.cmd == "crop":
-        out = crop(a.src, a.dst, a.bbox, a.pad, a.zoom)
-    elif a.cmd == "corner":
-        out = round(corner_radius(a.src, a.bbox, a.corner), 1)
-    elif a.cmd == "side":
-        out = side_by_side(a.srcs, a.dst, a.height)
-    elif a.cmd == "som":
-        out = som_overlay(a.src, read_json(a.items), a.dst)
-    else:
-        out = tile(a.srcs, a.dst, a.cols, a.frame_h)
-    print(json.dumps(out, ensure_ascii=False))
+    print(json.dumps(crop(a.src, a.dst, a.bbox, a.pad, a.zoom), ensure_ascii=False))
     return 0
 
 

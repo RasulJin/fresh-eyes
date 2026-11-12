@@ -6,22 +6,17 @@ from tests.fresh_eyes.helpers import FIXTURES
 from hierarchy import XCUI_TYPES, HierarchyError, compress, match_key, normalize
 
 FIX_XML = os.path.join(FIXTURES, "settings_uiautomator.xml")
-FIX_CLI = os.path.join(FIXTURES, "settings_maestro_cli.json")
 
-# Shape copied from a real MCP inspect_screen reply (Settings app).
-MCP_COMPACT = {
-    "ui_schema": {"platform": "android",
-                  "abbreviations": {"b": "bounds", "txt": "text", "rid": "resource-id", "a11y": "content-desc",
-                                    "cls": "class", "c": "children"},
-                  "defaults": {"enabled": True, "clickable": False, "focused": False}},
-    "elements": [{"enabled": False, "c": [
-        {"b": "[0,0][1080,2400]", "cls": "android.widget.FrameLayout", "c": [
-            {"b": "[42,84][1038,273]", "rid": "com.android.settings:id/search_action_bar",
-             "cls": "android.widget.LinearLayout", "clickable": True, "c": [
-                 {"b": "[189,143][578,214]", "txt": "Search Settings", "cls": "android.widget.TextView"}]},
-            {"b": "[221,352][354,409]", "txt": "Импорт мест", "a11y": "import", "cls": "android.widget.TextView"},
-        ]}]}],
-}
+# The Settings app trimmed: a clickable search bar and a label whose content-desc differs from its text.
+SMALL_XML = (
+    '<hierarchy><node bounds="[0,0][1080,2400]" class="android.widget.FrameLayout" text="" content-desc="" '
+    'resource-id="" clickable="false">'
+    '<node bounds="[42,84][1038,273]" class="android.widget.LinearLayout" text="" content-desc="" '
+    'resource-id="com.android.settings:id/search_action_bar" clickable="true">'
+    '<node bounds="[189,143][578,214]" class="android.widget.TextView" text="Search Settings" content-desc="" '
+    'resource-id="" clickable="false"/></node>'
+    '<node bounds="[221,352][354,409]" class="android.widget.TextView" text="Импорт мест" content-desc="import" '
+    'resource-id="" clickable="false"/></node></hierarchy>')
 
 
 # Shape copied from a real Maestro iOS driver /viewHierarchy reply (Settings app), trimmed. Frames are in points.
@@ -71,39 +66,24 @@ class HierarchyTest(unittest.TestCase):
         self.assertIsNotNone(child["parent"])
         self.assertGreater(child["depth"], 0)
 
-    def test_maestro_compact(self):
-        nodes = normalize(json.dumps(MCP_COMPACT), "maestro")
-        search = next(n for n in nodes if n["rid"].endswith("search_action_bar"))
-        self.assertTrue(search["clickable"])
-        self.assertEqual(search["bounds"], [42, 84, 996, 189])
-        label = next(n for n in nodes if n["text"] == "Импорт мест")
-        self.assertEqual(label["label"], "import")
-        self.assertTrue(label["enabled"])
-
-    def test_maestro_cli_fixture(self):
-        nodes = normalize(_read(FIX_CLI), "maestro-cli")
-        self.assertGreater(len(nodes), 10)
-        row = next(n for n in nodes if n["text"] == "Apps")
-        self.assertEqual(len(row["bounds"]), 4)
-        self.assertFalse(row["clickable"])
-
     def test_empty_raises(self):
-        for raw, src in [("", "uiautomator"), ("<hierarchy/>", "uiautomator"), ("{}", "maestro"),
-                         ("not xml", "uiautomator"), ('{"attributes":{},"children":[]}', "maestro-cli")]:
+        for raw, src in [("", "uiautomator"), ("<hierarchy/>", "uiautomator"), ("{}", "xctest"),
+                         ("not xml", "uiautomator"), ("not json", "xctest")]:
             with self.assertRaises(HierarchyError, msg=(raw, src)):
                 normalize(raw, src)
 
     def test_unknown_source_raises(self):
-        with self.assertRaises(HierarchyError):
-            normalize("<hierarchy/>", "xcui")
+        for source in ("xcui", "maestro", "maestro-cli"):
+            with self.assertRaises(HierarchyError, msg=source):
+                normalize("<hierarchy/>", source)
 
     def test_match_key(self):
-        nodes = normalize(json.dumps(MCP_COMPACT), "maestro")
+        nodes = normalize(SMALL_XML, "uiautomator")
         label = next(n for n in nodes if n["text"] == "Импорт мест")
         self.assertEqual(match_key(label), ("", "Импорт мест", "import", "android.widget.TextView"))
 
     def test_compress_lists_meaningful_nodes(self):
-        out = compress(normalize(json.dumps(MCP_COMPACT), "maestro"))
+        out = compress(normalize(SMALL_XML, "uiautomator"))
         self.assertIn('"Search Settings"', out)
         self.assertIn("⚑", out)  # clickable marker
         self.assertNotIn("FrameLayout", out)  # empty containers are skipped

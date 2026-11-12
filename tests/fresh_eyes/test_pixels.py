@@ -3,7 +3,7 @@ import unittest
 
 from tests.fresh_eyes.helpers import make_png, tmpdir
 from fe_common import image_size, read_rgb
-from pixels import corner_radius, crop, downscale, side_by_side, som_overlay, tile
+from pixels import corner_radius, crop, downscale, som_overlay, tile
 
 BLACK = (0, 0, 0)
 
@@ -52,13 +52,6 @@ class PixelsTest(unittest.TestCase):
         with tmpdir() as d:
             p = make_png(os.path.join(d, "small.png"), 300, 200)
             self.assertEqual(downscale(p, os.path.join(d, "s.png")), (300, 200))
-
-    def test_side_by_side(self):
-        with tmpdir() as d:
-            a = make_png(os.path.join(d, "a.png"), 40, 40)
-            b = make_png(os.path.join(d, "b.png"), 80, 40)
-            out = side_by_side([a, b], os.path.join(d, "ab.png"), height=160)
-            self.assertEqual(image_size(out), (160 + 320, 160))
 
     def test_tile_grid(self):
         with tmpdir() as d:

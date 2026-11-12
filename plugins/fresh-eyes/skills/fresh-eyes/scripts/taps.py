@@ -9,8 +9,8 @@ CLI:
   taps.py tap-back --platform P --device ID --x X --y Y [--delay-ms 100] --coverage C --cell ID
   taps.py drag-back --platform android --device ID --from X,Y --to X,Y [--ms 2000] [--back-at-ms 700]
                     --coverage C --cell ID
-  taps.py swipe-tap --platform android --device ID --from X,Y --to X,Y [--ms 250] [--delay-ms 300] --x X --y Y
-                    --coverage C --cell ID
+  taps.py swipe-tap --platform android --device ID --from X,Y --to X,Y [--ms 250] [--delay-ms MS] --x X --y Y
+                    --coverage C --cell ID      (--delay-ms: the run's motion_ceiling_ms unless given)
 """
 import argparse
 import json
@@ -19,6 +19,7 @@ import os
 import devices
 from devices import Device
 from fe_common import FEError, cli, read_json
+from motion import run_ceiling_ms
 from nav import _xy
 
 
@@ -56,7 +57,7 @@ def main():
             p.add_argument("--count", type=int, default=3 if name == "rapid" else 1)
             p.add_argument("--interval-ms", type=int, default=30 if name == "rapid" else 0)
         if name in ("tap-back", "swipe-tap"):
-            p.add_argument("--delay-ms", type=int, default=100 if name == "tap-back" else 300)
+            p.add_argument("--delay-ms", type=int, default=100 if name == "tap-back" else None)
         if name in ("drag-back", "swipe-tap"):
             p.add_argument("--from", dest="src", type=_xy, required=True)
             p.add_argument("--to", type=_xy, required=True)
@@ -75,7 +76,8 @@ def main():
     elif a.cmd == "drag-back":
         devices.drag_then_back(dev, *a.src, *a.to, ms=a.ms, back_at_ms=a.back_at_ms)
     elif a.cmd == "swipe-tap":
-        devices.swipe_then_tap(dev, *a.src, *a.to, a.x, a.y, ms=a.ms, delay_ms=a.delay_ms)
+        delay = a.delay_ms if a.delay_ms is not None else run_ceiling_ms(os.path.dirname(a.coverage))
+        devices.swipe_then_tap(dev, *a.src, *a.to, a.x, a.y, ms=a.ms, delay_ms=delay)
     else:
         devices.back(dev, a.count, a.interval_ms)
     print(json.dumps({"probe": a.cmd, "cell": a.cell, "ok": True}))

@@ -79,6 +79,12 @@ def read_rgb(path):
     return w, h, data
 
 
+def read_gray(path, w, h, flags=None):
+    """Decode an image scaled to w x h into gray bytes (flags: an ffmpeg scaler such as "area")."""
+    vf = "scale=%d:%d%s,format=gray" % (w, h, ":flags=" + flags if flags else "")
+    return run(FFMPEG + ["-i", path, "-vf", vf, "-f", "rawvideo", "-frames:v", "1", "-"]).stdout
+
+
 def write_png(path, w, h, rgb):
     parent = os.path.dirname(path)
     if parent:

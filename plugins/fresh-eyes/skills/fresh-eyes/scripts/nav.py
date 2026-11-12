@@ -11,13 +11,10 @@ CLI (all print the compressed screen after acting; --platform defaults to androi
   nav.py tap    --device ID (--text RE | --label RE | --id SUFFIX | --point X,Y) [--index N]
   nav.py type   --device ID (--text "text" | --env VAR)   (Android: ASCII only; --env for secrets)
   nav.py swipe  --device ID --from X,Y --to X,Y [--ms 300]
-  nav.py back   --device ID                      (iOS: edge swipe)
-  nav.py wait   --device ID (--text RE | --label RE | --id SUFFIX) [--timeout 15]
 """
 import argparse
 import os
 import re
-import sys
 import time
 
 import devices
@@ -91,17 +88,6 @@ def adb_text_arg(text):
     return out.replace("%", "\\%").replace(" ", "%s")
 
 
-def wait_for(dev, text=None, label=None, rid=None, timeout=15):
-    deadline = time.time() + timeout
-    while True:
-        try:
-            return find_node(screen_nodes(dev), text, label, rid)
-        except FEError:
-            if time.time() > deadline:
-                raise
-            time.sleep(1)
-
-
 def _xy(s):
     x, y = s.split(",")
     return int(x), int(y)
@@ -110,17 +96,14 @@ def _xy(s):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("screen", "tap", "type", "swipe", "back", "wait"):
+    for name in ("screen", "tap", "type", "swipe"):
         p = sub.add_parser(name)
         p.add_argument("--device", required=True)
         p.add_argument("--platform", choices=["android", "ios"], default="android")
         p.add_argument("--max-chars", type=int, default=3000)
-        if name in ("tap", "wait"):
-            p.add_argument("--text"); p.add_argument("--label"); p.add_argument("--id")
         if name == "tap":
+            p.add_argument("--text"); p.add_argument("--label"); p.add_argument("--id")
             p.add_argument("--point", type=_xy); p.add_argument("--index", type=int, default=0)
-        if name == "wait":
-            p.add_argument("--timeout", type=float, default=15)
         if name == "type":  # --env: a secret read here from the environment, never printed or passed as text
             g = p.add_mutually_exclusive_group(required=True)
             g.add_argument("--text"); g.add_argument("--env", metavar="VAR")
@@ -148,12 +131,6 @@ def main():
     elif a.cmd == "swipe":
         devices.swipe(dev, a.src[0], a.src[1], a.to[0], a.to[1], a.ms)
         time.sleep(SETTLE_S)
-    elif a.cmd == "back":
-        devices.back(dev)
-        time.sleep(SETTLE_S)
-    elif a.cmd == "wait":
-        node = wait_for(dev, a.text, a.label, a.id, a.timeout)
-        print("found %s %r" % (node["id"], node["text"] or node["label"]))
     nodes = [n for n in screen_nodes(dev) if not n["rid"].startswith("com.android.systemui")]
     print(compress(nodes, a.max_chars))
     return 0

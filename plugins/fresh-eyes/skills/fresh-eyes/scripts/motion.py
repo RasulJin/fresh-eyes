@@ -9,7 +9,7 @@ import argparse
 import json
 import os
 
-from fe_common import FEError, FFMPEG, cli, run, write_json
+from fe_common import FEError, FFMPEG, cli, read_json, run, write_json
 from pixels import tile
 
 REST_EPS = 0.004      # mean |Δ| below this between frames = no visible change
@@ -17,7 +17,17 @@ MOVE_EPS = 0.02       # mean |Δ| above this = a clear change
 FLICKER_RATIO = 0.35  # frame i+2 is this close to frame i while i→i+1 changed a lot: a flash
 REST_S = 0.3          # this long without change counts as "settled"
 FLASH_S = 0.25        # a flash returns within this time
-DEFAULT_CEILING_MS = 500
+DEFAULT_CEILING_MS = 500  # only without a run: coverage.py plan copies the config's motion_ceiling_ms
+
+
+def run_ceiling_ms(path):
+    """The run's motion_ceiling_ms: from the first coverage.json in `path` or a folder above it."""
+    d = os.path.abspath(path)
+    while not os.path.exists(os.path.join(d, "coverage.json")):
+        if os.path.dirname(d) == d:
+            return DEFAULT_CEILING_MS
+        d = os.path.dirname(d)
+    return read_json(os.path.join(d, "coverage.json")).get("motion_ceiling_ms", DEFAULT_CEILING_MS)
 
 
 def _probe_times(video):

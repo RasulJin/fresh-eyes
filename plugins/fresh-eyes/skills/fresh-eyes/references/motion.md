@@ -5,7 +5,8 @@ Screenshots are taken after the screen settles, so they never show a transition.
 ## Capture
 
 - Wrap the action: `python3 $S/capture.py around --platform P --device ID --out PACK --settle 2.5
-  --ceiling-ms <spec motion ceiling> -- <action command>`.
+  -- <action command>`. Ceiling: config via the run (`coverage.py plan` copies `motion_ceiling_ms` into
+  coverage.json, `around` reads the first coverage.json above `--out`); `--ceiling-ms` overrides.
 - Android recordings (`screenrecord`) are variable frame rate: frames exist only when pixels change, about
   10–15 fps on an emulator, and the timeline starts at the first change. A static screen yields one frame.
 - iOS recordings come from `simctl io recordVideo --codec=h264`.
@@ -18,7 +19,7 @@ Screenshots are taken after the screen settles, so they never show a transition.
 |---|---|---|
 | `flicker` | a frame differs a lot from its neighbours, and the next frame is back to the previous one within 250 ms | a flash of the old screen, a white frame between screens, a ghost of the previous tab |
 | `jump_after_rest` | after ≥300 ms of stillness one single-step change, then stillness again (not the first change) | layout shift after load, a sheet re-docking for one frame, content jumping by the keyboard height |
-| `long_transition` | continuous motion longer than the ceiling (spec, default 500 ms) | sluggish transitions, double animations |
+| `long_transition` | continuous motion longer than the ceiling (config `motion_ceiling_ms`; 500 ms outside a run) | sluggish transitions, double animations |
 | `never_settles` | the video still moves at the end of the recording window | endless spinner, oscillating layout, a stuck spring |
 
 Thresholds: mean frame difference < 0.004 = still, > 0.02 = a clear change.

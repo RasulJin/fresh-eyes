@@ -11,10 +11,12 @@ iOS input goes through the Maestro XCTest driver, which serializes touches: rapi
 (enough for double-submit windows, not for a sub-100 ms race), and Back is a left-edge swipe.
 
 ### none
-Just look. `capture.py snap`. With `--keyboard` when an input is focused. On the `default` state add `--pages`:
-the snap then scrolls the screen's list half a screen at a time into `scroll-<k>/` and back, so the checks see
-the whole screen, not its first viewport. `"scroll_restored": false` in its output: swipe the list back to
-the top with `nav.py swipe` (slow, short drags) before the next cell.
+Just look. `capture.py snap`, on Android always with `--package <app.android_id>`: `"app_running": false` in its
+output and meta.json is a crash, its log goes to the pack's `logcat.txt`. With `--keyboard` when an input is
+focused. On the `default` state add `--pages`: the snap then scrolls the screen's list half a screen at a time
+into `scroll-<k>/` and back, so the checks see the whole screen, not its first viewport. `scroll_stop` says why
+the pages ended: `end`, `limit`, or the page snap that failed. `"scroll_restored": false` in its output: swipe
+the list back to the top with `nav.py swipe` (slow, short drags) before the next cell.
 
 ### rapid-tap
 - Reveals: double sheets/dialogs, double send, double navigation (stacked screens).
@@ -144,8 +146,8 @@ the top with `nav.py swipe` (slow, short drags) before the next cell.
   2. `drag-back`: `taps.py drag-back --from X,Y --to X,Y --ms 2000 --back-at-ms 700` (Back while the finger is
      still down), wait 1.5 s, snap into `<pack>/drag-back`, then tap the content behind and snap again. Oracle:
      Back closed it (or Back did what it does without the drag), and the content answers the tap.
-  3. `swipe-tap`: with it open, `taps.py swipe-tap --from X,Y --to X,Y --x X --y Y --delay-ms M` (the drag that
-     closes it, then, M = config `motion_ceiling_ms`, default 300, after the finger lifts, a tap on something
+  3. `swipe-tap`: with it open, `taps.py swipe-tap --from X,Y --to X,Y --x X --y Y` (the drag that closes it,
+     then, the run's `motion_ceiling_ms` after the finger lifts (`--delay-ms` overrides), a tap on something
      behind it that visibly reacts: a card that opens), wait 1.5 s, snap into `<pack>/swipe-tap`. Oracle: the
      tap landed: by then the closing animation is over. A tap that only works a moment later is a BUG.
 - Android only: the iOS driver cannot press Back while a drag is still running.

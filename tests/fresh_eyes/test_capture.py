@@ -1,7 +1,10 @@
+import contextlib
+import io
 import json
 import os
 import shutil
 import sys
+import time
 import unittest
 from unittest import mock
 
@@ -9,8 +12,9 @@ from tests.fresh_eyes.helpers import FIXTURES, make_png, tmpdir
 import capture
 import devices
 import nav
-from fe_common import read_json, run
+from fe_common import read_json, run, write_json
 from hierarchy import HierarchyError
+from motion import DEFAULT_CEILING_MS
 
 
 def fake_screenshot(dev, dst):
@@ -87,6 +91,37 @@ class SnapTest(unittest.TestCase):
             self.assertIn("hierarchy unavailable", meta["blocked"])
             self.assertTrue(os.path.exists(os.path.join(pack, "screen.png")))
 
+    def _snap_with_app(self, pid):
+        crash = "\n".join(["E/AndroidRuntime( 4242): FATAL EXCEPTION: main",
+                           "E/AndroidRuntime( 4242): Process: com.example.app, PID: 4242",
+                           "E/AndroidRuntime( 4242): java.lang.IllegalStateException: boom"])
+
+        def adb(dev_id, *args, **kw):
+            if args[:2] == ("shell", "pidof"):
+                return pid
+            return crash if "crash" in args else ""  # the crash buffer is read only when asked for
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            xml = f.read()
+        with tmpdir() as d, mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml), \
+                mock.patch.object(devices, "_adb", adb):
+            pack = os.path.join(d, "p")
+            self.assertEqual(capture.snap("android", "emulator-5560", pack, package="com.example.app"), 0)
+            text = None
+            if os.path.exists(os.path.join(pack, "logcat.txt")):
+                with open(os.path.join(pack, "logcat.txt"), encoding="utf-8") as f:
+                    text = f.read()
+            return read_json(os.path.join(pack, "meta.json")), text
+
+    def test_snap_of_a_dead_app_keeps_the_crash(self):
+        meta, log = self._snap_with_app("")
+        self.assertFalse(meta["app_running"])
+        self.assertIn("java.lang.IllegalStateException: boom", log)
+
+    def test_snap_of_a_running_app_writes_no_log(self):
+        meta, log = self._snap_with_app("4242\n")
+        self.assertTrue(meta["app_running"])
+        self.assertIsNone(log)
+
     def test_snap_ios_without_driver_is_blocked(self):
         def no_driver(dev):
             raise devices.FEError("no Maestro iOS driver for AAA")
@@ -153,7 +188,27 @@ class LogsTest(unittest.TestCase):
         self.assertEqual([l.split(" x ")[1][:16] for l in lines[1:]],
                          ["E/AndroidRuntime", "E/AndroidRuntime", "E/ReactNativeJS:", "W/Reanimated: sy"])
         self.assertTrue(lines[4].startswith("  5000 x "))
-        self.assertEqual(calls[-1], ("logcat", "-c"))
+        self.assertEqual(calls[-1], ("logcat",) + capture.BUFFERS + ("-c",))
+
+    def test_keeps_a_native_crash_that_names_the_app(self):
+        logcat = "\n".join([
+            "F/libc    ( 5001): Fatal signal 11 (SIGSEGV), code 1, fault addr 0x0 in tid 5020 (mqt_js), "
+            "pid 5001 (com.example.app)",
+            "E/libc    ( 5001): Abort message: 'JSI error'",
+            "E/libc    ( 6001): Abort message: 'other app'",
+            "F/libc    ( 6001): Fatal signal 6 (SIGABRT), pid 6001 (com.other.app)",
+            "F/linker  ( 7001): CANNOT LINK EXECUTABLE"])
+
+        def adb(dev_id, *args, **kw):
+            return "" if args[:2] == ("shell", "pidof") else logcat
+        with tmpdir() as d, mock.patch.object(devices, "_adb", adb):
+            capture.logs("android", "emulator-5560", d, "com.example.app")
+            with open(os.path.join(d, "logcat.txt"), encoding="utf-8") as f:
+                text = f.read()
+        self.assertIn("Fatal signal 11", text)
+        self.assertIn("JSI error", text)  # the whole block, not only its F line
+        self.assertNotIn("com.other.app", text)
+        self.assertIn("CANNOT LINK EXECUTABLE", text)  # an F line outside a crash block is kept as is
 
 
 class AroundTest(unittest.TestCase):
@@ -164,7 +219,8 @@ class AroundTest(unittest.TestCase):
                  "-vf", "drawbox=x=10:y=10:w=60:h=60:color=black:t=fill:enable='eq(n,15)'", "-c:v", "ffv1", src])
 
             class Rec(object):
-                started = 0.0
+                def __init__(self):
+                    self.started = time.time()
 
             def start(dev, dst, limit_s=60):
                 r = Rec()
@@ -186,6 +242,28 @@ class AroundTest(unittest.TestCase):
             meta = read_json(os.path.join(pack, "around.json"))
             self.assertEqual(meta["action_exit"], 0)
             self.assertIn("record_s", meta)
+
+    def _ceiling(self, pack, **kw):
+        seen = []
+        rec = mock.Mock(started=time.time())
+        with mock.patch.object(devices, "start_recording", lambda dev, dst, limit_s=60: rec), \
+                mock.patch.object(devices, "stop_recording", lambda r: None), \
+                mock.patch.object(capture, "analyze", lambda video, out, ceiling, *a: seen.append(ceiling) or
+                                  {"flags": []}), \
+                mock.patch.object(capture.time, "sleep", lambda s: None):
+            capture.around("android", "emulator-5560", pack, [sys.executable, "-c", "pass"], settle=0, **kw)
+        return seen[0]
+
+    def test_ceiling_comes_from_the_runs_coverage(self):
+        with tmpdir() as d:
+            write_json(os.path.join(d, "coverage.json"), {"cells": [], "motion_ceiling_ms": 300})
+            pack = os.path.join(d, "android", "feed", "default-tap-back")
+            self.assertEqual(self._ceiling(pack), 300)
+            self.assertEqual(self._ceiling(pack, ceiling_ms=700), 700)  # the flag overrides
+
+    def test_ceiling_without_a_run_is_the_default(self):
+        with tmpdir() as d:
+            self.assertEqual(self._ceiling(os.path.join(d, "p")), DEFAULT_CEILING_MS)
 
 
 
@@ -278,13 +356,65 @@ class OrderTest(unittest.TestCase):
         self.assertEqual(order[:2], ["hierarchy", "screenshot"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def _node(i, cls, bounds, depth=1, text=""):
     return {"id": "n%d" % i, "parent": None, "depth": depth, "cls": cls, "text": text, "label": "", "rid": "",
             "bounds": bounds, "clickable": False, "focused": False, "enabled": True}
+
+
+class FakeList(object):
+    """A 360x800 screen: a sticky header over rows every 200 px of a `content` px list; a drag loses 8 px of slop
+    (px_per_dp 1). `spinner`: a square that flips black and white on every frame, an animation that never stops.
+    `fail`: {page: exit} for snaps that fail."""
+    W, H, SLOP = 360, 800, 8
+
+    def __init__(self, content, spinner=False, fail=None):
+        self.content, self.spinner, self.fail = content, spinner, fail or {}
+        self.off = self.pulled = self.frames = 0  # pulled: px dragged past the top (pull-to-refresh)
+
+    def visible(self):
+        return [(k, y - self.off) for k, y in enumerate(range(100, self.content, 200))
+                if 0 < y - self.off < self.H - 100]
+
+    def frame(self, dst):
+        self.frames += 1
+        rects = [(0, 0, self.W, 60, (200, 200, 200), 0)] + [(20, y, 320, 100, (40, 40, 40), 8)
+                                                            for _, y in self.visible()]
+        if self.spinner:
+            rects.append((280, 680, 60, 60, (0, 0, 0) if self.frames % 2 else (255, 255, 255), 0))
+        return make_png(dst, self.W, self.H, rects=rects)
+
+    def snap(self, platform, device_id, out, *a, **kw):
+        os.makedirs(out, exist_ok=True)
+        self.frame(os.path.join(out, "screen.png"))
+        nodes = [_node(0, "android.widget.ScrollView", [0, 0, self.W, self.H], 1),
+                 _node(1, "android.widget.TextView", [0, 10, 100, 40], 2, "Back"),
+                 _node(2, "android.widget.TextView", [100, 10, 160, 40], 2, "Header"),
+                 _node(3, "android.widget.TextView", [260, 10, 100, 40], 2, "Share")]
+        nodes += [_node(4 + k, "android.widget.TextView", [20, y, 320, 100], 2, "row %d" % k)
+                  for k, y in self.visible()]
+        write_json(os.path.join(out, "nodes.json"), nodes)
+        write_json(os.path.join(out, "meta.json"), {"screen_wh": [self.W, self.H], "px_per_dp": 1.0})
+        return self.fail.get(os.path.basename(out), 0)
+
+    def swipe(self, dev, x1, y1, x2, y2, ms=300):
+        d = y1 - y2
+        step = (abs(d) - self.SLOP) * (1 if d > 0 else -1)
+        self.pulled = max(self.pulled, -(self.off + step))
+        self.off = max(0, min(self.content - self.H, self.off + step))
+
+    @contextlib.contextmanager
+    def pack(self):
+        with tmpdir() as d, mock.patch.object(capture, "snap", self.snap), \
+                mock.patch.object(devices, "swipe", self.swipe), \
+                mock.patch.object(devices, "screenshot", lambda dev, dst: self.frame(dst)), \
+                mock.patch.object(capture.time, "sleep", lambda s: None):
+            pack = os.path.join(d, "default-none")
+            self.snap("android", "emulator-5560", pack)
+            yield pack
+
+
+def _scrolls(pack):
+    return sorted(n for n in os.listdir(pack) if n.startswith("scroll-"))
 
 
 class PagesTest(unittest.TestCase):
@@ -297,61 +427,72 @@ class PagesTest(unittest.TestCase):
         self.assertIsNone(capture.main_list(nodes[3:], 2400))
 
     def test_scrolls_page_by_page_to_the_end_and_back_to_the_top(self):
-        W, H, CONTENT, SLOP = 360, 800, 1800, 8  # px_per_dp 1: the list eats 8 px of each drag
-        state = {"off": 0, "pulled": 0}  # pulled: px dragged past the top (pull-to-refresh)
-        rows = range(100, CONTENT, 200)
-
-        def visible():
-            return [(k, y - state["off"]) for k, y in enumerate(rows) if 0 < y - state["off"] < H - 100]
-
-        def frame(dst):  # a sticky header that never moves, rows that do
-            make_png(dst, W, H, rects=[(0, 0, W, 60, (200, 200, 200), 0)] +
-                     [(20, y, 320, 100, (40, 40, 40), 8) for _, y in visible()])
-            return dst
-
-        def fake_snap(platform, device_id, out, *a, **kw):
-            os.makedirs(out, exist_ok=True)
-            frame(os.path.join(out, "screen.png"))
-            nodes = [_node(0, "android.widget.ScrollView", [0, 0, W, H], 1),
-                     _node(1, "android.widget.TextView", [0, 10, 100, 40], 2, "Back"),
-                     _node(2, "android.widget.TextView", [100, 10, 160, 40], 2, "Header"),
-                     _node(3, "android.widget.TextView", [260, 10, 100, 40], 2, "Share")]
-            nodes += [_node(4 + k, "android.widget.TextView", [20, y, 320, 100], 2, "row %d" % k)
-                      for k, y in visible()]
-            with open(os.path.join(out, "nodes.json"), "w") as f:
-                json.dump(nodes, f)
-            with open(os.path.join(out, "meta.json"), "w") as f:
-                json.dump({"screen_wh": [W, H], "px_per_dp": 1.0}, f)
-            return 0
-
-        def swipe(dev, x1, y1, x2, y2, ms=300):
-            d = y1 - y2
-            step = (abs(d) - SLOP) * (1 if d > 0 else -1)
-            state["pulled"] = max(state["pulled"], -(state["off"] + step))
-            state["off"] = max(0, min(CONTENT - H, state["off"] + step))
-
-        with tmpdir() as d, mock.patch.object(capture, "snap", fake_snap), \
-                mock.patch.object(devices, "swipe", swipe), \
-                mock.patch.object(devices, "screenshot", lambda dev, dst: frame(dst)), \
-                mock.patch.object(capture.time, "sleep", lambda s: None):
-            pack = os.path.join(d, "default-none")
-            fake_snap("android", "emulator-5560", pack)
+        fake = FakeList(1800)
+        with fake.pack() as pack:
             meta = capture.pages("android", "emulator-5560", pack)
-            self.assertEqual((meta["scroll_pages"], meta["scroll_restored"]), (3, True))
-            self.assertEqual((state["off"], state["pulled"]), (0, 0))  # the same distances back: no pull past the top
-            self.assertEqual(sorted(n for n in os.listdir(pack) if n.startswith("scroll-")),
-                             ["scroll-1", "scroll-2", "scroll-3"])
+            self.assertEqual((meta["scroll_pages"], meta["scroll_stop"], meta["scroll_restored"]), (3, "end", True))
+            self.assertEqual((fake.off, fake.pulled), (0, 0))  # the same distances back: no pull past the top
+            self.assertEqual(_scrolls(pack), ["scroll-1", "scroll-2", "scroll-3"])
             self.assertEqual(read_json(os.path.join(pack, "meta.json"))["scroll_pages"], 3)
             self.assertFalse(os.path.exists(os.path.join(pack, ".top.png")))
+
+    def test_a_long_screen_stops_at_the_page_limit(self):
+        with FakeList(1800).pack() as pack:
+            meta = capture.pages("android", "emulator-5560", pack, max_pages=2)
+        self.assertEqual((meta["scroll_pages"], meta["scroll_stop"]), (2, "limit"))
+
+    def test_rows_that_stay_put_end_the_list_while_an_animation_runs(self):
+        fake = FakeList(1000, spinner=True)  # the first drag already reaches the end
+        with fake.pack() as pack:
+            meta = capture.pages("android", "emulator-5560", pack)
+            self.assertEqual((meta["scroll_pages"], meta["scroll_stop"], meta["scroll_restored"]), (1, "end", True))
+            self.assertEqual(_scrolls(pack), ["scroll-1"])
+        self.assertEqual((fake.off, fake.pulled), (0, 0))  # back by what moved, not by a full step
+
+    def test_a_failed_page_snap_is_reported(self):
+        with FakeList(1800, fail={"scroll-2": 3}).pack() as pack:
+            meta = capture.pages("android", "emulator-5560", pack)
+            self.assertEqual(_scrolls(pack), ["scroll-1"])
+        self.assertEqual((meta["scroll_pages"], meta["scroll_stop"]), (1, "snap failed on page 2 (exit 3)"))
+
+    def test_shift_tells_no_common_text_from_texts_that_stayed(self):
+        box = [0, 0, 360, 800]
+        a = [_node(1, "T", [0, 300, 100, 40], text="row 1"), _node(2, "T", [0, 500, 100, 40], text="row 2")]
+        moved = [_node(2, "T", [0, 100, 100, 40], text="row 2")]
+        other = [_node(3, "T", [0, 300, 100, 40], text="row 3")]
+        self.assertEqual(capture._shift(a, moved, box), 400)
+        self.assertIsNone(capture._shift(a, other, box))
+        self.assertEqual(capture._shift(a, a, box), 0)
 
     def test_a_screen_without_a_list_gets_no_pages(self):
         with tmpdir() as d, mock.patch.object(devices, "screenshot", fake_screenshot):
             pack = os.path.join(d, "p")
             os.makedirs(pack)
             shutil.copyfile(os.path.join(FIXTURES, "settings.png"), os.path.join(pack, "screen.png"))
-            with open(os.path.join(pack, "nodes.json"), "w") as f:
-                json.dump([_node(0, "android.widget.FrameLayout", [0, 0, 1080, 2400])], f)
-            with open(os.path.join(pack, "meta.json"), "w") as f:
-                json.dump({"screen_wh": [1080, 2400]}, f)
+            write_json(os.path.join(pack, "nodes.json"), [_node(0, "android.widget.FrameLayout", [0, 0, 1080, 2400])])
+            write_json(os.path.join(pack, "meta.json"), {"screen_wh": [1080, 2400]})
             meta = capture.pages("android", "emulator-5560", pack)
         self.assertEqual((meta["scroll_pages"], meta["scroll_restored"]), (0, True))
+
+
+class CliTest(unittest.TestCase):
+    def test_snap_passes_the_package_and_prints_where_the_pages_stopped(self):
+        seen = {}
+
+        def snap(platform, device_id, out, **kw):
+            seen.update(kw)
+            write_json(os.path.join(out, "meta.json"), {"app_running": True})
+            return 0
+        pages = {"scroll_pages": 1, "scroll_stop": "snap failed on page 2 (exit 3)", "scroll_restored": False}
+        with tmpdir() as d, mock.patch.object(capture, "snap", snap), \
+                mock.patch.object(capture, "pages", lambda *a: pages), \
+                mock.patch.object(sys, "argv", ["capture.py", "snap", "--platform", "android", "--device", "e",
+                                                "--out", d, "--package", "com.example.app", "--pages"]), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(capture.main(), 0)
+        self.assertEqual(seen["package"], "com.example.app")
+        self.assertEqual(json.loads(out.getvalue())["scroll_stop"], "snap failed on page 2 (exit 3)")
+
+
+if __name__ == "__main__":
+    unittest.main()

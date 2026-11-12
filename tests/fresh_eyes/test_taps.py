@@ -1,9 +1,13 @@
+import contextlib
+import io
 import os
+import sys
 import unittest
 from unittest import mock
 
 from tests.fresh_eyes.helpers import tmpdir
 import devices
+import taps
 from fe_common import FEError, write_json
 from taps import guard
 
@@ -39,6 +43,23 @@ class TapsGuardTest(unittest.TestCase):
             os.remove(os.path.join(d, "preflight.json"))
             with self.assertRaises(FEError):
                 guard(cov, CELL["id"])
+
+
+class SwipeTapTest(unittest.TestCase):
+    def test_the_delay_is_the_runs_motion_ceiling(self):
+        cell = dict(CELL, id="android/feed/default/drag-interrupt", probe="drag-interrupt")
+        calls = []
+        with tmpdir() as d:
+            cov = run_dir(d, [cell], False)
+            write_json(cov, {"run_id": "r", "cells": [cell], "motion_ceiling_ms": 250})
+            argv = ["taps.py", "swipe-tap", "--platform", "android", "--device", "e", "--from", "500,1500",
+                    "--to", "500,2300", "--x", "540", "--y", "800", "--coverage", cov, "--cell", cell["id"]]
+            with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(io.StringIO()), \
+                    mock.patch.object(devices, "swipe_then_tap", lambda dev, *a, **kw: calls.append(kw)):
+                taps.main()
+                with mock.patch.object(sys, "argv", argv + ["--delay-ms", "120"]):
+                    taps.main()
+        self.assertEqual([c["delay_ms"] for c in calls], [250, 120])
 
 
 if __name__ == "__main__":

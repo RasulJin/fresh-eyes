@@ -73,7 +73,8 @@ noted. Example (generic values):
 - `backlog`: where confirmed findings go; `template` is `ru-backlog` or `en-backlog`; `images_dir` gets crops.
 - `maestro_dir`: existing flows (reused as setup steps) and where regression flows are written.
 - `references`: apps the user compares against; the UX rubric uses them.
-- `motion_ceiling_ms`: transition duration ceiling from the design system.
+- `motion_ceiling_ms`: transition duration ceiling from the design system (default 300). `coverage.py plan`
+  copies it into coverage.json; `capture.py around` and `taps.py swipe-tap` read it from there.
 - `screens[]`: `id`, `name`, `route`, `reach` (how to get there: words or a flow path), `states` (from the
   checklist), `probes` (from the probe library), `neighbors` (screens a change here can break), `marker`
   (1–3 strings only this screen shows: its header title, a unique button label, a testID; matched

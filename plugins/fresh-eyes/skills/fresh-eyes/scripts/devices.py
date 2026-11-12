@@ -650,15 +650,6 @@ def px_per_dp(dev):
     return int(m.group(1)) / 160.0 if m else 2.625
 
 
-def screen_size(dev):
-    if dev.platform == "android":
-        out = _shell(dev, "wm size", check=False)
-        m = re.search(r"Override size: (\d+)x(\d+)", out) or re.search(r"Physical size: (\d+)x(\d+)", out)
-        if m:
-            return [int(m.group(1)), int(m.group(2))]
-    return None
-
-
 def _android_only(what, command):
     def apply(dev):
         if dev.platform != "android":
