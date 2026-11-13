@@ -54,7 +54,11 @@ For each BUG with `verdict: "pending"`:
 3. If the evidence decides it → set `verdict` to `confirmed` or `rejected` with a one-line `verify_note`.
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
-   "probe": "<probe id>", "bbox": [x, y, w, h]}` and leave it pending.
+   "probe": "<probe id>", "bbox": [x, y, w, h]}` and leave it pending. A repeat with other probe flags gets
+   `"args"`, e.g. `"--interval-ms 150"` (a person's pace) or `"--delay-ms 200"`.
+5. A cell whose probe never tested its oracle (snapped on another screen, the gesture never reached what it
+   should interrupt): `{"do": "redo-cell", "cell": "<cell id>", "why": "<one line>"}`; the orchestrator runs it
+   again, and on the second pass you rule on its findings from the new pack (the entry's `done`).
 
 Duplicates: when two findings (in this folder's files, or one here and one in a file you were given) report
 the same defect, set `same_as` on the one with weaker evidence, pointing at the other with its file relative
@@ -74,8 +78,9 @@ action per item, buttons by their on-screen text, ending with what to look at. I
 numbers, scripts or coordinates, rewrite them from `found_by` and the frames.
 
 Backlog: read `backlog-index.md` once. A BUG you confirm that an open entry already describes (the same defect
-on the same screen, not a look-alike elsewhere) gets `"backlog_id": "BUG-N"` and `verify_note` "already open:
-BUG-N". It stays `confirmed`: the defect is real, the report lists it as still reproducing.
+on the same screen, not a look-alike elsewhere) gets `"backlog_id": "BUG-N"` (or the `IMP-N` that holds it) and
+`verify_note` "already open: <id>". It stays `confirmed`: the defect is real, the report lists it as still
+reproducing. An IMP an open entry already proposes gets its `"backlog_id": "IMP-N"` too and stays pending.
 
 Write each updated findings file back in place.
 

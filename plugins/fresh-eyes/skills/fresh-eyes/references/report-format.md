@@ -24,7 +24,7 @@
   "som": [3], "bbox": [0, 0, 0, 0], "expected": "", "actual": "", "steps": [""], "found_by": "",
   "rule": "spec:<id> | taste", "evidence": ["crops/clipped-1.png"], "log": "<logcat.txt line (app errors only)>",
   "verdict": "pending|confirmed|unsure|rejected", "verify_note": "",
-  "same_as": "<findings file relative to the run>#<id> (optional)", "backlog_id": "BUG-N (optional)"}],
+  "same_as": "<findings file relative to the run>#<id> (optional)", "backlog_id": "BUG-N | IMP-N (optional)"}],
  "questions": [{"text": "", "options": [""], "finding": "<id> | <findings file relative to the run>#<id>"}]}
 ```
 
@@ -45,9 +45,10 @@ then returns it in `merged`, and the report lists it under that finding.
   with a question as unsure and returns it in `asked`: until the owner answers, it is not a bug.
 - `reviewed_packs`: every pack whose evidence the reviewer actually opened (its `som.png`, or its crops plus
   `candidates.json`), and only those. A done cell whose packs no reviewer listed keeps the verdict INCOMPLETE.
-- `backlog_id`: the verifier sets it on a confirmed BUG that an open entry of `backlog-index.md` already
-  describes, with `verify_note` "already open: BUG-N". It still counts as a confirmed bug; the report lists it
-  under "still reproduces" and the backlog gets a recheck line instead of a new entry.
+- `backlog_id` (`BUG-N` or `IMP-N`): the verifier sets it on a confirmed BUG or an IMP that an open entry of
+  `backlog-index.md` already describes, with `verify_note` "already open: <id>". A BUG still counts as
+  confirmed; the report lists it under "still reproduces" and the backlog gets a recheck line instead of a new
+  entry. An IMP with it gets no new entry.
 - `rule: taste` (no spec rule behind it) caps `confidence` at 0.6.
 - The verifier sets `verdict` and `verify_note`. No BUG reaches the backlog while `pending`; IMPs are proposals
   and go in when the owner picks them. The verifier only rejects an IMP the spec slice or `known.md`
@@ -55,8 +56,10 @@ then returns it in `merged`, and the report lists it under that finding.
 
 ## `requests.json` (verifier → navigator, in the screen folder)
 
-`[{"finding": "f1", "pack": "<path>", "do": "resnap|repeat-probe|crop", "probe": "<id>", "bbox": [..]}]`; the
-navigator adds `"done": "<path>"` or `"failed": "<why>"` to each entry.
+`[{"finding": "f1", "pack": "<path>", "do": "resnap|repeat-probe|crop", "probe": "<id>", "bbox": [..],
+"args": "<extra probe flags, optional: --interval-ms 150>"}, {"do": "redo-cell", "cell": "<cell id>", "why": ""}]`;
+the navigator adds `"done": "<path>"` or `"failed": "<why>"` to each entry but `redo-cell`, which the
+orchestrator handles (the cell back to `todo`, navigated and reviewed again, then `done`).
 
 ## Verdict
 

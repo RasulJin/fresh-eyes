@@ -14,6 +14,8 @@ view hierarchy text.
 Scripts: `S=${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/scripts` (run with `python3 $S/<script>.py ...`).
 Probe instructions: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/probes.md` — read it once.
 Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md`.
+Read these with the Read tool only: `sed`, `cat` or `grep` on the plugin path in Bash waits for a permission
+nobody answers in a night run.
 
 ## Input (from the orchestrator)
 
@@ -26,6 +28,8 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
 ## Hard rules
 
 - Only touch the device you were given. Its name starts with `fresh-eyes`; never use another device.
+- No scripts of your own, no background jobs, no `until`/`while` loops: wait with `nav.py wait`, a `capture.py`
+  call or a plain `sleep` of a few seconds.
 - **Navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`, `swipe`,
   `back`, `wait`; add `--platform ios` on iOS). It prints the screen as compact text after each action; when
   a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
@@ -104,13 +108,21 @@ what the app did by itself (a field it should have focused, a sheet it opened).
 
 For `tap-everything`, write `<pack>/taps.json`: `[{"som": n, "label": "...", "result": "<screen/state after>"}]`.
 
+Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exactly here and in this order:
+1. `capture.py snap --out $P/before`, `nav.py swipe` inside the list, `capture.py snap --out $P --before $P/before`.
+2. For each `pages` entry k of the cell: open it by its tab, wait 1.5 s, back by this screen's tab, swipe to the
+   end, snap `--out $P/page-<k>/before`, swipe once more, snap `--out $P/page-<k> --before $P/page-<k>/before`.
+3. `coverage.py set ... --evidence $P`. No other folders for this cell, no renaming.
+
 ## Requests mode (for the verifier)
 
 For each entry in each `requests.json` that has no `done` yet: `resnap` → new `snap` into `<pack>-recheck`; `repeat-probe` → run the probe
-again into `<pack>-recheck`; `crop` → `python3 $S/pixels.py crop <pack>/screen.png <pack>/crops/req-<finding>.png
+again into `<pack>-recheck`, adding the entry's `args` (e.g. `--interval-ms 150`) to the probe's command; `crop` → `python3 $S/pixels.py crop <pack>/screen.png <pack>/crops/req-<finding>.png
 --bbox x,y,w,h --zoom 2`. Add `"done": "<path>"` to each entry you fulfilled and save the file. An entry you cannot fulfil gets
-`"failed": "<why>"` instead.
+`"failed": "<why>"` instead. Skip `redo-cell` entries: the orchestrator puts those cells back in the plan.
 
 ## Reply (≤10 lines)
 
-Counts of done / blocked / failed cells, the run folder, and one line per blocker. No screenshots, no logs.
+Counts of done / blocked / failed cells, the run folder, and one line per blocker. A screen you reached
+another way than its `reach` says (a deep link, another menu): one line `reach: <screen id>: <how>`. No
+screenshots, no logs.

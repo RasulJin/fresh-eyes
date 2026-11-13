@@ -120,7 +120,10 @@ words / nothing (= the current diff).
    the cell ids, `package: <app.android_id>` (it goes to every `capture.py snap --package`, which saves the
    crash log when the app died), and `app language: <app.locale>` when config sets it. A navigator that finds
    the app signed out signs in with `accounts` itself; cells blocked with
-   "signed out: <variable> not set" mean the user has to export that variable before the next run.
+   "signed out: <variable> not set" mean the user has to export that variable before the next run. A reply line
+   `reach: <screen>: <how>`: write `<how>` into that screen's `reach` in `.fresh-eyes/config.json`, so the next
+   run does not hit the same wall. A navigator whose output has not grown for 10 minutes is stuck (a permission
+   prompt nobody answers, a loop): stop it and start a fresh one on the cells `coverage.py next` still lists.
 8. Review: first, per screen with done cells, `python3 $S/spec.py slice --spec .fresh-eyes/spec.md --screens
    <id>,<its neighbors> --stale $RUN/spec-stale.json --out $RUN/spec/<id>.md` (the global rules and those
    sections; neighbors' rules often apply); journeys: `--screens` = the screens of the journeys walked, `--out
@@ -139,7 +142,9 @@ words / nothing (= the current diff).
    `first pass`, that folder, its spec slice, `.fresh-eyes/known.md`, `$RUN/backlog-index.md`, `language`,
    `source_root`. Keep each verifier's agent id. The journey
    folder's verifier also gets the findings files of the screens its findings concern (to mark duplicates). Folders whose verifier
-   answered `needs: requests`: one navigator per platform in requests mode with their `requests.json` paths;
+   answered `needs: requests`: first, each `"do": "redo-cell"` entry → `python3 $S/coverage.py set --cov
+   $RUN/coverage.json --cell <cell> --status todo --note "<why>"`, that cell navigated again (step 7) and its new
+   pack reviewed (step 8, a new `findings-<k>.json`), then the entry gets `"done": "<pack>"`; then one navigator per platform in requests mode with their `requests.json` paths;
    when every entry has `done` or `failed`, send `second pass` with SendMessage to that folder's first-pass
    verifier (it keeps what it already read). A fresh verifier with `second pass` and the same inputs only when
    that agent is gone.
@@ -218,7 +223,7 @@ stop throws away a build or a sign-in someone put on it.
 2. New real bugs and taken improvements → backlog: write the finding to `$RUN/backlog-<k>.json`, then `python3
    $S/backlog.py append --file <backlog.path> --finding $RUN/backlog-<k>.json --template <template> --attach
    $RUN/<its main crop> --images-dir <backlog.images_dir>` (assigns the BUG or IMP id, copies the crop next to
-   the backlog, since run folders are git-ignored, and links it). A real bug with `backlog_id` gets no new entry:
+   the backlog, since run folders are git-ignored, and links it). A real bug with `backlog_id` gets no new entry (an improvement with one neither):
    `python3 $S/backlog.py set-status --file <backlog.path> --id <backlog_id> --status open --note "<date>,
    <device>, <build>: still reproduces, <evidence>"`. For `quick BUG-N`: the same `set-status` with `--status
    verified|open` and `<result>` in the note.

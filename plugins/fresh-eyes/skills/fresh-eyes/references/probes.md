@@ -126,13 +126,14 @@ the list back to the top with `nav.py swipe` (slow, short drags) before the next
 ### swipe-inside
 - Reveals: content clipped by its container (a grid that cannot scroll to its last row), pagers that snap back,
   jumps when releasing halfway.
-- Steps: snap → `nav.py swipe` inside the container's bounds → `capture.py snap --before <first pack>`;
+- Steps: snap into `<pack>/before` → `nav.py swipe` inside the container's bounds → snap the pack itself with
+  `--before <pack>/before` (exact paths: navigator.md);
   `geometry.still_clipped` flags rows still cut. `coverage.py set` refuses a pack snapped without `--before`,
   and one where the swipe moved nothing (it missed the list): swipe inside the list itself. A container that
   truly does not scroll goes in `--note`.
 - On a page of a pager or tab set, for each config `pages` entry k: open that page by its tab, wait 1.5 s, come
-  back by this screen's tab, swipe the content up to its end, snap, swipe once more and snap into
-  `<pack>/page-<k>` with `--before` the first of the two. A page laid out while a shorter one was open can stay
+  back by this screen's tab, swipe the content up to its end, snap into `<pack>/page-<k>/before`, swipe once more
+  and snap into `<pack>/page-<k>` with `--before` that. A page laid out while a shorter one was open can stay
   held to that height: the grid ends in a row cut to a strip with blank under it, and `still_clipped` flags it.
 - Pagers, drawers and sheets get `drag-interrupt` for the slow drag and the races.
 
