@@ -156,8 +156,10 @@ def analyze(video, out_dir, ceiling_ms=DEFAULT_CEILING_MS, record_s=None, t0_s=0
         files = extract_frames(video, os.path.join(out_dir, "frames_%d" % k), a, b)
         if files:
             sheets.append(tile(files, os.path.join(out_dir, "sheet_%d.png" % k)))
+    # the most any frame differs from the first: under MOVE_EPS nothing on screen moved (a ripple at most)
+    peak = max((_mad(frames[0], f) for f in frames[1:]), default=0.0)
     report = {"frames": len(frames), "duration": round(times[-1] - times[0], 3), "flags": found,
-              "sheets": sheets}
+              "sheets": sheets, "peak_change": round(peak, 4)}
     write_json(os.path.join(out_dir, "motion.json"), report)
     return report
 

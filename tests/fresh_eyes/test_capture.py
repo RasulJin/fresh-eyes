@@ -61,6 +61,15 @@ class SnapTest(unittest.TestCase):
             meta = read_json(os.path.join(after, "meta.json"))
         self.assertEqual((meta["before"], meta["moved"]), (first, 0))
 
+    def test_snap_on_a_screen_without_the_marker_is_blocked(self):
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            xml = f.read()
+        with tmpdir() as d, mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml):
+            self.assertEqual(capture.snap("android", "emulator-5560", os.path.join(d, "a"), marker=["Лента"]), 5)
+            self.assertIn("wrong screen", read_json(os.path.join(d, "a", "meta.json"))["blocked"])
+            self.assertEqual(capture.snap("android", "emulator-5560", os.path.join(d, "b"),
+                                          marker=["Лента", "network & internet"]), 0)
+
     def test_every_snap_records_whether_the_keyboard_is_up(self):
         with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
             xml = f.read()
@@ -243,6 +252,7 @@ class AroundTest(unittest.TestCase):
             meta = read_json(os.path.join(pack, "around.json"))
             self.assertEqual(meta["action_exit"], 0)
             self.assertIn("record_s", meta)
+            self.assertTrue(meta["animated"])  # the black box covers ~25% of the frame
 
     def _ceiling(self, pack, **kw):
         seen = []
@@ -250,7 +260,7 @@ class AroundTest(unittest.TestCase):
         with mock.patch.object(devices, "start_recording", lambda dev, dst, limit_s=60: rec), \
                 mock.patch.object(devices, "stop_recording", lambda r: None), \
                 mock.patch.object(capture, "analyze", lambda video, out, ceiling, *a: seen.append(ceiling) or
-                                  {"flags": []}), \
+                                  {"flags": [], "peak_change": 0}), \
                 mock.patch.object(capture.time, "sleep", lambda s: None):
             capture.around("android", "emulator-5560", pack, [sys.executable, "-c", "pass"], settle=0, **kw)
         return seen[0]

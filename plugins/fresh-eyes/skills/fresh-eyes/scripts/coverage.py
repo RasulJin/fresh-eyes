@@ -12,6 +12,7 @@ CLI:
   coverage.py verdict --cov cov.json --findings F [F ...] [--language ru|en]
   coverage.py map --cov cov.json [--language ru|en]
   coverage.py diff-screens --repo R --base REF --config C
+  coverage.py packs --dir <run>/<platform>/<screen> [--max 25]
   coverage.py prune --runs .fresh-eyes/runs [--keep 3]
 """
 import argparse
@@ -206,7 +207,7 @@ def _evidence_problem(path):
     return None
 
 
-def _shows_marker(pack, markers):
+def shows_marker(pack, markers):
     """True/False from the pack's nodes (text, label or testID contains a marker); None when it has none to check."""
     path = os.path.join(pack, "nodes.json")
     if not os.path.isfile(path):
@@ -261,6 +262,14 @@ def _probe_problems(c, packs, note):
         if packs and not (os.path.isfile(meta) and "before" in read_json(meta)):
             problems.append("«%s» opened by its tab and left by this screen's tab, the content swiped to its "
                             "end, snapped into <pack>/page-%d with --before (config pages)" % (page, k))
+    if c["probe"] == "back-during-animation" and packs and os.path.isdir(packs[0]):
+        dirs = [packs[0]] + [os.path.join(packs[0], s) for s in os.listdir(packs[0])]
+        moved = [read_json(os.path.join(d, "around.json")).get("animated") for d in dirs
+                 if os.path.isfile(os.path.join(d, "around.json"))]
+        if moved and all(m is False for m in moved):  # an around.json from before 0.5.10 has no "animated"
+            problems.append("no animation in any frame: Back landed before the transition began, so nothing was "
+                            "interrupted; tap-back again with a longer --delay-ms or devices.py set --what "
+                            "slow-animations")
     meta0 = os.path.join(packs[0], "meta.json") if packs else ""
     lit = read_json(meta0).get("brightness", 0) if c["state"] == "dark" and os.path.isfile(meta0) else 0
     if lit > DARK_MAX and not note:
@@ -273,7 +282,7 @@ def _probe_problems(c, packs, note):
                  for k, d in enumerate(c.get("drag", []), 1)
                  if packs and not os.path.isfile(os.path.join(packs[0], "drag-%d" % k, "meta.json"))]
     if c.get("marker") and c["probe"] in ON_SCREEN_PROBES and not note \
-            and all(_shows_marker(e, c["marker"]) is False for e in packs):
+            and all(shows_marker(e, c["marker"]) is False for e in packs):
         problems.append("the pack shows none of %s's markers %s, so it was snapped on another screen: snap it "
                         "there; if it is that screen and it is broken (blank, an error), pass --note saying "
                         "what it shows" % (c["screen"], c["marker"]))
@@ -531,6 +540,25 @@ def screens_from_diff(repo, base, config, head="HEAD"):
     return {"screens": sorted(hits, key=lambda s: (-hits[s], s)), "unmapped": unmapped}
 
 
+def pack_groups(screen_dir, max_n=25):
+    """The screen's snaps (folders with a screen.png) in groups of at most max_n, one reviewer each. A pack's
+    sub-packs stay together unless they alone are more; a group never mixes the passes of `twice`."""
+    groups, cur, cur_p2, max_n = [], [], False, max(1, max_n)
+    for top in sorted(os.listdir(screen_dir), key=lambda t: (t.endswith("-p2"), t)):
+        subs = sorted(r for r, _, files in os.walk(os.path.join(screen_dir, top)) if "screen.png" in files)
+        if not subs:
+            continue
+        if cur and (len(cur) + len(subs) > max_n or top.endswith("-p2") != cur_p2):
+            groups.append(cur)
+            cur = []
+        cur += subs
+        cur_p2 = top.endswith("-p2")
+        while len(cur) > max_n:
+            groups.append(cur[:max_n])
+            cur = cur[max_n:]
+    return groups + [cur] if cur else groups
+
+
 def _load_findings(paths, run="."):
     """All findings (each tagged with its file relative to the run, for same_as) and all reviewed pack paths.
     A confirmed finding that a question asks about (its `finding`: "f3", or "<file>#f3" in another file) turns
@@ -604,6 +632,8 @@ def main():
     p = sub.add_parser("diff-screens"); p.add_argument("--repo", required=True); p.add_argument("--base",
                                                                                               required=True)
     p.add_argument("--config", required=True)
+    p = sub.add_parser("packs"); p.add_argument("--dir", required=True, help="<run>/<platform>/<screen>")
+    p.add_argument("--max", type=int, default=25, help="snaps per reviewer")
     p = sub.add_parser("prune"); p.add_argument("--runs", required=True); p.add_argument("--keep", type=int, default=3)
     a = ap.parse_args()
     if a.cmd == "plan":
@@ -637,6 +667,8 @@ def main():
         print(json.dumps(verdict(read_json(a.cov), findings, a.language, reviewed, drift, ss), ensure_ascii=False))
     elif a.cmd == "map":
         print(coverage_map(read_json(a.cov), a.language))
+    elif a.cmd == "packs":
+        print(json.dumps(pack_groups(a.dir, a.max), ensure_ascii=False))
     elif a.cmd == "prune":
         print(json.dumps({"freed_mb": round(prune(a.runs, a.keep) / 1e6, 1)}))
     else:

@@ -2,18 +2,20 @@
 """Build the evidence pack for one coverage cell, so the navigator never has to look at pixels.
 
 snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json, som.png (+som.json),
-        crops/<check>-<k>.png (native resolution), meta.json. Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs.
+        crops/<check>-<k>.png (native resolution), meta.json. Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs,
+        5 = none of the --marker words on screen (another screen: meta.json blocked).
         --package (Android): meta.json app_running; a dead app also gets logcat.txt with its crash.
         --pages: then scrolls the screen's list half a screen at a time, a pack per page in scroll-<k>/, and back
         to the top (meta.json: scroll_pages, scroll_stop, scroll_restored).
 around: records the screen around an action command, then motion analysis: video.mp4, motion.json,
-        sheet_*.png, around.json. The ceiling is the run's motion_ceiling_ms (coverage.json above --out).
+        sheet_*.png, around.json (animated: false = no frame moved). The ceiling is the run's motion_ceiling_ms
+        (coverage.json above --out).
 logs:   Android only: the app's warnings and errors since the last `logs --clear`, plus crashes, repeats
         collapsed: logcat.txt.
 
 CLI:
   capture.py snap --platform P --device ID --out PACK [--before PACK] [--keyboard] [--expect-differs PACK] [--pages]
-                  [--package PKG]
+                  [--package PKG] [--marker WORD ...]
   capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms MS] -- CMD ...
   capture.py logs --platform android --device ID --out PACK --package PKG [--clear]
 """
@@ -28,6 +30,7 @@ import time
 from collections import Counter, defaultdict
 
 import composition
+import coverage
 import devices
 import fe_common
 import nav
@@ -35,7 +38,7 @@ from devices import Device
 from fe_common import FEError, image_size, read_json, write_json
 from geometry import moved_fraction, run_all
 from hierarchy import compress
-from motion import analyze, run_ceiling_ms
+from motion import MOVE_EPS, analyze, run_ceiling_ms
 from pixels import brightness, changed_fraction, corner_candidates, crop, downscale, som_overlay
 
 MIN_DP = {"android": 48, "ios": 44}
@@ -75,7 +78,7 @@ def _crop_order(candidates):
     return order
 
 
-def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=None, package=None):
+def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=None, package=None, marker=()):
     dev = Device(platform, device_id, "")
     os.makedirs(out, exist_ok=True)
     # Hierarchy first: uiautomator returns once the UI is idle, so the screenshot taken right after shows the
@@ -101,6 +104,10 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
         write_json(os.path.join(out, "meta.json"), meta)
         return 4
     write_json(os.path.join(out, "nodes.json"), nodes)
+    if marker and coverage.shows_marker(out, marker) is False:  # a probe step run on the wrong screen proves nothing
+        meta["blocked"] = "wrong screen: marker not found (%s)" % ", ".join(marker)
+        write_json(os.path.join(out, "meta.json"), meta)
+        return 5
     with open(os.path.join(out, "hierarchy.txt"), "w", encoding="utf-8") as f:
         f.write(compress(nodes))
     kb_top = devices.keyboard_top(dev, nodes)  # recorded on every snap: a `return` snap must show no keyboard
@@ -221,7 +228,8 @@ def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None):
     t0 = round(t_action - rec.started, 3) if platform == "android" else 0.0  # Android: first change ~ the action
     report = analyze(os.path.join(out, "video.mp4"), out, ceiling_ms, record_s, t0)
     write_json(os.path.join(out, "around.json"), {"action": action, "action_exit": code, "record_s": record_s,
-                                                  "flags": [f["type"] for f in report["flags"]]})
+                                                  "flags": [f["type"] for f in report["flags"]],
+                                                  "animated": report["peak_change"] >= MOVE_EPS})
     return 0 if code == 0 else 2
 
 
@@ -283,6 +291,7 @@ def main():
     s.add_argument("--expect-differs", help="pack whose screen must differ (state cells: the default pack)")
     s.add_argument("--pages", action="store_true", help="then a pack per scrolled page in scroll-<k>/")
     s.add_argument("--package", help="Android app id: records app_running, a dead app's crash goes to logcat.txt")
+    s.add_argument("--marker", nargs="+", default=(), help="the screen's marker words (coverage.json cell)")
     r = sub.choices["around"]
     r.usage = "capture.py around --platform P --device ID --out PACK [--settle S] [--ceiling-ms MS] -- CMD ..."
     r.add_argument("--settle", type=float, default=2.5)
@@ -293,7 +302,7 @@ def main():
     out = {}
     if a.cmd == "snap":
         code = snap(a.platform, a.device, a.out, before=a.before, keyboard=a.keyboard,
-                    expect_differs=a.expect_differs, package=a.package)
+                    expect_differs=a.expect_differs, package=a.package, marker=a.marker)
         out = {k: v for k, v in read_json(os.path.join(a.out, "meta.json")).items() if k == "app_running"}
         if code == 0 and a.pages:
             m = pages(a.platform, a.device, a.out)

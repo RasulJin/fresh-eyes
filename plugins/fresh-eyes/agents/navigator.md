@@ -79,6 +79,9 @@ Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md
    `swipe-inside` and `keyboard-open`; `--expect-differs <default pack>` for state cells like dark/font-xl —
    exit code 4 means the state had not applied yet: wait 2 s and snap again, at most 3 times, then mark the
    cell blocked with note "state did not apply"). Exit code 3 means blocked (no hierarchy): retry once, then mark blocked.
+   The snap of a `none` or `keyboard-open` cell, and any snap that starts a probe step on the screen, gets
+   `--marker <the cell's marker words in coverage.json>` (never one taken after a swipe, or a tap that opens
+   something: they may hide the header). Exit 5: another screen is up; reach the screen again, redo the step.
 5. **Record**: `python3 $S/coverage.py set --cov <run>/coverage.json --cell <id> --status done --evidence <pack>`.
    It refuses a pack that is missing, blocked, or whose recorded action failed (`capture.py around` exit 2:
    the wrapped command failed — e.g. the element was not found). Then retry the cell once, else

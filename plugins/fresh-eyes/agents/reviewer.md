@@ -21,7 +21,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 
 ## Input (from the orchestrator)
 
-- Pack folders of one screen × platform: `<run>/<platform>/<screen>/<state>-<probe>/`.
+- Snap folders of one screen × platform (`<run>/<platform>/<screen>/<state>-<probe>/` and its sub-packs), one
+  group of `coverage.py packs`: look at exactly those; a listed pack's sub-folders left out of the list go to
+  another reviewer.
 - The screen id and its spec slice `<run>/spec/<screen>.md`: the global rules and the sections of this screen
   and its neighbors. A `⚠ stale since <date>` line under a section: its code changed later; judge by it as
   written, the verdict asks the owner. Also `known.md`.

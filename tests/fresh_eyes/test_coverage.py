@@ -10,7 +10,7 @@ import unittest
 from tests.fresh_eyes.helpers import SCRIPTS, tmpdir
 from fe_common import FEError, read_json, write_json
 from coverage import (PROBES, REQUIRED_SUBPACKS, SCENARIO_KINDS, STATES, _load_findings, coverage_map, next_cells,
-                      plan, prune, screens_from_diff, set_status, verdict)
+                      pack_groups, plan, prune, screens_from_diff, set_status, verdict)
 
 ONE_SCREEN = {"language": "ru", "app": {"expo_root": "apps/mobile"}, "hooks": {},
               "screens": [{"id": "profile-trips", "route": "app/(tabs)/profile.tsx", "states": ["default", "dark"],
@@ -428,6 +428,21 @@ class StatusTest(unittest.TestCase):
             set_status(cov, dark["id"], "done", evidence=[make_pack(root, dark, brightness=173)])
         set_status(cov, dark["id"], "done", evidence=[make_pack(root, dark, brightness=60)])
 
+    def test_back_during_animation_needs_a_frame_that_moved(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0]["probes"] = ["back-during-animation"]
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        cell = next(c for c in cov["cells"] if c["probe"] == "back-during-animation")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        path = make_pack(root, cell)
+        for k, animated in (("d50", False), ("d100", False)):
+            write_json(os.path.join(path, k, "around.json"), {"action_exit": 0, "animated": animated})
+        with self.assertRaisesRegex(FEError, "no animation in any frame"):
+            set_status(cov, cell["id"], "done", evidence=[path])
+        write_json(os.path.join(path, "d150", "around.json"), {"action_exit": 0, "animated": True})
+        set_status(cov, cell["id"], "done", evidence=[path])
+
     def test_resume_blocks_mutating_cells_when_mutation_no_longer_allowed(self):
         cov = plan(MUT_SCREEN, BOTH_OK_MUT_ON, "full")
         ids = [c["id"] for c in next_cells(cov, limit=100, mutating_allowed=False)]
@@ -719,6 +734,19 @@ class PruneTest(unittest.TestCase):
         self.assertEqual(left[3], everything)  # the newest full run: `full --resume` may continue it
         self.assertEqual(left[4], everything)
         self.assertEqual(left[5], everything)
+
+
+class PackGroupsTest(unittest.TestCase):
+    def test_groups_count_sub_packs_keep_a_pack_together_and_passes_apart(self):
+        with tmpdir() as d:
+            snaps = ["default-none", "default-tap-everything"] + ["default-tap-everything/tap-%d" % k
+                                                                  for k in range(1, 5)] + ["dark-none-p2"]
+            for rel in snaps:
+                os.makedirs(os.path.join(d, rel))
+                open(os.path.join(d, rel, "screen.png"), "w").close()
+            open(os.path.join(d, "findings.json"), "w").close()
+            groups = [[os.path.relpath(p, d) for p in g] for g in pack_groups(d, max_n=3)]
+        self.assertEqual(groups, [["default-none"], snaps[1:4], snaps[4:6], ["dark-none-p2"]])
 
 
 class DiffScreensTest(unittest.TestCase):

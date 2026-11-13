@@ -124,13 +124,14 @@ words / nothing (= the current diff).
 8. Review: first, per screen with done cells, `python3 $S/spec.py slice --spec .fresh-eyes/spec.md --screens
    <id>,<its neighbors> --stale $RUN/spec-stale.json --out $RUN/spec/<id>.md` (the global rules and those
    sections; neighbors' rules often apply); journeys: `--screens` = the screens of the journeys walked, `--out
-   $RUN/spec/journey.md`. Then one `fresh-eyes:reviewer` per screen × platform with done cells (up to 4 in
-   parallel). Prompt: the pack folders, the screen id and its spec slice path (never `.fresh-eyes/spec.md`),
+   $RUN/spec/journey.md`. Then per screen × platform with done cells `python3 $S/coverage.py packs --dir
+   $RUN/<platform>/<screen>` and one `fresh-eyes:reviewer` per group it prints (up to 4 in parallel; two or more
+   groups: each writes its own `findings-<k>.json` in the screen folder). Prompt: the group's snap folders, the
+   screen id and its spec slice path (never `.fresh-eyes/spec.md`),
    `.fresh-eyes/known.md`, `.fresh-eyes/examples/`, the `references` and `language` from config, `source_root`
    (`source.root` from preflight.json, or `none`). Journey cells get one reviewer per platform over
    `<run>/<platform>/journey/`;
-   its findings carry the real screen they concern. More than ~8 packs for one screen: split them between
-   reviewers, each writing its own `findings-<k>.json` in the screen folder.
+   its findings carry the real screen they concern.
 9. Verify: once per run, `python3 $S/backlog.py index --file <backlog.path> --out $RUN/backlog-index.md` (open
    backlog entries, one line each; only verifiers get it, reviewers never see the backlog; no `backlog` in
    config: skip it). Then one
@@ -171,8 +172,8 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
 merged; one pass catches about three quarters of what two catch. Same steps, with these differences:
 - `coverage.py plan … --passes 2`: every cell gets a twin `<id>#2` (a backlog replay runs once).
 - Navigation: all first-pass cells, then the `#2` cells with fresh navigators (their packs end in `-p2`).
-- Review: one reviewer per screen × platform × pass. A second-pass reviewer gets only the `-p2` packs, writes
-  `findings-p2.json` (or `findings-p2-<k>.json`) and never sees first-pass findings.
+- Review: `coverage.py packs` never mixes the passes; a group of `-p2` packs goes to a second-pass reviewer,
+  which writes `findings-p2.json` (or `findings-p2-<k>.json`) and never sees first-pass findings.
 - Verify: one verifier per screen folder over both passes' findings; a defect both passes found gets `same_as`,
   so the verdict and the report count it once.
 
