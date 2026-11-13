@@ -12,7 +12,7 @@ CLI:
   coverage.py verdict --cov cov.json --findings F [F ...] [--language ru|en]
   coverage.py map --cov cov.json [--language ru|en]
   coverage.py diff-screens --repo R --base REF --config C
-  coverage.py packs --dir <run>/<platform>/<screen> [--max 25]
+  coverage.py packs --dir <run>/<platform>/<screen> [--max 15]
   coverage.py prune --runs .fresh-eyes/runs [--keep 3]
 """
 import argparse
@@ -540,7 +540,7 @@ def screens_from_diff(repo, base, config, head="HEAD"):
     return {"screens": sorted(hits, key=lambda s: (-hits[s], s)), "unmapped": unmapped}
 
 
-def pack_groups(screen_dir, max_n=25):
+def pack_groups(screen_dir, max_n=15):
     """The screen's snaps (folders with a screen.png) in groups of at most max_n, one reviewer each. A pack's
     sub-packs stay together unless they alone are more; a group never mixes the passes of `twice`."""
     groups, cur, cur_p2, max_n = [], [], False, max(1, max_n)
@@ -633,7 +633,7 @@ def main():
                                                                                               required=True)
     p.add_argument("--config", required=True)
     p = sub.add_parser("packs"); p.add_argument("--dir", required=True, help="<run>/<platform>/<screen>")
-    p.add_argument("--max", type=int, default=25, help="snaps per reviewer")
+    p.add_argument("--max", type=int, default=15, help="snaps per reviewer (~30 images in all)")
     p = sub.add_parser("prune"); p.add_argument("--runs", required=True); p.add_argument("--keep", type=int, default=3)
     a = ap.parse_args()
     if a.cmd == "plan":

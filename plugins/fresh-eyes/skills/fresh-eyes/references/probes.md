@@ -44,7 +44,8 @@ the list back to the top with `nav.py swipe` (slow, short drags) before the next
   fresh `nav.py screen`): the tap and Back go out in one command, Back lands mid-transition (iOS: the
   edge swipe, no sooner than ~225 ms). Repeat with `--delay-ms 50` and `150`. Then tap the content behind to
   check it responds.
-- Evidence: `capture.py around` around each `tap-back`. `coverage.py set` refuses the cell when no recorded frame
+- Evidence: `capture.py around` around each `tap-back`, `--out <pack>/d100`, `<pack>/d50`, `<pack>/d150` (the
+  delay in the name; `coverage.py set` reads these sub-folders). It refuses the cell when no recorded frame
   moved (Back landed before the transition began): repeat with a longer `--delay-ms`, or on Android widen the
   window with `devices.py set --what slow-animations` (restore with `--what animations-on`).
 
