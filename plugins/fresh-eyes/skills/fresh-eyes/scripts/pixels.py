@@ -31,6 +31,12 @@ def changed_fraction(a, b, top=0.06, bottom=0.04, w=90, h=200):
     return sum(1 for i in idx if abs(ga[i] - gb[i]) > 24) / float(len(idx))
 
 
+def brightness(path, w=90, h=200):
+    """Mean gray level 0-255 of a screenshot: dark themes sit near 60, light ones near 190."""
+    g = read_gray(path, w, h)
+    return round(sum(g) / float(len(g)))
+
+
 def downscale(src, dst, long_side=1000):
     _parent(dst)
     w, h = image_size(src)

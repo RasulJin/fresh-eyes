@@ -87,6 +87,16 @@ class StaleTest(unittest.TestCase):
                                    stdout=subprocess.PIPE).stdout.decode().strip()
             self.assertEqual(out, {"updated": "2026-01-02", "base": first, "stale_screens": ["feed"]})
 
+    def test_head_is_the_build_commit_not_the_checkout(self):
+        with tmpdir() as repo:
+            self._repo(repo)
+            built = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                                   stdout=subprocess.PIPE).stdout.decode().strip()
+            self._git(repo, "checkout", "-q", "HEAD~1")  # the checkout sits on another commit than the build
+            self._write(repo, "app/settings.tsx", "export default 3;\n")  # uncommitted: not in the build
+            self.assertEqual(stale(SPEC, repo, CONFIG)["stale_screens"], ["settings"])
+            self.assertEqual(stale(SPEC, repo, CONFIG, head=built)["stale_screens"], ["feed"])
+
     def test_a_spec_dated_today_is_current(self):
         with tmpdir() as repo:
             self._repo(repo)

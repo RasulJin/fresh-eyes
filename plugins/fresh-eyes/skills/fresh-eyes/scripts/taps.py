@@ -3,7 +3,7 @@
 Every probe names a coverage cell; mutating cells are refused unless preflight allowed mutation.
 
 CLI:
-  taps.py rapid   --platform P --device ID --x X --y Y [--count 3] [--interval-ms 30] --coverage C --cell ID
+  taps.py rapid   --platform P --device ID --x X --y Y [--count 3] [--interval-ms 120] --coverage C --cell ID
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
   taps.py tap-back --platform P --device ID --x X --y Y [--delay-ms 100] --coverage C --cell ID
@@ -55,7 +55,8 @@ def main():
             p.add_argument("--y", type=int, required=True)
         if name in ("rapid", "back"):
             p.add_argument("--count", type=int, default=3 if name == "rapid" else 1)
-            p.add_argument("--interval-ms", type=int, default=30 if name == "rapid" else 0)
+            # a person's fast taps; 30 ms is the evil race a script alone makes, asked for explicitly
+            p.add_argument("--interval-ms", type=int, default=120 if name == "rapid" else 0)
         if name in ("tap-back", "swipe-tap"):
             p.add_argument("--delay-ms", type=int, default=100 if name == "tap-back" else None)
         if name in ("drag-back", "swipe-tap"):

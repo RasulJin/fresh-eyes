@@ -36,7 +36,7 @@ from fe_common import FEError, image_size, read_json, write_json
 from geometry import moved_fraction, run_all
 from hierarchy import compress
 from motion import analyze, run_ceiling_ms
-from pixels import changed_fraction, corner_candidates, crop, downscale, som_overlay
+from pixels import brightness, changed_fraction, corner_candidates, crop, downscale, som_overlay
 
 MIN_DP = {"android": 48, "ios": 44}
 MAX_CROPS = 12
@@ -87,7 +87,7 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
     shot = devices.screenshot(dev, os.path.join(out, "screen.png"))
     w, h = image_size(shot)
     meta = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "platform": platform, "device": device_id,
-            "screen_wh": [w, h]}
+            "screen_wh": [w, h], "brightness": brightness(shot)}
     if package and platform == "android":  # every cell passes here: a crash is caught before anyone relaunches
         meta["app_running"] = bool(devices._adb(device_id, "shell", "pidof", package, check=False).strip())
         if not meta["app_running"]:

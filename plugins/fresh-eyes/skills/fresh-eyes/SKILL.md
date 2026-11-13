@@ -92,9 +92,10 @@ words / nothing (= the current diff).
    "no Maestro iOS driver", call the Maestro MCP `inspect_screen` on that simulator once and run preflight
    again. If no platform is ready, or the computer's disk is nearly full (`disk_free_gb` under 15), stop: tell
    the user what is missing or how much is free; the verdict is INCOMPLETE.
-   Then `python3 $S/spec.py stale --spec .fresh-eyes/spec.md --repo . --config .fresh-eyes/config.json --out
-   $RUN/spec-stale.json`: screens whose code changed after the spec's `Updated` date (the verdict turns their
-   `spec:` findings into questions).
+   Then `python3 $S/spec.py stale --spec .fresh-eyes/spec.md --repo . --config .fresh-eyes/config.json --head
+   <source.ref> --out $RUN/spec-stale.json`: screens whose code changed after the spec's `Updated` date (the
+   verdict turns their `spec:` findings into questions). `<source.ref>` is preflight.json's commit, so a checkout
+   on another branch does not hide the build's changes; leave `--head` out when there is no commit there.
 4. Screens:
    - `BUG-N`: read the entry in the backlog (heading + its fields); its replay becomes the coverage cell
      `<platform>/recheck-BUG-N/default/replay` (step 5, `--recheck BUG-N`), reviewed against its "Expected"

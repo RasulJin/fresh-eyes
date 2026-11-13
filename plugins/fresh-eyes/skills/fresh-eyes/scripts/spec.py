@@ -3,7 +3,7 @@
 
 CLI:
   spec.py slice --spec F --screens a,b --out OUT [--stale J]
-  spec.py stale --spec F --repo R --config C --out OUT
+  spec.py stale --spec F --repo R --config C --out OUT [--head REF]
 """
 import argparse
 import json
@@ -45,17 +45,18 @@ def slice_spec(text, screens, stale=None):
     return out.rstrip("\n") + "\n\n" + "\n".join(missing) if missing else out
 
 
-def stale(text, repo, config):
-    """Screens whose code changed after the spec's `Updated:` day (git log base, then coverage's diff mapping).
-    A spec dated today was checked against today's code: nothing is stale."""
+def stale(text, repo, config, head="HEAD"):
+    """Screens whose code changed after the spec's `Updated:` day, up to `head` (the build's commit: the checkout
+    can sit on another branch). A spec dated today was checked against today's code: nothing is stale."""
     m = re.search(r"^Updated:\s*(\d{4}-\d{2}-\d{2})", text, re.M)
     if not m:
         raise FEError("the spec has no `Updated: YYYY-MM-DD` line")
     updated = m.group(1)
-    base = run(["git", "-C", repo, "log", "-1", "--until=%sT23:59:59" % updated, "--format=%H"]).stdout.decode().strip()
+    base = run(["git", "-C", repo, "log", "-1", head, "--until=%sT23:59:59" % updated,
+                "--format=%H"]).stdout.decode().strip()
     if not base:
         raise FEError("no commit on or before %s in %s" % (updated, repo))
-    screens = [] if updated >= time.strftime("%Y-%m-%d") else screens_from_diff(repo, base, config)["screens"]
+    screens = [] if updated >= time.strftime("%Y-%m-%d") else screens_from_diff(repo, base, config, head)["screens"]
     return {"updated": updated, "base": base, "stale_screens": screens}
 
 
@@ -68,6 +69,7 @@ def main():
     p = sub.add_parser("stale", help="screens whose code changed since the spec's Updated date")
     p.add_argument("--spec", required=True); p.add_argument("--repo", required=True)
     p.add_argument("--config", required=True); p.add_argument("--out", required=True)
+    p.add_argument("--head", default="HEAD", help="the commit the tested build was made from (preflight source.ref)")
     a = ap.parse_args()
     if a.cmd == "slice":
         screens = [s.strip() for s in a.screens.split(",") if s.strip()]
@@ -78,7 +80,7 @@ def main():
             f.write(text)
         out = {"out": a.out, "screens": screens}
     else:
-        out = stale(_read(a.spec), a.repo, read_json(a.config))
+        out = stale(_read(a.spec), a.repo, read_json(a.config), a.head)
         write_json(a.out, out)
     print(json.dumps(out, ensure_ascii=False))
     return 0

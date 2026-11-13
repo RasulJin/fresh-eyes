@@ -45,6 +45,7 @@ class SnapTest(unittest.TestCase):
                 self.assertTrue(os.path.exists(os.path.join(pack, name)), name)
             meta = read_json(os.path.join(pack, "meta.json"))
             self.assertEqual(meta["screen_wh"], [1080, 2400])
+            self.assertGreater(meta["brightness"], 120)  # a light settings screen
             self.assertNotIn("blocked", meta)
             self.assertIsInstance(read_json(os.path.join(pack, "candidates.json")), list)
             self.assertGreater(len(read_json(os.path.join(pack, "som.json"))), 0)

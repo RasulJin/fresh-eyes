@@ -7,8 +7,8 @@ CLI:
   devices.py ensure --platform android|ios [--kind default|small]   ("booted": false = it was already running)
   devices.py stop --platform android|ios      (shuts down every running fresh-eyes device of that platform)
   devices.py screenshot --platform P --device ID --out PNG
-  devices.py set --platform P --device ID --name NAME --what dark|light|font-xl|font-default|offline|online|...
-  devices.py app --platform P --device ID --name NAME --app BUNDLE --do launch|terminate|clear|background|install|locale
+  devices.py set --platform P --device ID [--name NAME] --what dark|light|font-xl|font-default|offline|online|...
+  devices.py app --platform P --device ID [--name NAME] --app BUNDLE --do launch|terminate|clear|background|install|locale
                  [--artifact APK_OR_APP] [--locale TAG]   (iOS clear uninstalls: install again before launch)
 """
 import argparse
@@ -699,13 +699,16 @@ def main():
                                                                                                 required=True)
     p.add_argument("--out", required=True)
     p = sub.add_parser("set"); p.add_argument("--platform", required=True); p.add_argument("--device", required=True)
-    p.add_argument("--name", required=True); p.add_argument("--what", required=True, choices=sorted(SETTINGS))
+    p.add_argument("--name", default=""); p.add_argument("--what", required=True, choices=sorted(SETTINGS))
     p = sub.add_parser("app"); p.add_argument("--platform", required=True); p.add_argument("--device", required=True)
-    p.add_argument("--name", required=True); p.add_argument("--app", required=True)
+    p.add_argument("--name", default="", help="default: the name the device reports")
+    p.add_argument("--app", required=True)
     p.add_argument("--do", required=True, choices=sorted(APP_ACTIONS) + ["install", "locale"])
     p.add_argument("--artifact", help="with --do install: the .apk / .app to install")
     p.add_argument("--locale", help="with --do locale: the app language, e.g. ru-RU")
     a = ap.parse_args()
+    if a.cmd in ("set", "app") and not a.name:
+        a.name = real_name(Device(a.platform, a.device, ""))
     if a.cmd == "list":
         out = [dict(d._asdict(), owned=is_owned(d)) for d in list_devices()]
     elif a.cmd == "ensure":

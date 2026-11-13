@@ -228,6 +228,20 @@ class PreflightTest(unittest.TestCase):
         self.assertFalse(st["small_device"])
         self.assertIn("another build", " ".join(st["problems"]))
 
+    def test_fix_installs_the_runs_build_on_a_small_device_with_another(self):
+        small = Device("android", "emulator-5562", "fresh-eyes-small")
+        self.fake_devices(listed=(PIXEL, small))
+        builds, installed = {small.id: "c" * 64}, []
+
+        def install(dev, artifact):
+            installed.append((dev.id, artifact))
+            builds[dev.id] = "b" * 64
+        with mock.patch.object(devices, "app_build", lambda dev, app: builds.get(dev.id, "b" * 64)), \
+                mock.patch.object(devices, "install", install):
+            st = preflight.check(config(), "full", fix=True, project="/p")["platforms"]["android"]
+        self.assertEqual(installed, [(small.id, "/p/build/app.apk")])
+        self.assertTrue(st["small_device"])
+
     def test_build_drift_names_the_device_whose_app_changed(self):
         small = Device("android", "emulator-5562", "fresh-eyes-small")
         self.fake_devices(listed=(PIXEL, small))

@@ -419,6 +419,15 @@ class StatusTest(unittest.TestCase):
         set_status(cov, rapid["id"], "done", evidence=[pack(rapid, text="Поделиться")])
         self.assertEqual([c["status"] for c in cell.values()], ["done"] * 3)
 
+    def test_a_light_frame_cannot_be_a_dark_cell(self):
+        cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full")
+        dark = next(c for c in cov["cells"] if c["state"] == "dark")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        with self.assertRaisesRegex(FEError, "app_theme"):
+            set_status(cov, dark["id"], "done", evidence=[make_pack(root, dark, brightness=173)])
+        set_status(cov, dark["id"], "done", evidence=[make_pack(root, dark, brightness=60)])
+
     def test_resume_blocks_mutating_cells_when_mutation_no_longer_allowed(self):
         cov = plan(MUT_SCREEN, BOTH_OK_MUT_ON, "full")
         ids = [c["id"] for c in next_cells(cov, limit=100, mutating_allowed=False)]

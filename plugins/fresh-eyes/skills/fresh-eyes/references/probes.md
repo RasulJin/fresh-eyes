@@ -21,9 +21,10 @@ the list back to the top with `nav.py swipe` (slow, short drags) before the next
 ### rapid-tap
 - Reveals: double sheets/dialogs, double send, double navigation (stacked screens).
 - Target: the primary action that opens or sends something (Share, Send, Submit, Buy), never `⋯`, Back or Close.
-- `python3 $S/taps.py rapid --platform P --device ID --x X --y Y --count 3 --interval-ms 30 ...` wrapped in
-  `capture.py around` to record (x, y in screenshot pixels: the center of the node in a fresh `nav.py screen`
-  taken right before; rows move after state changes, so never reuse coordinates from an earlier screen).
+- `python3 $S/taps.py rapid --platform P --device ID --x X --y Y --count 3 ...` (120 ms apart, a person's fast
+  taps) wrapped in `capture.py around` to record (x, y in screenshot pixels: the center of the node in a fresh
+  `nav.py screen` taken right before; rows move after state changes, so never reuse coordinates from an earlier
+  screen). The evil race no person makes, `--interval-ms 30`, only when a request asks for it.
 - Oracle: one Back/dismiss later nothing of it is left on screen: `taps.py back` once, then
   `capture.py snap --out <pack>/afterback` (`coverage.py set` refuses the cell without it).
 - Mutating: no (but if the button sends something, the probe belongs to a mutating cell).

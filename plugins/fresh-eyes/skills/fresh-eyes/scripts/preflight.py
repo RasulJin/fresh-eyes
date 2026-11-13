@@ -160,7 +160,7 @@ def _prepare(dev, platform, app_id, fix):
     return st
 
 
-def _platform_state(config, platform, kind_needed_small, fix):
+def _platform_state(config, platform, kind_needed_small, fix, artifact=None):
     app_id = (config.get("app") or {}).get("%s_id" % platform)
     owned = [d for d in devices.list_devices() if d.platform == platform and devices.is_owned(d)]
     state = {"ok": False, "device": None, "name": None, "owned": False, "small_device": False,
@@ -189,6 +189,12 @@ def _platform_state(config, platform, kind_needed_small, fix):
     state["problems"] = earlier + state["problems"]
     if small is not None:
         small_state = _prepare(small, platform, app_id, fix)
+        if fix and artifact and state["build"] and small_state["build"] != state["build"]:
+            try:  # the small device lags a build behind: give it the run's build (~20 s), then check again
+                devices.install(small, artifact)
+                small_state = _prepare(small, platform, app_id, fix)
+            except FEError as e:
+                small_state["problems"].append(str(e))
         if small_state["ok"] and small_state["build"] != state["build"]:
             small_state["ok"] = False
             small_state["problems"].append("another build than on %s is installed" % main.name)
@@ -305,7 +311,8 @@ def check(config, mode, fix=False, project=".", only=None, source=None):
                             "app_installed": False, "soft_keyboard": True, "animations": True,
                             "problems": ["not requested in this run (--platforms)"]}
             continue
-        platforms[p] = _platform_state(config, p, wants_small, fix)
+        art = (((config.get("builds") or {}).get(mode) or {}).get(p) or {}).get("artifact")
+        platforms[p] = _platform_state(config, p, wants_small, fix, art and os.path.join(project, art))
     ok_platforms = [p for p, s in platforms.items() if s["ok"]]
     env = _env(config, mode, platforms, project, fix)
     unchecked = ["%s: %s" % (p, "; ".join(s["problems"])) for p, s in platforms.items() if not s["ok"]]

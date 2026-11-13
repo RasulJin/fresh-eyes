@@ -69,6 +69,7 @@ LABELS = {
     "en": {"BLOCK": "DO NOT SHIP", "ISSUES": "HAS ISSUES", "INCOMPLETE": "NOT FULLY CHECKED", "CLEAN": "CLEAN"},
 }
 CODE_EXT = (".ts", ".tsx", ".js", ".jsx")
+DARK_MAX = 120  # mean gray of a dark-theme frame: dark screens measured 56-68, light ones 173-196
 
 
 def _cell(platform, screen, state, probe):
@@ -260,6 +261,12 @@ def _probe_problems(c, packs, note):
         if packs and not (os.path.isfile(meta) and "before" in read_json(meta)):
             problems.append("«%s» opened by its tab and left by this screen's tab, the content swiped to its "
                             "end, snapped into <pack>/page-%d with --before (config pages)" % (page, k))
+    meta0 = os.path.join(packs[0], "meta.json") if packs else ""
+    lit = read_json(meta0).get("brightness", 0) if c["state"] == "dark" and os.path.isfile(meta0) else 0
+    if lit > DARK_MAX and not note:
+        problems.append("the dark frame is light (brightness %d > %d): the app's own theme is pinned, pick its Dark "
+                        "the way config app_theme says and snap again; dark but lit by a photo or map: pass --note "
+                        "saying so" % (lit, DARK_MAX))
     if c["probe"] == "scenario" and packs:
         problems += ["a scenario cell needs: %s (see probes.md)" % p for p in _scenario_problems(packs[0], c)]
     problems += ["a drag of «%s» with the overlay open, snapped into <pack>/drag-%d (config drag)" % (d, k)
@@ -467,11 +474,14 @@ def _strip_ext(path):
     return path
 
 
-def screens_from_diff(repo, base, config):
+def screens_from_diff(repo, base, config, head="HEAD"):
+    """head: the commit the build was made from; only HEAD adds the checkout's uncommitted and untracked files."""
     expo_root = (config.get("app") or {}).get("expo_root", ".")
     changed = set()
-    for i, cmd in enumerate((["diff", "--name-only", "%s...HEAD" % base], ["diff", "--name-only"],
-                             ["ls-files", "--others", "--exclude-standard"])):
+    cmds = [["diff", "--name-only", "%s...%s" % (base, head)]]
+    if head == "HEAD":
+        cmds += [["diff", "--name-only"], ["ls-files", "--others", "--exclude-standard"]]
+    for i, cmd in enumerate(cmds):
         out = run(["git", "-C", repo] + cmd, check=i == 0).stdout.decode()  # a bad base must not look like "no change"
         changed.update(line.strip() for line in out.splitlines() if line.strip())
     routes = defaultdict(list)
