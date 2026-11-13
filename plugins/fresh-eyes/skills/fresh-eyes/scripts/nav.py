@@ -91,6 +91,15 @@ def adb_text_arg(text):
     return out.replace("%", "\\%").replace(" ", "%s")
 
 
+CHUNK = 20  # chars per `input text`: Android drops characters from a long one and while a field reformats
+CHUNK_PAUSE_S = 0.15
+
+
+def adb_text_chunks(text, size=CHUNK):
+    """(raw, escaped) pieces of `size` characters, each escaped on its own so no escape is cut in half."""
+    return [(text[i:i + size], adb_text_arg(text[i:i + size])) for i in range(0, len(text), size)]
+
+
 def wait_for(dev, text=None, label=None, rid=None, timeout=15):
     deadline = time.time() + timeout
     while True:
@@ -141,9 +150,10 @@ def main():
             devices.ios_type(dev, text)
         else:
             devices._require_owned(dev, "send input")
-            arg = adb_text_arg(text)
-            fe_common.run([devices.adb_path(), "-s", dev.id, "shell", "input", "text", arg],
-                          redact=(text, arg) if a.env else ())
+            for k, (raw, arg) in enumerate(adb_text_chunks(text)):  # all escaped (and checked) before typing
+                time.sleep(CHUNK_PAUSE_S if k else 0)
+                fe_common.run([devices.adb_path(), "-s", dev.id, "shell", "input", "text", arg],
+                              redact=(text, raw, arg) if a.env else ())
         time.sleep(0.5)
     elif a.cmd == "swipe":
         devices.swipe(dev, a.src[0], a.src[1], a.to[0], a.to[1], a.ms)

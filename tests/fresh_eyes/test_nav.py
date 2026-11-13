@@ -46,6 +46,13 @@ class FindTest(unittest.TestCase):
 
 
 class InputTest(unittest.TestCase):
+    def test_long_text_goes_in_escaped_chunks_that_rejoin(self):
+        text = "https://example.com/p?a=1&b=50%off " * 3 + "back\\slash end"
+        chunks = nav.adb_text_chunks(text, size=7)
+        self.assertEqual("".join(raw for raw, _ in chunks), text)
+        self.assertTrue(all(len(raw) <= 7 and arg == nav.adb_text_arg(raw) for raw, arg in chunks))
+        self.assertEqual("".join(arg for _, arg in chunks), nav.adb_text_arg(text))  # no escape cut in half
+
     def test_ascii_text_escaped_for_adb(self):
         self.assertEqual(nav.adb_text_arg("hello world & co"), "hello%sworld%s\\&%sco")
 
