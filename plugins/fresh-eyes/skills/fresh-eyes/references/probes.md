@@ -138,6 +138,14 @@ the list back to the top with `nav.py swipe` (slow, short drags) before the next
   held to that height: the grid ends in a row cut to a strip with blank under it, and `still_clipped` flags it.
 - Pagers, drawers and sheets get `drag-interrupt` for the slow drag and the races.
 
+### edge
+- On a verifier's request only (`repeat-probe`, `args` `--node nN --side top --dp 2`), never planned: does a target
+  drawn under the minimum answer just outside its drawn edge? uiautomator cuts bounds to the parent.
+- Bring the screen to the pack's state (the node at the same bounds in `nav.py screen`), then `capture.py around
+  --out <pack>-recheck -- python3 $S/taps.py edge --pack <pack> --node nN --side S --dp 2 ...` and `capture.py snap
+  --out <pack>-recheck --before <pack>`. Side: where its parent clips the node, else its short side.
+- Oracle: the node itself responds (its icon toggles, its action opens), not just any change on screen.
+
 ### drag-interrupt
 - Reveals: invisible windows left after a drag closes something (the next tap is eaten), Back mid-drag reopening
   it or leaving the content dead or shifted, pagers and drawers that jump past halfway or snap back.

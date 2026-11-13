@@ -11,6 +11,8 @@ CLI:
                     --coverage C --cell ID
   taps.py swipe-tap --platform android --device ID --from X,Y --to X,Y [--ms 250] [--delay-ms MS] --x X --y Y
                     --coverage C --cell ID      (--delay-ms: the run's motion_ceiling_ms unless given)
+  taps.py edge    --platform P --device ID --pack P --node nN --side top|bottom|left|right [--dp 2]
+                  --coverage C --cell ID      (a tap just outside the node's visible edge, from the pack's nodes)
 """
 import argparse
 import json
@@ -41,16 +43,25 @@ def guard(coverage_path, cell_id, platform=None):
     return cell
 
 
+def edge_point(bounds, side, dp, px_per_dp):
+    """The point dp beyond a node's visible edge on `side`, centred along it: uiautomator cuts bounds to the parent,
+    so a tap there tells whether the declared hit area (hitSlop, a 48 dp box) really answers."""
+    x, y, w, h = bounds
+    off = round(dp * px_per_dp)
+    return {"top": (x + w // 2, y - off), "bottom": (x + w // 2, y + h - 1 + off),
+            "left": (x - off, y + h // 2), "right": (x + w - 1 + off, y + h // 2)}[side]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("rapid", "outside", "back", "tap-back", "drag-back", "swipe-tap"):
+    for name in ("rapid", "outside", "back", "tap-back", "drag-back", "swipe-tap", "edge"):
         p = sub.add_parser(name)
         p.add_argument("--platform", required=True, choices=["android", "ios"])
         p.add_argument("--device", required=True)
         p.add_argument("--coverage", required=True)
         p.add_argument("--cell", required=True)
-        if name not in ("back", "drag-back"):
+        if name not in ("back", "drag-back", "edge"):
             p.add_argument("--x", type=int, required=True)
             p.add_argument("--y", type=int, required=True)
         if name in ("rapid", "back"):
@@ -65,11 +76,25 @@ def main():
             p.add_argument("--ms", type=int, default=2000 if name == "drag-back" else 250)
         if name == "drag-back":
             p.add_argument("--back-at-ms", type=int, default=700)
+        if name == "edge":
+            p.add_argument("--pack", required=True, help="the pack whose nodes.json holds the node")
+            p.add_argument("--node", required=True, help="node id from that nodes.json, e.g. n12")
+            p.add_argument("--side", required=True, choices=["top", "bottom", "left", "right"])
+            p.add_argument("--dp", type=float, default=2)
     a = ap.parse_args()
     guard(a.coverage, a.cell, a.platform)
     dev = Device(a.platform, a.device, "")
     if a.cmd == "rapid":
         devices.rapid_taps(dev, a.x, a.y, a.count, a.interval_ms)
+    elif a.cmd == "edge":
+        node = next((n for n in read_json(os.path.join(a.pack, "nodes.json")) if n["id"] == a.node), None)
+        if node is None:
+            raise FEError("no node %s in %s/nodes.json" % (a.node, a.pack))
+        ppd = read_json(os.path.join(a.pack, "meta.json")).get("px_per_dp") or 2.625
+        x, y = edge_point(node["bounds"], a.side, a.dp, ppd)
+        devices.tap(dev, x, y)
+        print(json.dumps({"probe": "edge", "cell": a.cell, "x": x, "y": y}))
+        return 0
     elif a.cmd == "outside":
         devices.tap(dev, a.x, a.y)
     elif a.cmd == "tap-back":

@@ -70,8 +70,11 @@ bug does that). The exceptions are single lookups, and only in `source_root` (th
 version than the build): a hit area (`hitSlop`, padding, a 48 dp wrapper) or a screen-reader label, which a
 frame cannot show; and, before confirming that the app shows other words or lacks an element the spec asks for,
 a comment beside that text or element saying the choice is deliberate (a data limit, a decision): then the
-rule is a conflict, `unsure` plus a question with `finding`. No `source_root`: no lookups, and a target drawn
-under the minimum whose hit area no frame shows is `unsure` ("hit area not checked: no source for this build").
+rule is a conflict, `unsure` plus a question with `finding`. No `source_root`: no lookups. A target drawn
+under the minimum whose hit area no frame shows (no source, or a source box the drawn bounds cut: a parent clips
+it) is not `unsure`: request `{"finding": "<id>", "pack": "<pack>", "do": "repeat-probe", "probe": "edge", "args":
+"--node nN --side top --dp 2"}` (its node in the pack's `nodes.json`; the side its parent clips, else its short
+side). Second pass: the node itself responded in the recheck → `rejected`, it did not → `confirmed`; no question.
 
 Before you confirm a finding, read its `steps` as the person who will fix it would: from the app's start, one
 action per item, buttons by their on-screen text, ending with what to look at. If they name cells, packs, step

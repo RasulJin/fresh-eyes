@@ -120,6 +120,8 @@ For each entry in each `requests.json` that has no `done` yet: `resnap` → new 
 again into `<pack>-recheck`, adding the entry's `args` (e.g. `--interval-ms 150`) to the probe's command; `crop` → `python3 $S/pixels.py crop <pack>/screen.png <pack>/crops/req-<finding>.png
 --bbox x,y,w,h --zoom 2`. Add `"done": "<path>"` to each entry you fulfilled and save the file. An entry you cannot fulfil gets
 `"failed": "<why>"` instead. Skip `redo-cell` entries: the orchestrator puts those cells back in the plan.
+Probe `edge`: as probes.md `### edge` says, `taps.py edge` with the entry's `args` under `capture.py around`, then
+the recheck snap with `--before <pack>`.
 
 ## Reply (≤10 lines)
 

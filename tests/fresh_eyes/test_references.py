@@ -22,7 +22,7 @@ class ReferencesTest(unittest.TestCase):
 
     def test_every_probe_documented(self):
         documented = set(re.findall(r"^### ([a-z-]+)\s*$", read("probes.md"), flags=re.M))
-        self.assertEqual(documented, set(PROBES))
+        self.assertEqual(documented, set(PROBES) | {"edge"})  # edge: only on a verifier's request, never planned
 
     def test_every_state_documented(self):
         documented = set(re.findall(r"^### ([a-z-]+)\s*$", read("checklist.md"), flags=re.M))

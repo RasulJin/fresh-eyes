@@ -9,7 +9,7 @@ from tests.fresh_eyes.helpers import tmpdir
 import devices
 import taps
 from fe_common import FEError, write_json
-from taps import guard
+from taps import edge_point, guard
 
 CELL = {"id": "android/feed/default/rapid-tap", "platform": "android", "screen": "feed", "state": "default",
         "probe": "rapid-tap", "mutating": False, "status": "todo", "evidence": [], "note": ""}
@@ -43,6 +43,13 @@ class TapsGuardTest(unittest.TestCase):
             os.remove(os.path.join(d, "preflight.json"))
             with self.assertRaises(FEError):
                 guard(cov, CELL["id"])
+
+
+class EdgeTest(unittest.TestCase):
+    def test_edge_point_four_sides(self):
+        box = [100, 200, 40, 20]  # 2 dp at 2.5 px/dp = 5 px outside each edge, centred along it
+        self.assertEqual([edge_point(box, s, 2, 2.5) for s in ("top", "bottom", "left", "right")],
+                         [(120, 195), (120, 224), (95, 210), (144, 210)])
 
 
 class SwipeTapTest(unittest.TestCase):
