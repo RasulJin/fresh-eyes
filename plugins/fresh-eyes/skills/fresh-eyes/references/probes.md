@@ -15,8 +15,9 @@ Just look. `capture.py snap`, on Android always with `--package <app.android_id>
 output and meta.json is a crash, its log goes to the pack's `logcat.txt`. With `--keyboard` when an input is
 focused. On the `default` state add `--pages`: the snap then scrolls the screen's list half a screen at a time
 into `scroll-<k>/` and back, so the checks see the whole screen, not its first viewport. `scroll_stop` says why
-the pages ended: `end`, `limit`, or the page snap that failed. `"scroll_restored": false` in its output: swipe
-the list back to the top with `nav.py swipe` (slow, short drags) before the next cell.
+the pages ended: `end`, `limit`, `keyboard covers list` (drags stay above an open keyboard), or the page snap
+that failed. `"scroll_restored": false` in its output: swipe the list back to the top with `nav.py swipe` (slow,
+short drags) before the next cell.
 
 ### rapid-tap
 - Reveals: double sheets/dialogs, double send, double navigation (stacked screens).

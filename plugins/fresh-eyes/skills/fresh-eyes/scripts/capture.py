@@ -172,17 +172,29 @@ def _shift(a, b, box):
     return moved.most_common(1)[0][0] if moved else (0 if common else None)
 
 
+def _band(bounds, kb_top=None):
+    """(cx, low, high) of a page drag: PAGE_STEP of the list's visible height around its middle, above an open
+    keyboard (a drag on it types, Gboard glides a word). None: the keyboard leaves under a quarter of the list."""
+    x, y, w, h = bounds
+    if kb_top is not None and kb_top - y < h:
+        if kb_top - y < h // 4:
+            return None
+        h = kb_top - y
+    return x + w // 2, y + int(h * (0.5 + PAGE_STEP / 2)), y + int(h * (0.5 - PAGE_STEP / 2))
+
+
 def pages(platform, device_id, out, max_pages=PAGES):
     """After a snap into `out`: scroll its main list page by page, a pack each in scroll-<k>/, then the same
     distances back, so the next cell starts at the top. The checks see the whole screen, not its first viewport.
-    scroll_stop: "end", "limit" (max_pages reached) or the failed snap."""
+    scroll_stop: "end", "limit" (max_pages reached), "keyboard covers list" or the failed snap."""
     dev = Device(platform, device_id, "")
     meta = read_json(os.path.join(out, "meta.json"))
-    lst = main_list(read_json(os.path.join(out, "nodes.json")), meta["screen_wh"][1])
-    shifts, stop = [], "end"
-    if lst is not None:
-        x, y, w, h = lst["bounds"]
-        cx, low, high = x + w // 2, y + int(h * (0.5 + PAGE_STEP / 2)), y + int(h * (0.5 - PAGE_STEP / 2))
+    nodes = read_json(os.path.join(out, "nodes.json"))
+    lst = main_list(nodes, meta["screen_wh"][1])
+    band = lst and _band(lst["bounds"], devices.keyboard_top(dev, nodes))
+    shifts, stop = [], "end" if band or lst is None else "keyboard covers list"
+    if band:
+        cx, low, high = band
         slop = round(TOUCH_SLOP_DP * (meta.get("px_per_dp") or 2.625))
         prev = out
         for k in range(1, max_pages + 1):

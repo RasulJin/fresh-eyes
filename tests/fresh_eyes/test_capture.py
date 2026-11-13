@@ -417,6 +417,7 @@ class FakeList(object):
     def pack(self):
         with tmpdir() as d, mock.patch.object(capture, "snap", self.snap), \
                 mock.patch.object(devices, "swipe", self.swipe), \
+                mock.patch.object(devices, "keyboard_top", lambda dev, n=(): None), \
                 mock.patch.object(devices, "screenshot", lambda dev, dst: self.frame(dst)), \
                 mock.patch.object(capture.time, "sleep", lambda s: None):
             pack = os.path.join(d, "default-none")
@@ -465,6 +466,14 @@ class PagesTest(unittest.TestCase):
             meta = capture.pages("android", "emulator-5560", pack)
             self.assertEqual(_scrolls(pack), ["scroll-1"])
         self.assertEqual((meta["scroll_pages"], meta["scroll_stop"]), (1, "snap failed on page 2 (exit 3)"))
+
+    def test_page_drags_stay_above_an_open_keyboard(self):
+        box = [0, 200, 1080, 2000]
+        self.assertEqual(capture._band(box), (540, 1700, 700))
+        cx, low, high = capture._band(box, kb_top=1400)
+        self.assertLess(low, 1400)
+        self.assertGreater(high, 200)
+        self.assertIsNone(capture._band(box, kb_top=600))  # under a quarter of the list is left
 
     def test_shift_tells_no_common_text_from_texts_that_stayed(self):
         box = [0, 0, 360, 800]
