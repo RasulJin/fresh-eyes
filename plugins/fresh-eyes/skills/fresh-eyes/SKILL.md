@@ -156,6 +156,9 @@ words / nothing (= the current diff).
 10. `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`
     and `python3 $S/coverage.py map --cov $RUN/coverage.json --language <config>`. If the verdict names done
     cells no reviewer looked at, send those packs to a reviewer (`findings-<k>.json`), verify, and rerun it.
+    Then `python3 $S/backlog.py match --index $RUN/backlog-index.md --findings <all findings*.json> --out
+    $RUN/imp.md --language <config>`: an IMP an open backlog entry already proposes gets its `backlog_id`, and
+    imp.md holds every IMP in full (the new ones numbered, the known ones a line each).
 11. Write `$RUN/report.md` by `$R/report-format.md` (see "Report").
 12. Review with the user, then write the backlog and regression flows (see "After the report").
 
@@ -211,7 +214,8 @@ with `"gap": true` and platform gaps from `$R/platforms.md`: this setup can neve
 the verdict), confirmed bugs, each with its
 numbered steps, expected and actual copied from the finding (a finding the verdict lists in `merged` goes under
 the one its `same_as` points to, or the confirmed one with the same `log` line; any other finding is its own item);
-a confirmed bug with `backlog_id` goes under "still reproduces (BUG-N)", not among the new ones; improvements,
+a confirmed bug with `backlog_id` goes under "still reproduces (BUG-N)", not among the new ones; improvements
+(only the new ones from imp.md: one line per screen with their imp.md numbers and titles, then a link to imp.md),
 "look with your own eyes" (unsure, the findings the verdict lists in `asked` next to their question, the ones
 it lists in `stale` with one question per stale screen from its reason line; neither goes under bugs or into the
 backlog), questions. Link evidence crops by path. Keep it scannable.
@@ -222,8 +226,8 @@ stop throws away a build or a sign-in someone put on it.
 
 ## After the report
 
-1. Show the user a numbered list: confirmed bugs (new and "still reproduces") and improvements (title, screen,
-   platform, severity, crop path). Ask which bugs are real or intended and which improvements to take. Default
+1. Show the user a numbered list: confirmed bugs (new and "still reproduces") and the new improvements (their
+   imp.md numbers and titles). Ask which bugs are real or intended and which improvements to take. Default
    if they just say ok: all confirmed bugs are real and every improvement goes in as a proposal.
 2. New real bugs and taken improvements → backlog: write the finding to `$RUN/backlog-<k>.json`, then `python3
    $S/backlog.py append --file <backlog.path> --finding $RUN/backlog-<k>.json --template <template> --attach

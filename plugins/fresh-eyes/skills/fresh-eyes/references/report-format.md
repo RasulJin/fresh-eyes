@@ -5,6 +5,7 @@
 ```
 .fresh-eyes/runs/<YYYYMMDD-HHMM>-<mode>/
   preflight.json  coverage.json  spec-stale.json  backlog-index.md  report.md
+  imp.md                                    ← backlog.py match: every IMP in full, new ones numbered
   spec/<screen>.md  spec/journey.md         ← spec slices: global rules + the screen and its neighbors
   <platform>/<screen>/<state>-<probe>/      ← one evidence pack per cell
     screen.png screen_1000.png som.png som.json nodes.json hierarchy.txt candidates.json meta.json
@@ -112,8 +113,8 @@ Evidence: <crop path> · found by <found_by> · backlog <BUG-N>
 ## Still reproduces
 - **<title>** (BUG-N), <platform>, <screen>, severity <s> · evidence <crop path>
 
-## Improvements
-1. **<title>** — <what to change and why>, reference: <app/pattern>
+## Improvements: <new> new, <known> already in the backlog (imp.md)
+- <screen>: 1. <title>; 2. <title>; … (imp.md numbers)
 
 ## Not verified
 - <finding still pending, and why the verifier could not decide>
