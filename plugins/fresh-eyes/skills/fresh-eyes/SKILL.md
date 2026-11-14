@@ -71,8 +71,9 @@ Goal: a working `.fresh-eyes/` for this project, confirmed by the user.
 5. Devices: `python3 $S/devices.py ensure --platform <p>` for each platform in config (owned devices only).
 6. Show the user the allow-rules a long run needs (they add them to `.claude/settings.local.json`; you do not):
    `Bash(python3 <this skill dir>/scripts/*)`, `Bash(adb:*)`, `Bash(xcrun simctl:*)`, `mcp__<maestro server>__*`.
-7. Ask the user to confirm: the env URLs, the screen list, every `⚠ conflict` in the spec, and the 5–10 most
-   important spec rules. Write their answers into the files.
+7. Ask the user to confirm: the env URLs, the screen list, every `⚠ conflict` in the spec, the 5–10 most
+   important spec rules, and which consent dialogs the test accounts may accept (terms, community rules, an AI
+   notice: its text and button, into `consents`; none named → none accepted). Write their answers into the files.
 
 ## quick
 
@@ -120,7 +121,9 @@ words / nothing (= the current diff).
    the cell ids, `package: <app.android_id>` (it goes to every `capture.py snap --package`, which saves the
    crash log when the app died), and `app language: <app.locale>` when config sets it. A navigator that finds
    the app signed out signs in with `accounts` itself; cells blocked with
-   "signed out: <variable> not set" mean the user has to export that variable before the next run. A reply line
+   "signed out: <variable> not set" mean the user has to export that variable before the next run; cells
+   blocked with "consent: <text>" need the user's yes for that dialog in config `consents` (ask after the
+   report, never let an agent accept it). A reply line
    `reach: <screen>: <how>`: write `<how>` into that screen's `reach` in `.fresh-eyes/config.json`, so the next
    run does not hit the same wall. A navigator whose output has not grown for 10 minutes is stuck (a permission
    prompt nobody answers, a loop): stop it and start a fresh one on the cells `coverage.py next` still lists.

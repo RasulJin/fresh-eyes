@@ -58,6 +58,11 @@ nobody answers in a night run.
   onboarding hints), typing only with `nav.py type --env <email_env>` and `--env <password_env>`. Never create
   an account. If `nav.py type` says the variable is not set, or signing in
   fails, mark the cells `blocked` with note "signed out: <variable> not set" or "signed out: <why>".
+- Consent dialogs (terms, community rules, privacy, an AI or data-sharing notice: anything asking the account
+  to agree): press its accepting button (Accept, I agree, Got it) only when an entry of `consents` in
+  `config.json` matches it, its `text` part of the dialog and its `button` that label: the owner allowed it.
+  Any other: close it (its cancel, or Back); a cell that cannot go on without it is `blocked` with note
+  "consent: <the dialog's title or first line>". In `tap-everything` it is a tap's result: snap, close, go on.
 
 ## For each cell `<platform>/<screen>/<state>/<probe>`
 

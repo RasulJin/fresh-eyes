@@ -57,6 +57,16 @@ class AgentsTest(unittest.TestCase):
         reviewer = " ".join(frontmatter("reviewer")[1].split())
         self.assertIn("then no BUG: a `spec-text` or `known` entry", reviewer)
 
+    def test_consents_only_from_the_owners_list(self):
+        # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
+        nav = " ".join(frontmatter("navigator")[1].split())
+        self.assertIn("only when an entry of `consents`", nav)
+        self.assertIn('"consent: <the dialog', nav)
+        skill_dir = os.path.join(PLUGIN, "skills", "fresh-eyes")
+        for rel in ("SKILL.md", os.path.join("references", "config-format.md")):
+            with open(os.path.join(skill_dir, rel), encoding="utf-8") as f:
+                self.assertIn("`consents`", f.read(), rel)
+
     def test_reviewer_and_verifier_read_a_spec_slice(self):
         for name in ("reviewer", "verifier"):
             body = frontmatter(name)[1]

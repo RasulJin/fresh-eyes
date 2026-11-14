@@ -332,7 +332,8 @@ def check(config, mode, fix=False, project=".", only=None, source=None):
             "mode": mode, "platforms": platforms, "disk_free_gb": round(free_gb, 1),
             "env": {k: env[k] for k in ("name", "verified", "api_host")},
             "mutating_allowed": bool(env["verified"] and env["name"] in ("staging", "local")),
-            "tools": tools, "source": src, "unchecked": unchecked}
+            "tools": tools, "source": src, "unchecked": unchecked,
+            "consents": [c.get("text", "") for c in config.get("consents") or []]}
 
 
 def _brief(res):
@@ -343,6 +344,8 @@ def _brief(res):
                                                               res["mutating_allowed"]))
     if res.get("source"):
         lines.append("  source: %s" % res["source"]["ref"][:40])
+    consents = res.get("consents") or []  # the owner's list; a dialog not on it blocks its cell
+    lines.append("  consents the navigator may accept: %s" % ("; ".join(c[:40] for c in consents) or "none"))
     missing = [k for k, v in res["tools"].items() if not v]
     if missing:
         lines.append("  missing tools: %s" % ", ".join(missing))

@@ -17,6 +17,7 @@ noted. Example (generic values):
     "author": {"email_env": "FE_AUTHOR_EMAIL", "password_env": "FE_AUTHOR_PASSWORD"},
     "viewer": {"email_env": "FE_VIEWER_EMAIL", "password_env": "FE_VIEWER_PASSWORD"}
   },
+  "consents": [{"text": "Community guidelines", "button": "Accept"}, {"text": "is an AI", "button": "Got it"}],
   "builds": {
     "quick": {
       "android": {"build": "npx expo run:android --device fresh-eyes-pixel", "cwd": "apps/mobile",
@@ -63,6 +64,10 @@ noted. Example (generic values):
   The first role is the one a navigator signs in with when it finds the app signed out. Export the variables in
   the shell that starts Claude Code (a headless `claude -p` run inherits them); without them a signed-out
   device's cells end blocked.
+- `consents` (optional): the consent dialogs the owner lets the test accounts accept (terms, community rules,
+  an AI or data-sharing notice): `text`, a part of the dialog's text (its title), and `button`, the label to
+  press. The navigator presses an accepting button only on a dialog listed here; any other consent dialog that
+  stands in a cell's way blocks the cell with note `consent: <its text>`. Preflight prints the list.
 - `builds.quick|full.<platform>`: `build` (command, run in `cwd`), `install` (optional), `start` (Metro),
   `metro_env` (env for Metro), `artifact` (built file to install).
 - `hooks`: optional project commands, run from the repo root: `seed` creates data for `empty`/`long-text`/`long-list`
