@@ -48,20 +48,23 @@ class ScoreTest(unittest.TestCase):
                 card = read_json(out["out"])
                 values = {k: card[k]["value"] for k in stats.LIMITS}
                 self.assertEqual(values, {
-                    "M1": 3, "M2": 0.2, "M3": 0.4, "M4": None, "M5": 3, "M6": 1, "M7": None, "M8": 31,
+                    "M1": 3, "M2": 0.333, "M3": 0.333, "M4": None, "M5": 3, "M6": 1, "M7": None, "M8": 32,
                     "M9": {"hours": 5.0, "idle_gaps": 1},  # 10, 500, 1000, then 2000: one gap over 10 min
                     "M10": {"total": 157, "orchestrator": 107}, "M11": None,
                     "M12": {"stops": 1, "consent_blocked": 1}})
                 self.assertEqual(card["M6"]["of"], 2)  # welcome is stale: its confirmed spec:G-target turns unsure
                 self.assertEqual((out["passed"], out["unknown"]), (3, ["M4", "M7", "M11"]))  # M5, M8, M10
                 card["M4"] = {"value": 0.04}  # the judge's entry
+                card["M1"] = {"value": 0, "by": "judge"}  # its correction: the 3 steps were SKILL.md's
                 write_json(out["out"], card)
                 with open(os.path.join(run, "run-log.md"), "w", encoding="utf-8") as f:
                     f.write("# Ход прогона\n1. reach поправлен руками\n- заметка\n")
                 card = read_json(stats.score(run)["out"])  # no session: transcript metrics unknown
             self.assertEqual((card["M4"]["value"], card["M4"]["ok"]), (0.04, True))
-            self.assertEqual(card["M1"]["value"], 1)
+            self.assertEqual((card["M1"]["value"], card["M1"]["ok"], card["M1"]["by"]), (0, True, "judge"))
             self.assertEqual(card["M10"]["ok"], None)
+            os.remove(os.path.join(run, "score.json"))
+            self.assertEqual(read_json(stats.score(run)["out"])["M1"]["value"], 1)  # run-log.md: 1 numbered step
             self.assertIn("M10", card["unknown"])
 
 

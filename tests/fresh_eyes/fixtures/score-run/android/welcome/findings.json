@@ -54,6 +54,17 @@
    "verdict": "unsure"
   },
   {
+   "id": "f7",
+   "kind": "BUG",
+   "severity": "low",
+   "title": "Кнопка «Продолжить с Google» не совпадает со спецификацией «Войти через Google»",
+   "screen": "welcome",
+   "platform": "android",
+   "rule": "spec:welcome#3",
+   "verdict": "rejected",
+   "verify_note": "spec text: welcome#3 «Войти через Google» → «Продолжить с Google» (auth.google)"
+  },
+  {
    "id": "f6",
    "kind": "IMP",
    "severity": "low",
@@ -72,6 +83,11 @@
     "«Регистрация» — задумано, поправить спецификацию"
    ],
    "finding": "f5"
+  },
+  {
+   "text": "welcome#3 «Войти через Google» → «Продолжить с Google» (auth.google)",
+   "options": [],
+   "class": "spec-text"
   }
  ]
 }

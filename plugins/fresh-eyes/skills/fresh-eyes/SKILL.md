@@ -164,7 +164,7 @@ words / nothing (= the current diff).
     imp.md holds every IMP in full (the new ones numbered, the known ones a line each).
 11. Write `$RUN/report.md`, `rejected.md` and `run-log.md` by `$R/report-format.md` (see "Report"; `imp.md` is
     step 10's). Then `python3 $S/coverage.py score --run $RUN --session "${CLAUDE_SESSION_ID}"`: the run's score
-    card (`$RUN/score.json`, the metrics a script counts; the judge fills M4, M7 and M11, a
+    card (`$RUN/score.json`, the metrics a script counts; the judge fills M4, M7 and M11 and may correct M1, a
     rerun keeps them).
 12. Review with the user, then write the backlog and regression flows (see "After the report").
 

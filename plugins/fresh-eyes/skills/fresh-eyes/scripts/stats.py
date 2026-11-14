@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Score card of a finished run (`coverage.py score`): the metrics of the 9.5 plan a script can count, from the run
 folder and, with the session id, the session's transcripts. The judge writes M4, M7 and M11 into score.json
-(`"M4": {"value": 0.04}`); a rerun keeps them.
+(`"M4": {"value": 0.04}`) and may correct a counted one (`"M1": {"value": 1, "by": "judge"}`: not every numbered
+step of run-log.md is a hand move); a rerun keeps them.
 """
 import glob
 import json
@@ -19,10 +20,10 @@ IDLE_S = 600
 JUDGE = ("M4", "M7", "M11")
 LIMITS = {  # what each number is and when it passes
     "M1": ("manual orchestrator moves: numbered items of run-log.md (or the report's run log)", lambda v: v <= 1),
-    "M2": ("false BUGs: rejected / ruled (confirmed + unsure + rejected)", lambda v: v <= 0.10),
+    "M2": ("false BUGs (a 'spec text:' or 'known candidate:' reject too): rejected / ruled", lambda v: v <= 0.10),
     "M3": ("BUGs left unsure / ruled", lambda v: v <= 0.15),
     "M4": ("judge: owner-facing BUGs ruled intended or duplicate / owner-facing BUGs", lambda v: v <= 0.05),
-    "M5": ("questions to the owner in report.md", lambda v: v <= 10),
+    "M5": ("questions to the owner in report.md (a bullet of spec-text pairs alone is none)", lambda v: v <= 10),
     "M6": ("confirmed BUGs the verdict turned unsure for a stale spec", lambda v: v == 0),
     "M7": ("judge: done cells whose oracle was not checked", lambda v: v == 0),
     "M8": ("report.md lines", lambda v: v <= 300),
@@ -36,7 +37,8 @@ LIMITS = {  # what each number is and when it passes
 }
 ITEM = re.compile(r"(?:[-*]|\d+\.)\s")
 NUMBERED = re.compile(r"\d+\.\s")
-CONSENT = re.compile(r"consent|соглас|правила|rules|принима|accept", re.I)
+QUESTION = re.compile(r"(?:[-*]|\d+\.)\s(?!\s*(?:\*\*[^*]*\*\*:?\s*)?spec text:)", re.I)
+CONSENT = re.compile(r"\bconsent:", re.I)  # the navigator's blocked note, "consent: <the dialog's title>"
 
 
 def _read(path):
@@ -102,7 +104,7 @@ def score(run, sid=None, out=None):
     log = os.path.join(run, "run-log.md")
     m = {"M1": sum(1 for line in _read(log).splitlines() if NUMBERED.match(line)) if os.path.exists(log)
          else items(text, r"(ход прогона|run log)", NUMBERED) if text is not None else None,
-         "M5": items(text, r"(вопрос|question)") if text is not None else None,
+         "M5": items(text, r"(вопрос|question)", QUESTION) if text is not None else None,
          "M8": len(text.splitlines()) if text is not None else None}
     paths = sorted(glob.glob(os.path.join(run, "*", "*", "findings*.json")))
     findings, _ = coverage._load_findings(paths, run)  # a confirmed finding an open question asks about: unsure
@@ -121,13 +123,16 @@ def score(run, sid=None, out=None):
     m["M12"] = {"stops": s and s["stops"], "consent_blocked": sum(1 for c in cov["cells"] if c["status"] == "blocked"
                                                                   and CONSENT.search(c.get("note") or ""))}
     old = read_json(out) if os.path.exists(out) else {}
-    for k in JUDGE:
+    corrected = [k for k in LIMITS if k not in JUDGE and (old.get(k) or {}).get("by") == "judge"]
+    for k in JUDGE + tuple(corrected):
         m[k] = (old.get(k) or {}).get("value")
     card = {}
     for k in LIMITS:
         v = m[k]
         known = v is not None and not (isinstance(v, dict) and None in v.values())
         card[k] = {"value": v, "ok": LIMITS[k][1](v) if known else None, "what": LIMITS[k][0]}
+    for k in corrected:
+        card[k]["by"] = "judge"
     card["M6"]["of"] = n["confirmed"]
     card["passed"] = sum(1 for k in LIMITS if card[k]["ok"])
     card["unknown"] = [k for k in LIMITS if card[k]["ok"] is None]

@@ -6,7 +6,7 @@
 .fresh-eyes/runs/<YYYYMMDD-HHMM>-<mode>/
   preflight.json  coverage.json  spec-stale.json  backlog-index.md
   report.md  imp.md  rejected.md  run-log.md ← the report and its companions (see report.md below)
-  score.json                                ← coverage.py score: M1-M12 {value, ok, what}, the judge's M4/M7/M11
+  score.json                                ← coverage.py score: M1-M12 {value, ok, what}, the judge's M1/M4/M7/M11
   spec/<screen>.md  spec/journey.md         ← spec slices: global rules + the screen and its neighbors
   <platform>/<screen>/<state>-<probe>/      ← one evidence pack per cell
     screen.png screen_1000.png som.png som.json nodes.json hierarchy.txt candidates.json meta.json
@@ -160,7 +160,8 @@ Also: <title of a finding merged into it> (<file>#<id>)
   (`verify_note` "intermittent: …"), then the rest (what a person should look at). Lows share one line of ids.
 - Questions: one bullet per screen, never one per finding, at most 10: the screen's `questions[]` with their
   options, its stale question and its `spec-text` pairs joined. More screens: the 10 with the most severe
-  findings, and one line counting the rest (they stay in the findings files).
+  findings, and one line counting the rest (they stay in the findings files). Keep the marker `spec text:` as is
+  in any language: `coverage.py score` does not count a bullet of spec-text pairs alone as a question (M5).
 - Known candidates: the `known` entries, one line each, not counted as questions; what the owner accepts goes
   to `known.md`.
 
