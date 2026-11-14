@@ -71,8 +71,9 @@ Goal: a working `.fresh-eyes/` for this project, confirmed by the user.
 5. Devices: `python3 $S/devices.py ensure --platform <p>` for each platform in config (owned devices only).
 6. Show the user the allow-rules a long run needs (they add them to `.claude/settings.local.json`; you do not):
    `Bash(python3 <this skill dir>/scripts/*)`, `Bash(adb:*)`, `Bash(xcrun simctl:*)`, `mcp__<maestro server>__*`.
-7. Ask the user to confirm: the env URLs, the screen list, every `⚠ conflict` in the spec, and the 5–10 most
-   important spec rules. Write their answers into the files.
+7. Ask the user to confirm: the env URLs, the screen list, every `⚠ conflict` in the spec, the 5–10 most
+   important spec rules, and which consent dialogs the test accounts may accept (terms, community rules, an AI
+   notice: its text and button, into `consents`; none named → none accepted). Write their answers into the files.
 
 ## quick
 
@@ -121,7 +122,9 @@ words / nothing (= the current diff).
    the cell ids, `package: <app.android_id>` (it goes to every `capture.py snap --package`, which saves the
    crash log when the app died), and `app language: <app.locale>` when config sets it. A navigator that finds
    the app signed out signs in with `accounts` itself; cells blocked with
-   "signed out: <variable> not set" mean the user has to export that variable before the next run. A reply line
+   "signed out: <variable> not set" mean the user has to export that variable before the next run; cells
+   blocked with "consent: <text>" need the user's yes for that dialog in config `consents` (ask after the
+   report, never let an agent accept it). A reply line
    `reach: <screen>: <how>`: write `<how>` into that screen's `reach` in `.fresh-eyes/config.json`, so the next
    run does not hit the same wall. Liveness: every `capture.py` call and every `nav.py` call with `--run $RUN`
    refreshes `$RUN/<platform>/heartbeat`; `python3 $S/nav.py idle --run $RUN --platform <p>` prints its age. Only
@@ -159,9 +162,10 @@ words / nothing (= the current diff).
     Then `python3 $S/backlog.py match --index $RUN/backlog-index.md --findings <all findings*.json> --out
     $RUN/imp.md --language <config>`: an IMP an open backlog entry already proposes gets its `backlog_id`, and
     imp.md holds every IMP in full (the new ones numbered, the known ones a line each).
-11. Write `$RUN/report.md` by `$R/report-format.md` (see "Report"). Then `python3 $S/coverage.py score --run $RUN
-    --session "${CLAUDE_SESSION_ID}"`: the run's score card (`$RUN/score.json`, the metrics a script counts; the
-    judge fills M4, M7 and M11, a rerun keeps them).
+11. Write `$RUN/report.md`, `rejected.md` and `run-log.md` by `$R/report-format.md` (see "Report"; `imp.md` is
+    step 10's). Then `python3 $S/coverage.py score --run $RUN --session "${CLAUDE_SESSION_ID}"`: the run's score
+    card (`$RUN/score.json`, the metrics a script counts; the judge fills M4, M7 and M11, a
+    rerun keeps them).
 12. Review with the user, then write the backlog and regression flows (see "After the report").
 
 ## full
@@ -209,18 +213,17 @@ the candidates, a model judges them; keywords never decide.
 
 ## Report
 
-`report.md` in the project language: the verdict line and reasons (verbatim from `coverage.py verdict`),
-build/backend/devices, the coverage map, "not checked in this run" (preflight `unchecked`, plan `unchecked`
-items without `gap`, blocked cells with notes, unmapped files) and apart from it "permanent gaps" (plan items
-with `"gap": true` and platform gaps from `$R/platforms.md`: this setup can never check them, they do not block
-the verdict), confirmed bugs, each with its
-numbered steps, expected and actual copied from the finding (a finding the verdict lists in `merged` goes under
-the one its `same_as` points to, or the confirmed one with the same `log` line; any other finding is its own item);
-a confirmed bug with `backlog_id` goes under "still reproduces (BUG-N)", not among the new ones; improvements
-(only the new ones from imp.md: one line per screen with their imp.md numbers and titles, then a link to imp.md),
-"look with your own eyes" (unsure, the findings the verdict lists in `asked` next to their question, the ones
-it lists in `stale` with one question per stale screen from its reason line; neither goes under bugs or into the
-backlog), questions. Link evidence crops by path. Keep it scannable.
+`report.md` (at most 300 lines) and its companions by `$R/report-format.md`, in the project language: the verdict
+line and reasons verbatim from `coverage.py verdict`, build/backend/devices, the coverage map, "not checked in
+this run" (preflight `unchecked`, plan `unchecked` items without `gap`, blocked cells with notes, unmapped files)
+and apart from it "permanent gaps" (plan items with `"gap": true` and platform gaps from `$R/platforms.md`: this
+setup can never check them, they do not block the verdict). A finding the verdict lists in `merged` goes under
+the one its `same_as` points to, or the confirmed one with the same `log` line; a confirmed bug with
+`backlog_id` goes under "still reproduces (BUG-N)"; improvements are only the new ones of imp.md, a row per
+screen with their imp.md numbers and titles; the findings the verdict lists in `asked` and `stale` go under
+"look with your own eyes", never under bugs or into the backlog. Every step you took by hand outside these
+steps (a resnap, a config fix, a stopped agent) goes to `run-log.md`. Over 300 lines: shorten items, never drop
+a confirmed bug or a question.
 
 Then stop the devices this run booted (`ensure` printed `"booted": true`), `python3 $S/devices.py stop --platform
 <p>`: an emulator holds ~2.5 GB of RAM. One that was already running stays up: it boots without saving state, so a
@@ -228,9 +231,10 @@ stop throws away a build or a sign-in someone put on it.
 
 ## After the report
 
-1. Show the user a numbered list: confirmed bugs (new and "still reproduces") and the new improvements (their
-   imp.md numbers and titles). Ask which bugs are real or intended and which improvements to take. Default
-   if they just say ok: all confirmed bugs are real and every improvement goes in as a proposal.
+1. Show the user a numbered list of confirmed bugs (new and "still reproduces": title, screen, platform,
+   severity, crop path), then the new improvements by screen (their imp.md numbers and titles) and the path of
+   `imp.md`. Ask which bugs are real or intended and which improvements (by their imp.md numbers) to take.
+   Default if they just say ok: all confirmed bugs are real and every improvement goes in as a proposal.
 2. New real bugs and taken improvements → backlog: write the finding to `$RUN/backlog-<k>.json`, then `python3
    $S/backlog.py append --file <backlog.path> --finding $RUN/backlog-<k>.json --template <template> --attach
    $RUN/<its main crop> --images-dir <backlog.images_dir>` (assigns the BUG or IMP id, copies the crop next to
@@ -239,7 +243,9 @@ stop throws away a build or a sign-in someone put on it.
    <device>, <build>: still reproduces, <evidence>"`. For `quick BUG-N`: the same `set-status` with `--status
    verified|open` and `<result>` in the note.
 3. Intended bugs and declined improvements → append to `.fresh-eyes/known.md` (never raised again); record the
-   intended bugs as "rejected by user" counts in `report.md` (this is the false-positive measure).
+   intended bugs as "rejected by user" counts in `report.md` (this is the false-positive measure). Known
+   candidates the user accepts go there too; a `spec-text` pair they accept is a spec update (step 5), one they
+   turn down (the app is wrong) a new bug: write it as a finding for step 2.
 4. For each new real BUG write a regression flow `<maestro_dir>/fresh-eyes-<BUG-id>.yaml` (tag `fresh-eyes`): reach
    the state, run the probe, assert the expected state (`assertVisible` / `assertNotVisible` /
    `extendedWaitUntil`). Visual-only bugs get a comment that `quick` re-checks them.

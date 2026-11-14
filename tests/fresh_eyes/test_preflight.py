@@ -273,6 +273,12 @@ class PreflightTest(unittest.TestCase):
         self.assertFalse(res["platforms"]["ios"]["ok"])
         self.assertIn("not requested", " ".join(res["unchecked"]))
 
+    def test_brief_lists_the_consents_the_owner_allowed(self):
+        self.fake_devices()
+        cfg = dict(config(), consents=[{"text": "Community rules", "button": "Accept"}, {"text": "is an AI"}])
+        self.assertIn("may accept: Community rules; is an AI", preflight._brief(preflight.check(cfg, "quick")))
+        self.assertIn("may accept: none", preflight._brief(preflight.check(config(), "quick")))
+
     def test_brief_exit_zero_on_problems(self):
         self.fake_devices(listed=())
         with tmpdir() as d:

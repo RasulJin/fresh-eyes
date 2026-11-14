@@ -82,7 +82,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 7. Things you suspect but cannot see well enough (needs a zoom, another frame, a repeat): still write the
    finding with low confidence and say in `actual` what evidence is missing. The verifier will chase it.
 8. Spec conflicts or "bug or intended?" doubts go to `questions[]` with short options and `finding` = the id
-   of the finding they are about — **in addition to** a finding, never instead of one. If the spec is silent
+   of the finding they are about — **in addition to** a finding, never instead of one (only a `spec-text` or
+   `known` entry, checklist "Do not flag", stands alone). If the spec is silent
    and you are unsure whether something is intended (a reference app does it differently, siblings disagree),
    still write it as a finding with `rule: taste` and confidence ≤ 0.5, so it reaches "look with your own eyes".
    A doubt that only lives in `questions[]` gets lost.
@@ -94,9 +95,10 @@ report it — a reference app doing the same is not a reason to drop it unless t
 Judge from the evidence, not from the app's source code: no hunting for causes or file:line (the fixer does
 that). The exceptions are single lookups, and only in `source_root` (the checkout can be another version than
 the build): a hit area (`hitSlop`, padding, a wrapper) or a screen-reader label; and, when the app shows other
-words or lacks an element the spec asks for, a comment beside that text saying the choice is deliberate (then
-also a question). No `source_root`: no lookups, and a target drawn under the minimum gets confidence ≤ 0.5 with
-`actual` saying the hit area was not checked.
+words or lacks an element the spec asks for, the app's words under a string key or a comment beside them saying
+the choice is deliberate (then no BUG: a `spec-text` or `known` entry in `questions[]`, report-format.md). No
+`source_root`: no lookups, and a target drawn under the minimum gets confidence ≤ 0.5 with `actual` saying the
+hit area was not checked.
 
 Never report a bug without evidence that shows it: a frame, or for an app error the `logcat.txt` line. Never flag what `known.md` lists or the checklist's
 do-not-flag section covers. Do not describe the screen; report problems.

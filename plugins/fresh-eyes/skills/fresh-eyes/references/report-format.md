@@ -4,8 +4,8 @@
 
 ```
 .fresh-eyes/runs/<YYYYMMDD-HHMM>-<mode>/
-  preflight.json  coverage.json  spec-stale.json  backlog-index.md  report.md
-  imp.md                                    ← backlog.py match: every IMP in full, new ones numbered
+  preflight.json  coverage.json  spec-stale.json  backlog-index.md
+  report.md  imp.md  rejected.md  run-log.md ← the report and its companions (see report.md below)
   score.json                                ← coverage.py score: M1-M12 {value, ok, what}, the judge's M4/M7/M11
   spec/<screen>.md  spec/journey.md         ← spec slices: global rules + the screen and its neighbors
   <platform>/<screen>/<state>-<probe>/      ← one evidence pack per cell
@@ -27,7 +27,8 @@
   "rule": "spec:<id> | taste", "evidence": ["crops/clipped-1.png"], "log": "<logcat.txt line (app errors only)>",
   "verdict": "pending|confirmed|unsure|rejected", "verify_note": "",
   "same_as": "<findings file relative to the run>#<id> (optional)", "backlog_id": "BUG-N | IMP-N (optional)"}],
- "questions": [{"text": "", "options": [""], "finding": "<id> | <findings file relative to the run>#<id>"}]}
+ "questions": [{"text": "", "options": [""], "finding": "<id> | <findings file relative to the run>#<id>",
+                "class": "spec-text | known (optional)"}]}
 ```
 
 - Text fields (`title`, `expected`, `actual`, `steps`, `verify_note`, `questions`) are in the config's
@@ -45,8 +46,14 @@ then returns it in `merged`, and the report lists it under that finding.
   once across screens: the most severe confirmed copy stays, the others are returned in `merged`.
 - `questions[].finding`: the finding the question is about. `coverage.py verdict` counts a confirmed finding
   with a question as unsure and returns it in `asked`: until the owner answers, it is not a bug.
+- `questions[].class` (no `finding`, no BUG behind it, no effect on the verdict): `spec-text`, the app shows
+  other words than the spec quotes and `source_root` holds them under a string key, one entry per screen with
+  its pairs (`<rule> «<spec>» → «<app>» (<key>)`; is the spec out of date?); `known`, a comment in `source_root`
+  calls the choice deliberate (`<screen>: <what> — <file>: «<comment>»`; add it to `known.md`?).
 - `reviewed_packs`: every pack whose evidence the reviewer actually opened (its `som.png`, or its crops plus
   `candidates.json`), and only those. A done cell whose packs no reviewer listed keeps the verdict INCOMPLETE.
+- `invariants` (when the slice has a `### Invariants`): `[{"id", "pack", "result": "ok|broken|not shown"}]`, each
+  `inv` line the reviewer recomputed (reviewer.md step 4); a `broken` one is also a BUG with the arithmetic.
 - `backlog_id` (`BUG-N` or `IMP-N`): the verifier sets it on a confirmed BUG or an IMP that an open entry of
   `backlog-index.md` already describes, with `verify_note` "already open: <id>". A BUG still counts as
   confirmed; the report lists it under "still reproduces" and the backlog gets a recheck line instead of a new
@@ -83,15 +90,24 @@ Stale spec: when `spec-stale.json` lists a screen (its code changed after the sp
 confirmed finding whose rule cites that screen's section (`spec:<id>…`) turns `unsure`. The verdict's `stale`
 lists those findings (file#id, like `asked`); the findings files still say `confirmed`, so the report and the
 backlog go by the verdict: they sit under "look with your own eyes", never under bugs and never in the backlog.
-Write one question per stale screen from the verdict's reason line (section ids and the `Updated` date):
+Each stale screen gets one question from the verdict's reason line (section ids and the `Updated` date):
 "section <id> dated <Updated>, code changed since: are its rules current?".
 
-## `report.md` (project language)
+## `report.md` and its companions (project language)
+
+`report.md` is what the owner reads first: at most 300 lines, each item a pointer; the full texts stay in the
+findings files. Beside it: `imp.md` (written by `backlog.py match`, never by hand: every improvement in full,
+the new ones numbered with screen, platform, severity, file#id, actual → expected, verify note, question and
+crop, then the ones an open entry already proposes a line each with its IMP-N; the owner picks by those
+numbers, and match sets that `backlog_id` on the IMPs the verifier left without one), `rejected.md` (one line per rejected finding:
+title, screen, kind and severity, file#id, the first sentence of `verify_note`) and `run-log.md` (each step the
+orchestrator took by hand, numbered, what and why; then the test data the run left on the backend).
 
 ```markdown
 # fresh-eyes — <mode> — <date>
 **Verdict: <label>** — <reasons, one line each>
 Build: <branch/commit>, backend: <api host or "not verified">, devices: <names>
+In numbers: BUG <confirmed> / <unsure> / <rejected>, IMP <new> + <already open>, questions <n> · imp.md · rejected.md · run-log.md
 
 ## Coverage
 <coverage.py map output>
@@ -104,33 +120,49 @@ Build: <branch/commit>, backend: <api host or "not verified">, devices: <names>
 
 ## Bugs (confirmed)
 ### 1. <title>
-<platform>, <screen>, severity <s>, confidence <c>, rule <rule>
-**Steps**
+<platform> · <screen> · <severity> · confidence <c> · <rule> · <file>#<id>
 1. <step>
 2. <step>
 **Expected:** … **Actual:** …
-Evidence: <crop path> · found by <found_by> · backlog <BUG-N>
+Evidence: <crop path> · found by <found_by>
+Also: <title of a finding merged into it> (<file>#<id>)
 
 ## Still reproduces
-- **<title>** (BUG-N), <platform>, <screen>, severity <s> · evidence <crop path>
+- **<title>** (BUG-N), <platform>, <screen>, severity <s> · <crop path>
 
 ## Improvements: <new> new, <known> already in the backlog (imp.md)
-- <screen>: 1. <title>; 2. <title>; … (imp.md numbers)
+| screen | new | already open | the new ones (imp.md numbers) |
+|---|---|---|---|
+| <screen> | <n> | IMP-N, … | 1. <title>; 2. <title>; … |
 
 ## Not verified
-- <finding still pending, and why the verifier could not decide>
+- <title> — <screen> — why the verifier could not decide
 
 ## Look with your own eyes (unsure)
-- <title> — <why unsure> — <crop path>
-- <a finding the verdict lists in `stale`> — stale spec — <crop path>
-- <one question per stale screen, from the verdict's reason line>
+### <class> (<n>) — <why, once for the class>
+- <title> — <screen>, <severity> · <crop path> · <file>#<id>
+- low: <file>#<id>, <file>#<id>, …
+
+## Known candidates
+- <screen>: <what the app does> — <file>: «<the comment>»
 
 ## Questions
-- <spec conflicts and "bug or intended?" questions>
+- **<screen>**: <question> (<options>); <question>; spec text: <rule> «<spec>» → «<app>», …
 
 ## Regression flows written
 - <maestro_dir>/fresh-eyes-<id>.yaml
 ```
+
+- A bug is at most 10 lines: at most 5 steps (join the way there into one, "Open Trips → Paris → Schedule"),
+  expected and actual one sentence each; the backlog entry gets the full finding.
+- Unsure, by class, never one block per finding, in this order and only classes that have findings: `stale`
+  (the verdict's `stale`), `asked` (the verdict's `asked`; its question is under Questions), `intermittent`
+  (`verify_note` "intermittent: …"), then the rest (what a person should look at). Lows share one line of ids.
+- Questions: one bullet per screen, never one per finding, at most 10: the screen's `questions[]` with their
+  options, its stale question and its `spec-text` pairs joined. More screens: the 10 with the most severe
+  findings, and one line counting the rest (they stay in the findings files).
+- Known candidates: the `known` entries, one line each, not counted as questions; what the owner accepts goes
+  to `known.md`.
 
 ## Backlog templates
 

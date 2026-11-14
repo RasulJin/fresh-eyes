@@ -31,10 +31,11 @@ How a picky QA engineer + product designer looks at one screen. Used by the revi
 - **Shape**: corner radii that differ from siblings or the design tokens (sharp where rounded is expected),
   one-sided rounding, hairline seams between cells. A `sharp_corners` candidate on a floating surface (drawer,
   sheet, dialog, card) is a finding when the app's other surfaces are rounded, even if a reference app is square.
-- **Consistency**: the same entity with two icons (header vs tab bar), two components for one meaning
-  (system alert next to a branded dialog), different styles for the same control on sibling screens.
+- **Consistency**: two components for one meaning (system alert next to a branded dialog), different styles
+  for the same control on sibling screens. Two icons for one entity is an IMP (Do not flag).
 - **Contrast / theme**: pale on pale, white on white, a dark map in a light app, colors that ignore the theme.
-- **Language**: mixed languages on one screen, broken plurals ("1 comments"), wrong date words ("0 days ago").
+- **Language**: mixed languages in the app's own copy, broken plurals ("1 comments"), wrong date words ("0 days
+  ago").
 
 ## Composition (the screen at arm's length)
 
@@ -144,8 +145,8 @@ raised again, so a proposal left out costs more than one written.
 
 - **high**: blocks a task, loses data, shows wrong data as true, breaks navigation, or is visible on a primary
   screen to every user (clipped main content, double send, stuck invisible overlay).
-- **medium**: clearly wrong but has a workaround or affects a secondary path (truncated menu item, wrong icon,
-  sharp corners on a main surface, keyboard covering a secondary field).
+- **medium**: clearly wrong but has a workaround or affects a secondary path (truncated menu item, sharp corners
+  on a main surface, keyboard covering a secondary field).
 - **low**: polish (1–2 px misalignment, slightly long transition, small tap target with enough spacing).
 
 ## Do not flag
@@ -155,3 +156,15 @@ raised again, so a proposal left out costs more than one written.
 - Content that is clearly test data, unless the screen shows it wrongly. A crash (`app_running: false` in the
   pack's `meta.json`) is never test data: it is a BUG high.
 - Partially visible items at the edge of a scrollable list when a swipe brings them fully into view.
+- Bounds alone (Android): uiautomator cuts a node's bounds at its parent's edge, down to zero or negative height.
+  An element the frame shows whole is not clipped or hidden from a screen reader because its bounds are; a hit
+  target cut so is judged by its box in `source_root` (a 48 dp box from padding with a negative margin, or a
+  wrapper, reaches touches; `hitSlop` past the parent's edge does not).
+- Other words than the spec quotes when `source_root` holds the app's words under a string key (a strings or
+  i18n file): no BUG, a `spec-text` entry in `questions[]`, one per screen (report-format.md).
+- Words, or an element missing, that a comment beside them in `source_root` calls deliberate (a data limit, a
+  decision): no BUG, a `known` entry in `questions[]`.
+- Names from outside the app's copy (places, addresses, airlines, other people's posts) in their own language
+  next to the UI's, unless the spec has a rule for them.
+- Which glyph an icon shows, also under a spec icon rule: an IMP. A missing or broken icon (an empty box, a
+  placeholder glyph) is a BUG.
