@@ -151,7 +151,7 @@ words / nothing (= the current diff).
 10. `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`
     and `python3 $S/coverage.py map --cov $RUN/coverage.json --language <config>`. If the verdict names done
     cells no reviewer looked at, send those packs to a reviewer (`findings-<k>.json`), verify, and rerun it.
-11. Write `$RUN/report.md` by `$R/report-format.md` (see "Report").
+11. Write `$RUN/report.md`, `imp.md`, `rejected.md` and `run-log.md` by `$R/report-format.md` (see "Report").
 12. Review with the user, then write the backlog and regression flows (see "After the report").
 
 ## full
@@ -199,17 +199,16 @@ the candidates, a model judges them; keywords never decide.
 
 ## Report
 
-`report.md` in the project language: the verdict line and reasons (verbatim from `coverage.py verdict`),
-build/backend/devices, the coverage map, "not checked in this run" (preflight `unchecked`, plan `unchecked`
-items without `gap`, blocked cells with notes, unmapped files) and apart from it "permanent gaps" (plan items
-with `"gap": true` and platform gaps from `$R/platforms.md`: this setup can never check them, they do not block
-the verdict), confirmed bugs, each with its
-numbered steps, expected and actual copied from the finding (a finding the verdict lists in `merged` goes under
-the one its `same_as` points to, or the confirmed one with the same `log` line; any other finding is its own item);
-a confirmed bug with `backlog_id` goes under "still reproduces (BUG-N)", not among the new ones; improvements,
-"look with your own eyes" (unsure, the findings the verdict lists in `asked` next to their question, the ones
-it lists in `stale` with one question per stale screen from its reason line; neither goes under bugs or into the
-backlog), questions. Link evidence crops by path. Keep it scannable.
+`report.md` (at most 300 lines) and its companions by `$R/report-format.md`, in the project language: the verdict
+line and reasons verbatim from `coverage.py verdict`, build/backend/devices, the coverage map, "not checked in
+this run" (preflight `unchecked`, plan `unchecked` items without `gap`, blocked cells with notes, unmapped files)
+and apart from it "permanent gaps" (plan items with `"gap": true` and platform gaps from `$R/platforms.md`: this
+setup can never check them, they do not block the verdict). A finding the verdict lists in `merged` goes under
+the one its `same_as` points to, or the confirmed one with the same `log` line; a confirmed bug with
+`backlog_id` goes under "still reproduces (BUG-N)"; the findings the verdict lists in `asked` and `stale` go
+under "look with your own eyes", never under bugs or into the backlog. Every step you took by hand outside these
+steps (a resnap, a config fix, a stopped agent) goes to `run-log.md`. Over 300 lines: shorten items, never drop
+a confirmed bug or a question.
 
 Then stop the devices this run booted (`ensure` printed `"booted": true`), `python3 $S/devices.py stop --platform
 <p>`: an emulator holds ~2.5 GB of RAM. One that was already running stays up: it boots without saving state, so a
@@ -217,9 +216,10 @@ stop throws away a build or a sign-in someone put on it.
 
 ## After the report
 
-1. Show the user a numbered list: confirmed bugs (new and "still reproduces") and improvements (title, screen,
-   platform, severity, crop path). Ask which bugs are real or intended and which improvements to take. Default
-   if they just say ok: all confirmed bugs are real and every improvement goes in as a proposal.
+1. Show the user a numbered list of confirmed bugs (new and "still reproduces": title, screen, platform,
+   severity, crop path) and the path of `imp.md` for improvements. Ask which bugs are real or intended and
+   which improvements (by their `imp.md` numbers) to take. Default if they just say ok: all confirmed bugs are
+   real and every improvement goes in as a proposal.
 2. New real bugs and taken improvements → backlog: write the finding to `$RUN/backlog-<k>.json`, then `python3
    $S/backlog.py append --file <backlog.path> --finding $RUN/backlog-<k>.json --template <template> --attach
    $RUN/<its main crop> --images-dir <backlog.images_dir>` (assigns the BUG or IMP id, copies the crop next to

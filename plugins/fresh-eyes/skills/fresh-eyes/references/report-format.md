@@ -4,7 +4,8 @@
 
 ```
 .fresh-eyes/runs/<YYYYMMDD-HHMM>-<mode>/
-  preflight.json  coverage.json  spec-stale.json  backlog-index.md  report.md
+  preflight.json  coverage.json  spec-stale.json  backlog-index.md
+  report.md  imp.md  rejected.md  run-log.md ← the report and its companions (see report.md below)
   spec/<screen>.md  spec/journey.md         ← spec slices: global rules + the screen and its neighbors
   <platform>/<screen>/<state>-<probe>/      ← one evidence pack per cell
     screen.png screen_1000.png som.png som.json nodes.json hierarchy.txt candidates.json meta.json
@@ -81,15 +82,22 @@ Stale spec: when `spec-stale.json` lists a screen (its code changed after the sp
 confirmed finding whose rule cites that screen's section (`spec:<id>…`) turns `unsure`. The verdict's `stale`
 lists those findings (file#id, like `asked`); the findings files still say `confirmed`, so the report and the
 backlog go by the verdict: they sit under "look with your own eyes", never under bugs and never in the backlog.
-Write one question per stale screen from the verdict's reason line (section ids and the `Updated` date):
+Each stale screen gets one question from the verdict's reason line (section ids and the `Updated` date):
 "section <id> dated <Updated>, code changed since: are its rules current?".
 
-## `report.md` (project language)
+## `report.md` and its companions (project language)
+
+`report.md` is what the owner reads first: at most 300 lines, each item a pointer; the full texts stay in the
+findings files. Beside it: `imp.md` (every improvement, one table row each, numbered: № | screen | title | the
+change | crop | file#id | backlog id; the owner picks from it), `rejected.md` (one line per rejected finding:
+title, screen, kind and severity, file#id, the first sentence of `verify_note`) and `run-log.md` (each step the
+orchestrator took by hand, numbered, what and why; then the test data the run left on the backend).
 
 ```markdown
 # fresh-eyes — <mode> — <date>
 **Verdict: <label>** — <reasons, one line each>
 Build: <branch/commit>, backend: <api host or "not verified">, devices: <names>
+In numbers: BUG <confirmed> / <unsure> / <rejected>, IMP <new> + <already open>, questions <n> · imp.md · rejected.md · run-log.md
 
 ## Coverage
 <coverage.py map output>
@@ -102,33 +110,44 @@ Build: <branch/commit>, backend: <api host or "not verified">, devices: <names>
 
 ## Bugs (confirmed)
 ### 1. <title>
-<platform>, <screen>, severity <s>, confidence <c>, rule <rule>
-**Steps**
+<platform> · <screen> · <severity> · confidence <c> · <rule> · <file>#<id>
 1. <step>
 2. <step>
 **Expected:** … **Actual:** …
-Evidence: <crop path> · found by <found_by> · backlog <BUG-N>
+Evidence: <crop path> · found by <found_by>
+Also: <title of a finding merged into it> (<file>#<id>)
 
 ## Still reproduces
-- **<title>** (BUG-N), <platform>, <screen>, severity <s> · evidence <crop path>
+- **<title>** (BUG-N), <platform>, <screen>, severity <s> · <crop path>
 
 ## Improvements
-1. **<title>** — <what to change and why>, reference: <app/pattern>
+| screen | new | already open | the new ones |
+|---|---|---|---|
+| <screen> | <n> | IMP-N, … | <title>; <title>; … |
 
 ## Not verified
-- <finding still pending, and why the verifier could not decide>
+- <title> — <screen> — why the verifier could not decide
 
 ## Look with your own eyes (unsure)
-- <title> — <why unsure> — <crop path>
-- <a finding the verdict lists in `stale`> — stale spec — <crop path>
-- <one question per stale screen, from the verdict's reason line>
+### <class> (<n>) — <why, once for the class>
+- <title> — <screen>, <severity> · <crop path> · <file>#<id>
+- low: <file>#<id>, <file>#<id>, …
 
 ## Questions
-- <spec conflicts and "bug or intended?" questions>
+- **<screen>**: <question> (<options>); <question>; …
 
 ## Regression flows written
 - <maestro_dir>/fresh-eyes-<id>.yaml
 ```
+
+- A bug is at most 10 lines: at most 5 steps (join the way there into one, "Open Trips → Paris → Schedule"),
+  expected and actual one sentence each; the backlog entry gets the full finding.
+- Unsure, by class, never one block per finding, in this order and only classes that have findings: `stale`
+  (the verdict's `stale`), `asked` (the verdict's `asked`; its question is under Questions), `intermittent`
+  (`verify_note` "intermittent: …"), then the rest (what a person should look at). Lows share one line of ids.
+- Questions: one bullet per screen, never one per finding, at most 10: the screen's `questions[]` with their
+  options and its stale question joined. More screens: the 10 with the most severe findings, and one line
+  counting the rest (they stay in the findings files).
 
 ## Backlog templates
 
