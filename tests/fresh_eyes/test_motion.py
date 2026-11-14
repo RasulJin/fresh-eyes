@@ -99,3 +99,52 @@ class VideoTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeyboardTest(unittest.TestCase):
+    """The chat field riding the keyboard on a 360x640 dp phone (fe10-verify J7 and its re-check 6a), downscaled."""
+    def pack(self, d, **videos):
+        import shutil
+        from fe_common import write_json
+        from tests.fresh_eyes.helpers import FIXTURES
+        write_json(os.path.join(d, "meta.json"), {"screen_wh": [720, 1280]})
+        write_json(os.path.join(d, "nodes.json"), [{"id": "n109", "focused": True, "bounds": [58, 570, 532, 72]}])
+        for name, video in videos.items():
+            os.makedirs(os.path.join(d, name))
+            shutil.copy(os.path.join(FIXTURES, "keyboard", video + ".mp4"), os.path.join(d, name, "video.mp4"))
+        return d
+
+    def test_field_that_stops_and_jumps_again(self):  # up 348 px, a 170 ms stop, then 60 px more
+        from motion import keyboard
+        with tmpdir() as d:
+            rep = keyboard(self.pack(d, **{"kb-show": "show-double-jump", "kb-hide": "hide-one-move"}))
+            self.assertEqual(rep["flags"], ["kb-show: double_jump"])
+            self.assertEqual([m["dy_px"] < -40 for m in rep["kb-show"]["moves"]], [True, True])
+            self.assertEqual(rep["kb-hide"]["jumps"], 1)
+            self.assertTrue(os.path.exists(rep["kb-show"]["sheet"]))
+
+    def test_field_covered_by_the_rising_keyboard(self):  # one move, but two frames with the field under the keys
+        from motion import keyboard
+        with tmpdir() as d:
+            rep = keyboard(self.pack(d, **{"kb-show": "show-lag"}))
+            self.assertEqual(rep["flags"], ["kb-show: lag"])
+            self.assertEqual((rep["kb-show"]["jumps"], rep["kb-show"]["covered_frames"]), (1, 2))
+            self.assertTrue(os.path.isfile(os.path.join(d, "keyboard.json")))
+
+    def test_a_settling_tail_after_a_stop_is_not_a_second_jump(self):  # J11 at full size: 242 -> 244 after 227 ms
+        from motion import jumps
+        times = [0.0, 0.027, 0.484, 0.567, 0.59, 0.629, 0.662, 0.682, 0.724, 0.765, 0.804, 0.86, 0.951, 1.178, 1.47]
+        ys = [142, 142, 142, 142, 142, 142, 142, 147, 219, 225, 236, 238, 242, 244, 244]
+        moves, covered = jumps(ys, times, 18)
+        self.assertEqual(([m[2:] for m in moves], covered), ([[142, 242]], 0))
+
+    def test_needs_a_focused_field_and_a_video(self):
+        from motion import keyboard
+        from fe_common import write_json
+        with tmpdir() as d:
+            self.pack(d)
+            with self.assertRaisesRegex(FEError, "kb-show"):
+                keyboard(d)
+            write_json(os.path.join(d, "nodes.json"), [{"id": "n1", "focused": False, "bounds": [0, 0, 9, 9]}])
+            with self.assertRaisesRegex(FEError, "no focused field"):
+                keyboard(d)

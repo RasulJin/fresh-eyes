@@ -285,7 +285,8 @@ def text_fit(nodes, screen_wh):
         if t.isalpha() and len(t) >= 4 and h >= 1.6 * line and w < 1.3 * _ems(t) * TYPICAL_CHAR_PER_H * line:
             detail = "one word %r over %d lines (its row: %d px a line)" % (t, round(h / line), line)
         elif btn and {"t", "b"} <= _touching(n["bounds"], btn["bounds"]) and h >= 1.3 * line:
-            detail = "%r wrapped to %d px in a %d px button (its row: %d px a line): cut" % (t, h, btn["bounds"][3], line)
+            detail = "%r wrapped to %d px in a %d px button (its row: %d px a line): cut" % (
+                t, h, btn["bounds"][3], line)
         elif sum(c.isalpha() for c in t) >= 4 and w < 0.7 * need:
             detail = "%r gets %d px, its letters need ~%d (same font beside it)" % (t, w, need)
         else:

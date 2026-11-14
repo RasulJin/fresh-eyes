@@ -37,6 +37,8 @@ def make_pack(root, cell, sub=True, **meta):
     write_json(os.path.join(path, "meta.json"), dict(base, **meta))
     for need in REQUIRED_SUBPACKS.get(cell["probe"], ()) if sub else ():
         write_json(os.path.join(path, need, "meta.json"), {"platform": cell["platform"]})
+    if sub and cell["probe"] == "keyboard-open":
+        write_json(os.path.join(path, "keyboard.json"), {"flags": []})
     if sub and cell["probe"] == "scenario":
         steps = full_steps(cell.get("forms", []))
         write_json(os.path.join(path, "steps.json"), steps)
@@ -336,6 +338,10 @@ class StatusTest(unittest.TestCase):
         with self.assertRaisesRegex(FEError, "keyboard is still up"):
             set_status(cov, cell["id"], "done", evidence=[pack])
         write_json(os.path.join(pack, "return", "meta.json"), {"platform": cell["platform"], "keyboard_up": False})
+        os.remove(os.path.join(pack, "keyboard.json"))  # the field's ride on the keyboard was never measured
+        with self.assertRaisesRegex(FEError, "motion.py --keyboard"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "keyboard.json"), {"flags": []})
         set_status(cov, cell["id"], "done", evidence=[pack])
         self.assertEqual(cell["status"], "done")
 
