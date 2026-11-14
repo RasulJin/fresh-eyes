@@ -311,6 +311,7 @@ def main():
     g = sub.choices["logs"]
     g.add_argument("--package", required=True); g.add_argument("--clear", action="store_true")
     a = ap.parse_args(argv)
+    fe_common.heartbeat(a.out, a.platform, "capture.py %s %s" % (a.cmd, a.out))
     out = {}
     if a.cmd == "snap":
         code = snap(a.platform, a.device, a.out, before=a.before, keyboard=a.keyboard,

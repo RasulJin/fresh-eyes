@@ -123,8 +123,12 @@ words / nothing (= the current diff).
    the app signed out signs in with `accounts` itself; cells blocked with
    "signed out: <variable> not set" mean the user has to export that variable before the next run. A reply line
    `reach: <screen>: <how>`: write `<how>` into that screen's `reach` in `.fresh-eyes/config.json`, so the next
-   run does not hit the same wall. A navigator whose output has not grown for 10 minutes is stuck (a permission
-   prompt nobody answers, a loop): stop it and start a fresh one on the cells `coverage.py next` still lists.
+   run does not hit the same wall. Liveness: every `capture.py` call and every `nav.py` call with `--run $RUN`
+   refreshes `$RUN/<platform>/heartbeat`; `python3 $S/nav.py idle --run $RUN --platform <p>` prints its age. Only
+   a navigator that has run 10 minutes with `idle_s` over 600 is stuck (a permission prompt nobody answers, a
+   loop): stop it (TaskStop) and start a fresh one on the cells `coverage.py next` still lists. Never go by the
+   mtime of the agent's output file (a symlink: the time it was made). Check every 1–2 minutes, not in one long
+   wait: an agent that finished meanwhile is noticed only when the check returns.
 8. Review: first, per screen with done cells, `python3 $S/spec.py slice --spec .fresh-eyes/spec.md --screens
    <id>,<its neighbors> --stale $RUN/spec-stale.json --out $RUN/spec/<id>.md` (the global rules and those
    sections; neighbors' rules often apply); journeys: `--screens` = the screens of the journeys walked, `--out
