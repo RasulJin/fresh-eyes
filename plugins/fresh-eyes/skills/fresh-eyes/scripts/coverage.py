@@ -14,6 +14,7 @@ CLI:
   coverage.py diff-screens --repo R --base REF --config C
   coverage.py packs --dir <run>/<platform>/<screen> [--max 15]
   coverage.py prune --runs .fresh-eyes/runs [--keep 3]
+  coverage.py score --run RUN [--session ID] [--out RUN/score.json]   (stats.py: the run's M1-M12 card)
 """
 import argparse
 import glob
@@ -636,6 +637,8 @@ def main():
     p = sub.add_parser("packs"); p.add_argument("--dir", required=True, help="<run>/<platform>/<screen>")
     p.add_argument("--max", type=int, default=15, help="snaps per reviewer (~30 images in all)")
     p = sub.add_parser("prune"); p.add_argument("--runs", required=True); p.add_argument("--keep", type=int, default=3)
+    p = sub.add_parser("score"); p.add_argument("--run", required=True); p.add_argument("--out")
+    p.add_argument("--session", help="the orchestrator's session id: its transcripts give M9, M10 and M12")
     a = ap.parse_args()
     if a.cmd == "plan":
         cov = plan(read_json(a.config), read_json(a.preflight), a.mode, a.screens.split(",") if a.screens else None,
@@ -672,6 +675,9 @@ def main():
         print(json.dumps(pack_groups(a.dir, a.max), ensure_ascii=False))
     elif a.cmd == "prune":
         print(json.dumps({"freed_mb": round(prune(a.runs, a.keep) / 1e6, 1)}))
+    elif a.cmd == "score":
+        import stats
+        print(json.dumps(stats.score(a.run, a.session, a.out), ensure_ascii=False))
     else:
         print(json.dumps(screens_from_diff(a.repo, a.base, read_json(a.config)), ensure_ascii=False))
     return 0

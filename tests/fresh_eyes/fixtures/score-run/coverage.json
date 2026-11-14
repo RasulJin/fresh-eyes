@@ -1,0 +1,9 @@
+{"cells": [
+  {"id": "android/welcome/default/none", "platform": "android", "screen": "welcome", "state": "default",
+   "probe": "none", "mutating": false, "status": "done", "evidence": ["android/welcome/default-none"], "note": ""},
+  {"id": "android/vio-guide/default/scenario", "platform": "android", "screen": "vio-guide", "state": "default",
+   "probe": "scenario", "mutating": false, "status": "blocked", "evidence": [],
+   "note": "«Vio — это ИИ» consent dialog: «Понятно» is not in config consents"},
+  {"id": "android/thread/default/none", "platform": "android", "screen": "thread", "state": "default",
+   "probe": "none", "mutating": false, "status": "blocked", "evidence": [], "note": "signed out: QA_EMAIL not set"}],
+ "unchecked": []}

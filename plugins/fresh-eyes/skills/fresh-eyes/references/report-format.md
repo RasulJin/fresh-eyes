@@ -6,6 +6,7 @@
 .fresh-eyes/runs/<YYYYMMDD-HHMM>-<mode>/
   preflight.json  coverage.json  spec-stale.json  backlog-index.md  report.md
   imp.md                                    ← backlog.py match: every IMP in full, new ones numbered
+  score.json                                ← coverage.py score: M1-M12 {value, ok, what}, the judge's M4/M7/M11
   spec/<screen>.md  spec/journey.md         ← spec slices: global rules + the screen and its neighbors
   <platform>/<screen>/<state>-<probe>/      ← one evidence pack per cell
     screen.png screen_1000.png som.png som.json nodes.json hierarchy.txt candidates.json meta.json

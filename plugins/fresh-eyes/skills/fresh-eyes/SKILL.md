@@ -159,7 +159,9 @@ words / nothing (= the current diff).
     Then `python3 $S/backlog.py match --index $RUN/backlog-index.md --findings <all findings*.json> --out
     $RUN/imp.md --language <config>`: an IMP an open backlog entry already proposes gets its `backlog_id`, and
     imp.md holds every IMP in full (the new ones numbered, the known ones a line each).
-11. Write `$RUN/report.md` by `$R/report-format.md` (see "Report").
+11. Write `$RUN/report.md` by `$R/report-format.md` (see "Report"). Then `python3 $S/coverage.py score --run $RUN
+    --session "${CLAUDE_SESSION_ID}"`: the run's score card (`$RUN/score.json`, the metrics a script counts; the
+    judge fills M4, M7 and M11, a rerun keeps them).
 12. Review with the user, then write the backlog and regression flows (see "After the report").
 
 ## full
