@@ -68,7 +68,9 @@ nobody answers in a night run.
    Three failed attempts → `coverage.py set ... --status blocked --note "<why>"` and move on.
 2. **Set the state** on the device (owned devices only):
    `python3 $S/devices.py set --platform P --device ID --name NAME --what dark|font-xl|offline|...`.
-   `keyboard`: focus the screen's main input. `small-screen`: use `platforms.<p>.small_device_id`.
+   `keyboard`: focus the screen's main input. `small-screen`: use `platforms.<p>.small_device_id`. `font-xl`:
+   then `devices.py app --do terminate` and `--do launch`, and reach the screen again (an app open across the
+   change keeps its old layouts).
    `empty`/`long-text`/`long-list`: the seeded data. `long-list`: snap the top, swipe inside the list until the
    screen stops changing, snap the end with `--before <top pack>`, record both packs; if every item fits on one
    screen, mark the cell blocked with note "not enough items". `loading`/`error`: run `hooks.loading` / `hooks.error` from

@@ -2,8 +2,10 @@
 """Find motion problems in a screen recording: flicker, layout jump after rest, too-long transition,
 a screen that never settles. Works on native (variable-frame-rate) frames with their PTS: emulator
 recordings only contain frames when the screen changes, and resampling would hide one-frame flashes.
+--keyboard: how the focused field rides the keyboard in a keyboard-open pack (double jump, lag).
 
 CLI: motion.py --video V --out DIR [--ceiling-ms 500] [--record-s S]
+     motion.py --keyboard PACK
 """
 import argparse
 import json
@@ -164,13 +166,100 @@ def analyze(video, out_dir, ceiling_ms=DEFAULT_CEILING_MS, record_s=None, t0_s=0
     return report
 
 
+KB_WIDTH = 180    # frame width for following the field: 4-6 screen px a row
+KB_CHUNKS = 12    # a row of the field as 12 column means: quick, and the keyboard's keys never pass for it
+COVERED = 0.015   # mean |Δ| of the best match above this: the field is nowhere in the frame, something covers it
+PAUSE_S = 0.1     # the field standing this long between two moves: two jumps
+FRAME_S = 0.05    # a move after a gap without frames began just before its frame (no change, no frame)
+JUMP = 0.25       # a move shorter than this share of the field's height is a settle, not a jump
+
+
+def follow_field(frames, w, box, ref):
+    """The field's top row in each frame (frame scale): the patch at `box` in frame `ref`, found row by row;
+    None where it matches nowhere."""
+    x, y0, bw, bh = box
+    cw = max(1, bw // KB_CHUNKS)
+    rows = [[[sum(f[r * w + x + k * cw:r * w + x + (k + 1) * cw]) / float(cw) for k in range(KB_CHUNKS)]
+             for r in range(len(f) // w)] for f in frames]
+    tpl = rows[ref][y0:y0 + bh]
+
+    def err(rs, y):
+        return sum(abs(a - b) for ta, ra in zip(tpl, rs[y:y + bh]) for a, b in zip(ta, ra)) / (255.0 * KB_CHUNKS * bh)
+    out = []
+    for rs in rows:
+        best = min(range(len(rs) - bh + 1), key=lambda y: err(rs, y))
+        out.append(best if err(rs, best) <= COVERED else None)
+    return out
+
+
+def jumps(ys, times, bh):
+    """The field's separate moves [start_s, end_s, from_y, to_y] (a stop of PAUSE_S splits them; settles under
+    JUMP of its height do not count), and the frames it was covered between the first and the last."""
+    seen = [(t, y) for t, y in zip(times, ys) if y is not None]
+    moves = []
+    for (t0, a), (t1, b) in zip(seen, seen[1:]):
+        if abs(b - a) < 2:
+            continue
+        covered = any(y is None and t0 < t < t1 for t, y in zip(times, ys))  # covered while moving: no stop
+        start = t0 if covered else max(t0, t1 - FRAME_S)
+        if moves and start - moves[-1][1] < PAUSE_S:
+            moves[-1][1], moves[-1][3] = t1, b
+        else:
+            moves.append([start, t1, a, b])
+    moves = [m for m in moves if abs(m[3] - m[2]) >= JUMP * bh]
+    hidden = sum(1 for t, y in zip(times, ys) if y is None and moves and moves[0][0] <= t <= moves[-1][1])
+    return moves, hidden
+
+
+def keyboard(pack):
+    """keyboard-open: the focused field (where it rests with the keyboard up, <pack>/nodes.json) followed through
+    <pack>/kb-show (the focus tap) and <pack>/kb-hide (Back). More than one jump, or more than one frame with the
+    field covered while it rises, is flagged; a sheet of those frames goes next to the video. → keyboard.json"""
+    meta = read_json(os.path.join(pack, "meta.json"))
+    field = next((n for n in read_json(os.path.join(pack, "nodes.json")) if n["focused"]), None)
+    if field is None:
+        raise FEError("no focused field in %s: snap it with --keyboard while the field has focus" % pack)
+    report, flagged = {"field": field["bounds"]}, []
+    for name, ref in (("kb-show", -1), ("kb-hide", 0)):  # the field as it rests: after the show, before the hide
+        video = os.path.join(pack, name, "video.mp4")
+        if not os.path.exists(video):
+            continue
+        frames, times, w, _ = extract_gray(video, width=KB_WIDTH)
+        s = w / float(meta["screen_wh"][0])
+        box = [int(round(v * s)) for v in field["bounds"]]
+        ys = follow_field(frames, w, box, ref)
+        moves, hidden = jumps(ys, times, box[3])
+        fl = (["double_jump"] if len(moves) > 1 else []) + (["lag"] if hidden > 1 else [])
+        report[name] = {"jumps": len(moves), "covered_frames": hidden, "flags": fl,
+                        "moves": [{"t": round(m[0], 3), "ms": round((m[1] - m[0]) * 1000),
+                                   "dy_px": round((m[3] - m[2]) / s)} for m in moves],
+                        "path": [[round(t, 3), None if y is None else round(y / s)] for t, y in zip(times, ys)]}
+        if fl:
+            files = extract_frames(video, os.path.join(pack, name, "kb_frames"), moves[0][0] - 0.1,
+                                   moves[-1][1] + 0.1)
+            report[name]["sheet"] = tile(files, os.path.join(pack, name, "sheet_kb.png")) if files else None
+        flagged += ["%s: %s" % (name, f) for f in fl]
+    if "kb-show" not in report and "kb-hide" not in report:
+        raise FEError("no kb-show/video.mp4 or kb-hide/video.mp4 in %s (capture.py around)" % pack)
+    report["flags"] = flagged
+    write_json(os.path.join(pack, "keyboard.json"), report)
+    return report
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--video", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--video")
+    ap.add_argument("--out")
     ap.add_argument("--ceiling-ms", type=int, default=DEFAULT_CEILING_MS)
     ap.add_argument("--record-s", type=float)
+    ap.add_argument("--keyboard", metavar="PACK", help="the focused field through PACK/kb-show and kb-hide")
     a = ap.parse_args()
+    if a.keyboard:
+        rep = keyboard(a.keyboard)
+        print(json.dumps({"flags": rep["flags"], "out": os.path.join(a.keyboard, "keyboard.json")}))
+        return 0
+    if not (a.video and a.out):
+        ap.error("--video and --out are required (or --keyboard PACK)")
     rep = analyze(a.video, a.out, a.ceiling_ms, a.record_s)
     print(json.dumps({"flags": [f["type"] for f in rep["flags"]], "sheets": rep["sheets"]}, ensure_ascii=False))
     return 0

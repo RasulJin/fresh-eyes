@@ -21,6 +21,10 @@ Purpose: <one line>
 - must <id>#1: <checkable rule> (source: <file/commit/decision>, <date>)
 - must-not <id>#2: <checkable rule> (source: ...)
 Reference: <design file / reference app screen>
+### Invariants
+- inv <id>#3: arrival = departure + flight duration, in the arrival city's time zone (source: ...)
+- inv <id>#4: the total equals the sum of the rows above it (source: ...)
+- inv <id>#5: past trips newest first, by end date (source: ...)
 ```
 
 Rules are **checkable sentences** ("replies open inline under the comment, without navigating to a Thread
@@ -28,6 +32,14 @@ screen"), not wishes ("nice replies"). Each rule has an id, a source and a date.
 
 Sections start at `## ` lines and the first word of the heading is the screen id from `config.json`, so keep
 screen headings as `## <screen-id> <name>` and the global one as exactly `## Global`.
+
+## Invariants
+
+Arithmetic and data the screen must keep true whatever the data is: sums, counts, dates and times (with their
+time zones), order. A person catches "lands an hour early" or "Lisbon listed before a newer trip"; a reviewer
+looking at a frame does not, unless told to recompute. Write them under the screen's `### Invariants` (inside its
+`## ` section, so slices carry them) as `inv <id>#N:` lines, each naming the on-screen values it relates. The
+reviewer recomputes every one from the texts of each pack that shows its values; a mismatch is a BUG.
 
 ## `Updated:` and stale sections
 

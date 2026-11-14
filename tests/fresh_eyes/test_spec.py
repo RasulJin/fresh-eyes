@@ -51,6 +51,13 @@ Sources: design/.
 ## nope: no section in spec.md
 """)
 
+    def test_a_screens_invariants_travel_with_its_section_only(self):
+        spec = SPEC.replace("- must feed#1: posts open inline.\n",
+                            "- must feed#1: posts open inline.\n### Invariants\n- inv feed#2: newest post first.\n")
+        self.assertIn("## feed — Feed\n- must feed#1: posts open inline.\n### Invariants\n- inv feed#2:",
+                      slice_spec(spec, ["feed"]))
+        self.assertNotIn("inv feed#2", slice_spec(spec, ["profile", "settings"]))
+
     def test_without_stale_file_nothing_is_marked(self):
         out = slice_spec(SPEC, ["profile"])
         self.assertIn("### Notes\n- profile only.", out)

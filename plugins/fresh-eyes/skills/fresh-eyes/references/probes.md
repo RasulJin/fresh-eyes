@@ -72,15 +72,14 @@ short drags) before the next cell.
 - Android: `am force-stop`, then launch under `capture.py around`. iOS: `simctl terminate` + `launch`.
 
 ### keyboard-open
-- Reveals: fields, counters, suggestions and CTAs under the keyboard; focus without keyboard.
-- Steps: tap each input; `capture.py snap --keyboard --before <pack before focus>` so new suggestion nodes
-  hidden under the keyboard are caught (no keyboard at all → a `keyboard_missing` candidate); type a few chars with real key taps when the bug may be in the IME.
-- Then, with the keyboard up, leave the screen (a link, avatar or tab, not Back; a sheet or modal with no way
-  out: close and reopen it) and return. If the keyboard is up again (a tab keeps the field focused), close it
-  with one `taps.py back` (with the keyboard up Back only hides it), wait 1.5 s, then
-  `capture.py snap --out <pack>/return`: a bar or gap left at keyboard height is a stale inset. `coverage.py set`
-  refuses the cell without this snap, and refuses a `return` snap that still shows the keyboard.
-- Also open/close the keyboard 3–4 times and compare the bottom of the form (layout creep).
+- Reveals: what the keyboard or a footer on it hides; focus without keyboard; a field that jumps twice or lags.
+- Steps: focus the main input under `capture.py around --out <pack>/kb-show -- python3 $S/nav.py tap ...`, then
+  `capture.py snap --keyboard --before <pack before focus>`; Android: Back only hides it, recorded with
+  `capture.py around --out <pack>/kb-hide -- python3 $S/taps.py back ...`; `motion.py --keyboard <pack>`. Then
+  the other inputs; type with real key taps when the IME matters.
+- Focus it again, leave (a link, avatar or tab, not Back; a modal: close and reopen) and return; keyboard up
+  again: one `taps.py back`, wait 1.5 s; `capture.py snap --out <pack>/return` (a stale inset). `coverage.py set`
+  needs `keyboard.json` and that snap with the keyboard closed. Open/close 3–4 times: does the form creep?
 
 ### search
 - Reveals: suggestions in mixed languages, wrong or duplicate matches, results that contradict the form or each

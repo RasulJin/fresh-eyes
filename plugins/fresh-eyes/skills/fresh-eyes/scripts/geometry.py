@@ -17,6 +17,7 @@ SYSTEM_PREFIXES = ("com.android.systemui",)
 # iOS native bars are translucent and content scrolls under them by design; a RN header drawn as a View is not
 # one of these and is still checked.
 NATIVE_BARS = {"NavigationBar", "Toolbar", "TabBar"}
+SCROLLS = ("ScrollView", "RecyclerView", "ListView", "Table", "CollectionView")
 
 
 def _area(b):
@@ -247,6 +248,53 @@ def truncation_candidates(nodes):
     return result
 
 
+def _touching(a, b, eps=1):
+    """Sides (l, r, t, b) where box a lies on box b's edge."""
+    d = {"l": a[0] - b[0], "r": b[0] + b[2] - a[0] - a[2], "t": a[1] - b[1], "b": b[1] + b[3] - a[1] - a[3]}
+    return {s for s, v in d.items() if abs(v) <= eps}
+
+
+def text_fit(nodes, screen_wh):
+    """Text that no longer fits its box (large font, small phone), judged against the texts beside it in the same
+    row (segments, tiles, a button pair), which share its font: a word broken over lines («Расписани/е»), a label
+    wrapped taller than its row and cut by its button («Удалить / навсегда»), a single line far narrower than
+    its letters need («Тём»). uiautomator cuts bounds to the parent, so the cut shows as a box too small."""
+    by_id = {n["id"]: n for n in nodes}
+    texty = [n for n in nodes if n["text"].strip() and n["bounds"][2] > 0 and n["bounds"][3] > 0
+             and not n["cls"].endswith(("EditText", "TextField", "SearchField"))]
+    screen = [0, 0] + list(screen_wh)
+    result = []
+    for n in texty:
+        t, (x, y, w, h) = n["text"].strip(), n["bounds"]
+        anc = [by_id[a] for a in _ancestors(n, by_id)]
+        if _touching(n["bounds"], screen) or any(a["cls"].endswith(SCROLLS) and _touching(n["bounds"], a["bounds"])
+                                                 for a in anc):
+            continue  # cut by the screen or a list's edge: scrolled, not squeezed
+        row = []
+        for p in texty:
+            (px, py, pw, ph), pt = p["bounds"], p["text"].strip()
+            if p is not n and len(pt) >= 3 and min(y + h, py + ph) - max(y, py) >= 0.5 * min(h, ph) \
+                    and (px + pw <= x + 2 or px >= x + w - 2) and 0.33 <= pw / _ems(pt) / ph <= 0.6:
+                row.append(p)  # beside it in its row, one line at its own width (a stretched box is no measure)
+        if not row:
+            continue
+        line = statistics.median(p["bounds"][3] for p in row)
+        btn = next((a for a in anc if a["clickable"]), None)
+        same = [p for p in row if abs(p["bounds"][3] - h) <= max(2, 0.06 * h)]
+        need = _ems(t) * min(p["bounds"][2] / _ems(p["text"].strip()) for p in same) if same else 0
+        if t.isalpha() and len(t) >= 4 and h >= 1.6 * line and w < 1.3 * _ems(t) * TYPICAL_CHAR_PER_H * line:
+            detail = "one word %r over %d lines (its row: %d px a line)" % (t, round(h / line), line)
+        elif btn and {"t", "b"} <= _touching(n["bounds"], btn["bounds"]) and h >= 1.3 * line:
+            detail = "%r wrapped to %d px in a %d px button (its row: %d px a line): cut" % (
+                t, h, btn["bounds"][3], line)
+        elif sum(c.isalpha() for c in t) >= 4 and w < 0.7 * need:
+            detail = "%r gets %d px, its letters need ~%d (same font beside it)" % (t, w, need)
+        else:
+            continue
+        result.append(_cand("text_fit", [n["id"]], n["bounds"], detail, "high"))
+    return result
+
+
 def _norm_text(t):
     return " ".join(t.casefold().split())
 
@@ -297,6 +345,36 @@ def under_keyboard(after, keyboard_top, before=None):
     return result
 
 
+def _inside(a, b):
+    return b[0] <= a[0] and b[1] <= a[1] and a[0] + a[2] <= b[0] + b[2] and a[1] + a[3] <= b[1] + b[3]
+
+
+def under_bar(nodes, keyboard_top):
+    """Keyboard up: a bar pinned on it (a footer with Next or Send) cuts the focused field or the controls under it
+    (suggestions, recent chips). uiautomator cuts their bounds at the bar, so they end on its top edge. The bar is
+    found by bounds: a footer's button is often not its child in the dump."""
+    field = next((n for n in nodes if n["focused"]), None)
+    if field is None:
+        return []
+    taps = [n for n in nodes if n["clickable"] and n["bounds"][3] > 0]
+    bar = min((b for b in nodes if abs(b["bounds"][1] + b["bounds"][3] - keyboard_top) <= 2
+               and not _inside(field["bounds"], b["bounds"]) and any(_inside(t["bounds"], b["bounds"]) for t in taps)),
+              key=lambda b: b["bounds"][1], default=None)  # the outermost: its top is the edge that cuts
+    if bar is None:
+        return []
+    top = bar["bounds"][1]
+    hit = [n for n in [field] + [t for t in taps if t is not field]
+           if n["bounds"][3] > 0 and n["bounds"][1] < top <= n["bounds"][1] + n["bounds"][3] + 2]
+    if not hit:
+        return []
+    name = next((t["text"] or t["label"] for t in taps if _inside(t["bounds"], bar["bounds"])
+                 and (t["text"] or t["label"])), "")
+    what = "the focused field" if field in hit else "%d control(s) below the focused field" % len(hit)
+    return [_cand("under_bar", [bar["id"]] + [n["id"] for n in hit],
+                  _union([n["bounds"] for n in hit] + [[bar["bounds"][0], top, bar["bounds"][2], 1]]),
+                  "%s cut by %r pinned on the keyboard" % (what, name), "high")]
+
+
 def keyboard_missing(nodes, screen_wh):
     """The navigator focused an input (--keyboard) but no soft keyboard is up: focus without keyboard, or on iOS
     the one-time slide-to-type intro / a connected hardware keyboard."""
@@ -316,11 +394,12 @@ def run_all(nodes, ctx, before=None):
     before = _app_only(before) if before is not None else None
     screen = ctx["screen_wh"]
     result = partially_visible(nodes, screen) + overlaps(nodes, screen_wh=screen) + truncation_candidates(nodes) \
-        + repeated_strings(nodes) + held_short(nodes, screen, ctx.get("px_per_dp") or 2.625)
+        + text_fit(nodes, screen) + repeated_strings(nodes) + held_short(nodes, screen, ctx.get("px_per_dp") or 2.625)
     if ctx.get("px_per_dp") and ctx.get("min_dp"):
         result += small_targets(nodes, ctx["px_per_dp"], ctx["min_dp"])
     if ctx.get("keyboard_top") is not None:
         result += under_keyboard(nodes, ctx["keyboard_top"], before)
+        result += under_bar(nodes, ctx["keyboard_top"])
     elif ctx.get("keyboard"):
         result += keyboard_missing(nodes, screen)
     if before is not None:

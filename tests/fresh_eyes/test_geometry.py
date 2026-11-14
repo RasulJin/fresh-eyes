@@ -219,3 +219,81 @@ class HeldShortTest(unittest.TestCase):
         nodes = self.grid(1328)
         nodes.append(node("tab", [0, 1800, 216, 186], cls="android.widget.Button", label="Лента"))
         self.assertEqual(held_short(nodes, SCREEN), [])
+
+
+class TextFitTest(unittest.TestCase):
+    """Text that outgrew its box at font_scale 1.3 / 360 dp, caught only by people in fe9/fe10-verify: real nodes."""
+    @classmethod
+    def setUpClass(cls):
+        import json
+        import os
+        from tests.fresh_eyes.helpers import FIXTURES
+        with open(os.path.join(FIXTURES, "text_fit.json"), encoding="utf-8") as f:
+            cls.packs = json.load(f)
+
+    def flagged(self, name):
+        from geometry import text_fit
+        p = self.packs[name]
+        return {c["node_ids"][0]: c["detail"] for c in text_fit(p["nodes"], p["screen_wh"])}
+
+    def test_segment_cut_to_a_stub(self):  # «Тёмная» shown as «Тём» at the card edge
+        got = self.flagged("theme_font13")
+        self.assertEqual(list(got), ["n90"])
+        self.assertIn("need", got["n90"])
+
+    def test_label_wrapped_and_cut_by_its_button(self):  # «Удалить / навсегда», «Восстановить» beside it fits
+        self.assertEqual(sorted(self.flagged("trash_font13")), ["n57", "n70"])
+
+    def test_one_word_broken_over_two_lines(self):  # «Расписани / е» among one-line tile labels
+        got = self.flagged("trip_tools_small")
+        self.assertEqual(list(got), ["n50"])
+        self.assertIn("one word", got["n50"])
+
+    def test_quiet_on_stretched_rows_and_scrolled_chips(self):  # «10:00» stretched to two lines, day chips at the edge
+        self.assertEqual(self.flagged("schedule_font13"), {})
+
+    def test_a_stretched_neighbour_is_no_measure(self):  # «Подписаться» beside a name stretched over the row
+        self.assertEqual(self.flagged("follow_button"), {})
+
+    def test_quiet_on_real_settings_screen_and_in_run_all(self):
+        import os
+        from hierarchy import normalize
+        from geometry import text_fit
+        from tests.fresh_eyes.helpers import FIXTURES
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            self.assertEqual(text_fit(normalize(f.read(), "uiautomator"), SCREEN), [])
+        p = self.packs["theme_font13"]
+        self.assertIn("text_fit", [c["check"] for c in run_all(p["nodes"], {"screen_wh": p["screen_wh"]})])
+
+
+class UnderBarTest(unittest.TestCase):
+    """A footer pinned on the keyboard over what the focused field needs (fe10-verify I7/I8, 360x640 dp)."""
+    @classmethod
+    def setUpClass(cls):
+        import json
+        import os
+        from tests.fresh_eyes.helpers import FIXTURES
+        with open(os.path.join(FIXTURES, "under_bar.json"), encoding="utf-8") as f:
+            cls.packs = json.load(f)
+
+    def run_pack(self, name):
+        from geometry import under_bar
+        p = self.packs[name]
+        return under_bar(p["nodes"], p["keyboard_top"])
+
+    def test_recent_chips_cut_by_next(self):  # «Дальше» leaves a 17 dp strip of the recent-city chips
+        c = self.run_pack("wizard_recent_small")
+        self.assertEqual([x["node_ids"] for x in c], [["n74", "n54", "n61", "n68"]])
+        self.assertIn("Дальше", c[0]["detail"])
+
+    def test_focused_field_cut_by_next(self):
+        c = self.run_pack("wizard_field_small")
+        self.assertEqual([x["node_ids"] for x in c], [["n80", "n57"]])
+        self.assertIn("focused field", c[0]["detail"])
+        p = self.packs["wizard_field_small"]
+        ctx = {"screen_wh": p["screen_wh"], "px_per_dp": p["px_per_dp"], "keyboard_top": p["keyboard_top"]}
+        self.assertIn("under_bar", [x["check"] for x in run_all(p["nodes"], ctx)])
+
+    def test_composer_holding_the_field_and_a_roomy_footer_are_fine(self):
+        self.assertEqual(self.run_pack("guide_composer_small"), [])  # the bar on the keyboard is the field's own
+        self.assertEqual(self.run_pack("wizard_pixel"), [])  # chips well above «Дальше»

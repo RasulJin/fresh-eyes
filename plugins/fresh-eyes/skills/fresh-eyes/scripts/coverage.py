@@ -249,6 +249,9 @@ def _probe_problems(c, packs, note):
     if c["probe"] == "keyboard-open" and os.path.isfile(back) and read_json(back).get("keyboard_up"):
         problems.append("the keyboard is still up in <pack>/return, so the state after it closes was never seen: "
                         "close it with one taps.py back (with the keyboard up Back only hides it), wait, snap again")
+    if c["probe"] == "keyboard-open" and packs and not os.path.isfile(os.path.join(packs[0], "keyboard.json")):
+        problems.append("no <pack>/keyboard.json: the focus tap recorded into <pack>/kb-show (and on Android Back "
+                        "into <pack>/kb-hide) with capture.py around, then motion.py --keyboard <pack>")
     swiped = read_json(os.path.join(packs[0], "meta.json")) \
         if c["probe"] == "swipe-inside" and packs and os.path.isfile(os.path.join(packs[0], "meta.json")) else None
     if swiped is not None and "before" not in swiped:
