@@ -46,6 +46,9 @@ def _read(path):
         return f.read()
 
 
+RUN_LOG = re.compile(r"^#+\s+(ход прогона|run log)", re.I | re.M)  # no log anywhere: M1 unknown, not 0
+
+
 def items(text, heading, pattern=ITEM):
     """Top-level list items under the headings matching `heading`, each up to the next heading of its level."""
     n, level = 0, None
@@ -103,7 +106,7 @@ def score(run, sid=None, out=None):
     text = _read(report) if os.path.exists(report) else None
     log = os.path.join(run, "run-log.md")
     m = {"M1": sum(1 for line in _read(log).splitlines() if NUMBERED.match(line)) if os.path.exists(log)
-         else items(text, r"(ход прогона|run log)", NUMBERED) if text is not None else None,
+         else items(text, r"(ход прогона|run log)", NUMBERED) if text and RUN_LOG.search(text) else None,
          "M5": items(text, r"(вопрос|question)", QUESTION) if text is not None else None,
          "M8": len(text.splitlines()) if text is not None else None}
     paths = sorted(glob.glob(os.path.join(run, "*", "*", "findings*.json")))

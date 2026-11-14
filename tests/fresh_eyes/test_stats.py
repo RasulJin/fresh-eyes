@@ -65,6 +65,12 @@ class ScoreTest(unittest.TestCase):
             self.assertEqual(card["M10"]["ok"], None)
             os.remove(os.path.join(run, "score.json"))
             self.assertEqual(read_json(stats.score(run)["out"])["M1"]["value"], 1)  # run-log.md: 1 numbered step
+            for name in ("score.json", "run-log.md"):
+                os.remove(os.path.join(run, name))
+            with open(os.path.join(run, "report.md"), "w", encoding="utf-8") as f:
+                f.write("# Отчёт\n1. not a hand move\n")
+            m1 = read_json(stats.score(run)["out"])["M1"]
+            self.assertEqual((m1["value"], m1["ok"]), (None, None))  # no run log anywhere: unknown, not a free pass
             self.assertIn("M10", card["unknown"])
 
 

@@ -34,8 +34,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 
 ## Method
 
-1. For each pack, look first, read second: images (`som.png` where required, `crops/*.png`, `sheet_*.png`),
-   then `candidates.json`, `meta.json`, `hierarchy.txt`, `motion.json`, `taps.json`, `around.json`. A pack's
+1. For each pack, look first, read second: images (`som.png` where required, `crops/*.png`, `sheet_*.png`,
+   `kb-show/sheet_kb.png`), then `candidates.json`, `meta.json`, `hierarchy.txt`, `motion.json`, `keyboard.json`,
+   `taps.json`, `around.json`. A pack's
    sub-folders with a `meta.json` (`afterback/`, `return/`, `typed/`, `form-after/`, journey and scenario
    `step-N/`, `scroll-N/`) are packs too; `scroll-N/` is the same screen scrolled N half-screens down: judge what
    the first frame could not show, and a row cut at its top or bottom edge is the scroll, not a defect.

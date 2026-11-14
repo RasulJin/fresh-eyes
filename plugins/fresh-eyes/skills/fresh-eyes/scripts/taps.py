@@ -20,7 +20,7 @@ import os
 
 import devices
 from devices import Device
-from fe_common import FEError, cli, read_json
+from fe_common import FEError, cli, heartbeat, read_json
 from motion import run_ceiling_ms
 from nav import _xy
 
@@ -83,6 +83,7 @@ def main():
             p.add_argument("--dp", type=float, default=2)
     a = ap.parse_args()
     guard(a.coverage, a.cell, a.platform)
+    heartbeat(a.coverage, a.platform, "taps.py %s %s" % (a.cmd, a.cell))
     dev = Device(a.platform, a.device, "")
     if a.cmd == "rapid":
         devices.rapid_taps(dev, a.x, a.y, a.count, a.interval_ms)
