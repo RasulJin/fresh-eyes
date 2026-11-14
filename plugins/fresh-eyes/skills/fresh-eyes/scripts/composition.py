@@ -10,7 +10,7 @@ import json
 from collections import Counter
 
 from fe_common import cli, image_size, read_gray, read_json
-from geometry import _ancestors, _area, _intersect
+from geometry import SCROLLS, _ancestors, _area, _intersect
 
 EDGE_TOL = 16     # gray step that counts as an edge
 EMPTY_EDGES = 6   # a blank row still crosses a card's two borders and their anti-aliasing
@@ -24,7 +24,6 @@ CROWD_DP = 8      # Material: 8 dp between touch targets
 # Empty inside by design: inputs, maps (flat water), web views. iOS classes carry no package, Android ones do.
 FLAT_IOS = {"TextField", "SecureTextField", "SearchField", "TextView", "Map", "WebView"}
 FLAT_ANDROID = ("EditText", "TextureView", "SurfaceView", "WebView")
-SCROLLS = ("ScrollView", "RecyclerView", "ListView", "Table", "CollectionView")
 
 
 def gray_dp(src, px_per_dp):

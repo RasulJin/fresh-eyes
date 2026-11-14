@@ -49,6 +49,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    is fine; `clipped`, `under_keyboard` and `overlap` deserve a careful look at the crop. `keyboard_missing`:
    an input was focused but no keyboard is up; a real bug unless the crop shows a keyboard intro/onboarding.
    `blank_gap` and `crowded` are measured on pixels: judge them on the crop by the checklist's Composition rules.
+   `text_fit` (a text cut, wrapped mid-word or wrapped out of its button, measured against the texts in its
+   row): a BUG, medium (high on a primary action), unless the crop shows the whole text on its lines.
 3. A scenario pack is judged step by step against its `steps.json`: does each frame match the `expect` written
    before the step? Results must belong to the latest input (nothing stale), what was saved must show where the
    step says and nothing unasked-for may appear, invalid input must be refused, a stopped or failed action must
