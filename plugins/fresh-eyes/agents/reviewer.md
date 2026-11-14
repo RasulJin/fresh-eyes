@@ -62,20 +62,24 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    Crash: a pack whose `meta.json` has `app_running: false` (in any probe) is a BUG high, with the crash line
    from that pack's `logcat.txt` in `log` (the exception or fatal signal naming the app) and `steps` up to the
    action before it. Never test data or a navigation slip, even when the frame shows the launcher.
-4. Go beyond the candidates through the checklist sections and the UX rubric. Compare with the spec rules and
+4. Invariants: for each `inv` line under a `### Invariants` of the slice, take every pack that shows its values,
+   read them from `hierarchy.txt` (exact text) and recompute: add the rows, shift the time by the duration and
+   the zones, check the order. A mismatch is a BUG (`check: invariant`, `rule: spec:<id>`, high when it shows
+   wrong data as true) with the values and your arithmetic in `actual`. Record each in the output's `invariants`.
+5. Go beyond the candidates through the checklist sections and the UX rubric. Compare with the spec rules and
    with the examples. Check consistency against sibling packs (header vs tab bar icon, the same control in two
    states, light vs dark). Then look once more as this app's designer: every change you would make (spacing,
    sizes, words, order, icons, defaults, a step to drop) is an IMP, small ones too.
-5. For each problem write a finding: `kind` BUG (defect) or IMP (improvement with a concrete change),
+6. For each problem write a finding: `kind` BUG (defect) or IMP (improvement with a concrete change),
    `severity` per the checklist, `som` numbers and an evidence crop path, `expected` vs `actual`, `rule` =
    `spec:<rule id>` or `taste`. `steps` is for the person who will fix it: from the app's start screen, one
    plain action per item (system settings too, like "set the system font to the largest"), buttons named by
    their on-screen text, the last item saying what to look at. No cell ids, pack names, step numbers, script
    commands or coordinates there: those go to `found_by` (cell id, probe, pack or scenario step). `confidence` reflects how
    sure the evidence makes you; `taste` findings are capped at 0.6.
-6. Things you suspect but cannot see well enough (needs a zoom, another frame, a repeat): still write the
+7. Things you suspect but cannot see well enough (needs a zoom, another frame, a repeat): still write the
    finding with low confidence and say in `actual` what evidence is missing. The verifier will chase it.
-7. Spec conflicts or "bug or intended?" doubts go to `questions[]` with short options and `finding` = the id
+8. Spec conflicts or "bug or intended?" doubts go to `questions[]` with short options and `finding` = the id
    of the finding they are about — **in addition to** a finding, never instead of one. If the spec is silent
    and you are unsure whether something is intended (a reference app does it differently, siblings disagree),
    still write it as a finding with `rule: taste` and confidence ≤ 0.5, so it reaches "look with your own eyes".
@@ -98,7 +102,8 @@ do-not-flag section covers. Do not describe the screen; report problems.
 ## Output
 
 Write `<run>/<platform>/<screen>/findings.json` — or the file name the orchestrator gives — (schema in
-report-format.md, all `verdict: "pending"`, evidence paths relative to the run folder, `reviewed_packs`).
+report-format.md, all `verdict: "pending"`, evidence paths relative to the run folder, `reviewed_packs`), and
+`"invariants": [{"id": "<rule id>", "pack": "<path>", "result": "ok|broken|not shown"}]` when the slice has any.
 
 ## Reply (≤10 lines)
 
