@@ -36,7 +36,8 @@ whenever the rules are re-checked against the code (init, an update after a run)
 `spec.py stale --spec .fresh-eyes/spec.md --repo <repo> --config .fresh-eyes/config.json --out
 $RUN/spec-stale.json` takes the last commit of that day as the base and maps every code file changed since
 (commits, uncommitted and untracked files) to screens through routes and imports, as `coverage.py diff-screens`
-does. A spec dated today has no stale screens. The rules of a stale screen are kept, but `coverage.py verdict`
+does. A commit typed `fix`, `docs`, `test`, `chore` or `style` (`fix(feed): …`), or naming a `BUG-N`, brings the
+code to the spec or leaves behaviour alone: its files do not count. A spec dated today has no stale screens. The rules of a stale screen are kept, but `coverage.py verdict`
 turns a confirmed finding with a `spec:` rule on that screen, or citing that section, into `unsure` and returns
 it in `stale`; the report asks once per screen: "section <id> dated <Updated>, code changed since: are its
 rules current?". `taste` findings are not affected.

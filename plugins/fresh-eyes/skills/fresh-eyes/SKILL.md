@@ -94,7 +94,8 @@ words / nothing (= the current diff).
    the user what is missing or how much is free; the verdict is INCOMPLETE.
    Then `python3 $S/spec.py stale --spec .fresh-eyes/spec.md --repo . --config .fresh-eyes/config.json --head
    <source.ref> --out $RUN/spec-stale.json`: screens whose code changed after the spec's `Updated` date (the
-   verdict turns their `spec:` findings into questions). `<source.ref>` is preflight.json's commit, so a checkout
+   verdict turns their `spec:` findings into questions; fix/docs/test/chore/style commits and commits naming a
+   BUG-N do not count). `<source.ref>` is preflight.json's commit, so a checkout
    on another branch does not hide the build's changes; leave `--head` out when there is no commit there.
 4. Screens:
    - `BUG-N`: read the entry in the backlog (heading + its fields); its replay becomes the coverage cell

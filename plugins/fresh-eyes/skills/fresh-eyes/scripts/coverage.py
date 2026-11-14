@@ -483,15 +483,16 @@ def _strip_ext(path):
     return path
 
 
-def screens_from_diff(repo, base, config, head="HEAD"):
-    """head: the commit the build was made from; only HEAD adds the checkout's uncommitted and untracked files."""
+def screens_from_diff(repo, base, config, head="HEAD", files=None):
+    """head: the commit the build was made from; only HEAD adds the checkout's uncommitted and untracked files.
+    files: the committed changes to map instead of the whole diff base...head (spec.py stale drops fix commits)."""
     expo_root = (config.get("app") or {}).get("expo_root", ".")
-    changed = set()
-    cmds = [["diff", "--name-only", "%s...%s" % (base, head)]]
+    changed = set(files or ())
+    cmds = [] if files is not None else [["diff", "--name-only", "%s...%s" % (base, head)]]
     if head == "HEAD":
         cmds += [["diff", "--name-only"], ["ls-files", "--others", "--exclude-standard"]]
-    for i, cmd in enumerate(cmds):
-        out = run(["git", "-C", repo] + cmd, check=i == 0).stdout.decode()  # a bad base must not look like "no change"
+    for i, cmd in enumerate(cmds):  # a bad base must not look like "no change"
+        out = run(["git", "-C", repo] + cmd, check=i == 0 and files is None).stdout.decode()
         changed.update(line.strip() for line in out.splitlines() if line.strip())
     routes = defaultdict(list)
     for s in config.get("screens", []):

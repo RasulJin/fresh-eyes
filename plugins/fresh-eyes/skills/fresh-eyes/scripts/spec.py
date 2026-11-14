@@ -15,6 +15,8 @@ from coverage import screens_from_diff
 from fe_common import FEError, cli, read_json, run, write_json
 
 GLOBAL = "Global"  # the section every screen follows (spec-format.md)
+# Commits that bring code to the spec (a fix, a BUG-N) or leave behaviour alone do not make it stale.
+QUIET = re.compile(r"^(?:fix|docs|test|chore|style)(?:\([^)]*\))?!?:|\bBUG-\d+\b", re.I)
 
 
 def _read(path):
@@ -45,9 +47,21 @@ def slice_spec(text, screens, stale=None):
     return out.rstrip("\n") + "\n\n" + "\n".join(missing) if missing else out
 
 
+def intent_files(repo, base, head):
+    """Files of the commits base..head whose subject is not QUIET: the changes that may alter what a screen does."""
+    out = run(["git", "-C", repo, "log", "--format=%x00%s", "--name-only", "%s..%s" % (base, head)]).stdout.decode()
+    files = set()
+    for block in out.split("\x00")[1:]:
+        subject, _, names = block.partition("\n")
+        if not QUIET.search(subject):
+            files.update(n for n in names.splitlines() if n.strip())
+    return files
+
+
 def stale(text, repo, config, head="HEAD"):
     """Screens whose code changed after the spec's `Updated:` day, up to `head` (the build's commit: the checkout
-    can sit on another branch). A spec dated today was checked against today's code: nothing is stale."""
+    can sit on another branch), by commits other than QUIET ones. A spec dated today was checked against today's
+    code: nothing is stale."""
     m = re.search(r"^Updated:\s*(\d{4}-\d{2}-\d{2})", text, re.M)
     if not m:
         raise FEError("the spec has no `Updated: YYYY-MM-DD` line")
@@ -56,7 +70,8 @@ def stale(text, repo, config, head="HEAD"):
                 "--format=%H"]).stdout.decode().strip()
     if not base:
         raise FEError("no commit on or before %s in %s" % (updated, repo))
-    screens = [] if updated >= time.strftime("%Y-%m-%d") else screens_from_diff(repo, base, config, head)["screens"]
+    screens = [] if updated >= time.strftime("%Y-%m-%d") else \
+        screens_from_diff(repo, base, config, head, intent_files(repo, base, head))["screens"]
     return {"updated": updated, "base": base, "stale_screens": screens}
 
 
