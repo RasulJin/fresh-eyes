@@ -264,3 +264,36 @@ class TextFitTest(unittest.TestCase):
             self.assertEqual(text_fit(normalize(f.read(), "uiautomator"), SCREEN), [])
         p = self.packs["theme_font13"]
         self.assertIn("text_fit", [c["check"] for c in run_all(p["nodes"], {"screen_wh": p["screen_wh"]})])
+
+
+class UnderBarTest(unittest.TestCase):
+    """A footer pinned on the keyboard over what the focused field needs (fe10-verify I7/I8, 360x640 dp)."""
+    @classmethod
+    def setUpClass(cls):
+        import json
+        import os
+        from tests.fresh_eyes.helpers import FIXTURES
+        with open(os.path.join(FIXTURES, "under_bar.json"), encoding="utf-8") as f:
+            cls.packs = json.load(f)
+
+    def run_pack(self, name):
+        from geometry import under_bar
+        p = self.packs[name]
+        return under_bar(p["nodes"], p["keyboard_top"])
+
+    def test_recent_chips_cut_by_next(self):  # «Дальше» leaves a 17 dp strip of the recent-city chips
+        c = self.run_pack("wizard_recent_small")
+        self.assertEqual([x["node_ids"] for x in c], [["n74", "n54", "n61", "n68"]])
+        self.assertIn("Дальше", c[0]["detail"])
+
+    def test_focused_field_cut_by_next(self):
+        c = self.run_pack("wizard_field_small")
+        self.assertEqual([x["node_ids"] for x in c], [["n80", "n57"]])
+        self.assertIn("focused field", c[0]["detail"])
+        p = self.packs["wizard_field_small"]
+        ctx = {"screen_wh": p["screen_wh"], "px_per_dp": p["px_per_dp"], "keyboard_top": p["keyboard_top"]}
+        self.assertIn("under_bar", [x["check"] for x in run_all(p["nodes"], ctx)])
+
+    def test_composer_holding_the_field_and_a_roomy_footer_are_fine(self):
+        self.assertEqual(self.run_pack("guide_composer_small"), [])  # the bar on the keyboard is the field's own
+        self.assertEqual(self.run_pack("wizard_pixel"), [])  # chips well above «Дальше»

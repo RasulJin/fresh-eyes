@@ -344,6 +344,36 @@ def under_keyboard(after, keyboard_top, before=None):
     return result
 
 
+def _inside(a, b):
+    return b[0] <= a[0] and b[1] <= a[1] and a[0] + a[2] <= b[0] + b[2] and a[1] + a[3] <= b[1] + b[3]
+
+
+def under_bar(nodes, keyboard_top):
+    """Keyboard up: a bar pinned on it (a footer with Next or Send) cuts the focused field or the controls under it
+    (suggestions, recent chips). uiautomator cuts their bounds at the bar, so they end on its top edge. The bar is
+    found by bounds: a footer's button is often not its child in the dump."""
+    field = next((n for n in nodes if n["focused"]), None)
+    if field is None:
+        return []
+    taps = [n for n in nodes if n["clickable"] and n["bounds"][3] > 0]
+    bar = min((b for b in nodes if abs(b["bounds"][1] + b["bounds"][3] - keyboard_top) <= 2
+               and not _inside(field["bounds"], b["bounds"]) and any(_inside(t["bounds"], b["bounds"]) for t in taps)),
+              key=lambda b: b["bounds"][1], default=None)  # the outermost: its top is the edge that cuts
+    if bar is None:
+        return []
+    top = bar["bounds"][1]
+    hit = [n for n in [field] + [t for t in taps if t is not field]
+           if n["bounds"][3] > 0 and n["bounds"][1] < top <= n["bounds"][1] + n["bounds"][3] + 2]
+    if not hit:
+        return []
+    name = next((t["text"] or t["label"] for t in taps if _inside(t["bounds"], bar["bounds"])
+                 and (t["text"] or t["label"])), "")
+    what = "the focused field" if field in hit else "%d control(s) below the focused field" % len(hit)
+    return [_cand("under_bar", [bar["id"]] + [n["id"] for n in hit],
+                  _union([n["bounds"] for n in hit] + [[bar["bounds"][0], top, bar["bounds"][2], 1]]),
+                  "%s cut by %r pinned on the keyboard" % (what, name), "high")]
+
+
 def keyboard_missing(nodes, screen_wh):
     """The navigator focused an input (--keyboard) but no soft keyboard is up: focus without keyboard, or on iOS
     the one-time slide-to-type intro / a connected hardware keyboard."""
@@ -368,6 +398,7 @@ def run_all(nodes, ctx, before=None):
         result += small_targets(nodes, ctx["px_per_dp"], ctx["min_dp"])
     if ctx.get("keyboard_top") is not None:
         result += under_keyboard(nodes, ctx["keyboard_top"], before)
+        result += under_bar(nodes, ctx["keyboard_top"])
     elif ctx.get("keyboard"):
         result += keyboard_missing(nodes, screen)
     if before is not None:
