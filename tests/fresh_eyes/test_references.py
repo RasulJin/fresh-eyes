@@ -39,6 +39,17 @@ class ReferencesTest(unittest.TestCase):
                      "never one block per finding", "one bullet per screen, never one per finding, at most 10"):
             self.assertIn(word, text, word)
 
+    def test_noise_rules_in_do_not_flag(self):
+        # the most frequent unsure / "intended" classes of 0.5.9 (KDD #497/#498 rulings)
+        section = " ".join(read("checklist.md").split("## Do not flag", 1)[1].split())
+        for word in ("negative margin", "`hitSlop` past the parent's edge does not", "string key", "`spec-text`",
+                     "calls deliberate", "`known`", "Names from outside the app's copy", "icon shows",
+                     "an IMP"):
+            self.assertIn(word, section, word)
+        schema = " ".join(read("report-format.md").split())
+        self.assertIn('"class": "spec-text | known (optional)"', schema)
+        self.assertIn("## Known candidates", schema)
+
     def test_no_project_specific_data(self):
         for name in FILES:
             text = read(name).lower()

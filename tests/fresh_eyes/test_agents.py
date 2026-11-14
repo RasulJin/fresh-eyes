@@ -49,6 +49,14 @@ class AgentsTest(unittest.TestCase):
         self.assertNotIn("every pack is mandatory", reviewer)  # som.png only for the first pack of a state (0.5.9)
         self.assertIn("app_running: false", reviewer)
 
+    def test_verifier_settles_noise_without_a_question(self):
+        body = " ".join(frontmatter("verifier")[1].split())
+        for word in ("bounds cut at the parent", "spec text: <rule>", '"class": "spec-text"', "known candidate:",
+                     '"class": "known"', "set `kind` to `IMP`", "\"Do not flag\" covers it"):
+            self.assertIn(word, body, word)
+        reviewer = " ".join(frontmatter("reviewer")[1].split())
+        self.assertIn("then no BUG: a `spec-text` or `known` entry", reviewer)
+
     def test_reviewer_and_verifier_read_a_spec_slice(self):
         for name in ("reviewer", "verifier"):
             body = frontmatter(name)[1]

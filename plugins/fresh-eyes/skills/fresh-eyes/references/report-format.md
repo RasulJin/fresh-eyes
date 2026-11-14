@@ -26,7 +26,8 @@
   "rule": "spec:<id> | taste", "evidence": ["crops/clipped-1.png"], "log": "<logcat.txt line (app errors only)>",
   "verdict": "pending|confirmed|unsure|rejected", "verify_note": "",
   "same_as": "<findings file relative to the run>#<id> (optional)", "backlog_id": "BUG-N | IMP-N (optional)"}],
- "questions": [{"text": "", "options": [""], "finding": "<id> | <findings file relative to the run>#<id>"}]}
+ "questions": [{"text": "", "options": [""], "finding": "<id> | <findings file relative to the run>#<id>",
+                "class": "spec-text | known (optional)"}]}
 ```
 
 - Text fields (`title`, `expected`, `actual`, `steps`, `verify_note`, `questions`) are in the config's
@@ -44,6 +45,10 @@ then returns it in `merged`, and the report lists it under that finding.
   once across screens: the most severe confirmed copy stays, the others are returned in `merged`.
 - `questions[].finding`: the finding the question is about. `coverage.py verdict` counts a confirmed finding
   with a question as unsure and returns it in `asked`: until the owner answers, it is not a bug.
+- `questions[].class` (no `finding`, no BUG behind it, no effect on the verdict): `spec-text`, the app shows
+  other words than the spec quotes and `source_root` holds them under a string key, one entry per screen with
+  its pairs (`<rule> «<spec>» → «<app>» (<key>)`; is the spec out of date?); `known`, a comment in `source_root`
+  calls the choice deliberate (`<screen>: <what> — <file>: «<comment>»`; add it to `known.md`?).
 - `reviewed_packs`: every pack whose evidence the reviewer actually opened (its `som.png`, or its crops plus
   `candidates.json`), and only those. A done cell whose packs no reviewer listed keeps the verdict INCOMPLETE.
 - `backlog_id` (`BUG-N` or `IMP-N`): the verifier sets it on a confirmed BUG or an IMP that an open entry of
@@ -133,8 +138,11 @@ Also: <title of a finding merged into it> (<file>#<id>)
 - <title> — <screen>, <severity> · <crop path> · <file>#<id>
 - low: <file>#<id>, <file>#<id>, …
 
+## Known candidates
+- <screen>: <what the app does> — <file>: «<the comment>»
+
 ## Questions
-- **<screen>**: <question> (<options>); <question>; …
+- **<screen>**: <question> (<options>); <question>; spec text: <rule> «<spec>» → «<app>», …
 
 ## Regression flows written
 - <maestro_dir>/fresh-eyes-<id>.yaml
@@ -146,8 +154,10 @@ Also: <title of a finding merged into it> (<file>#<id>)
   (the verdict's `stale`), `asked` (the verdict's `asked`; its question is under Questions), `intermittent`
   (`verify_note` "intermittent: …"), then the rest (what a person should look at). Lows share one line of ids.
 - Questions: one bullet per screen, never one per finding, at most 10: the screen's `questions[]` with their
-  options and its stale question joined. More screens: the 10 with the most severe findings, and one line
-  counting the rest (they stay in the findings files).
+  options, its stale question and its `spec-text` pairs joined. More screens: the 10 with the most severe
+  findings, and one line counting the rest (they stay in the findings files).
+- Known candidates: the `known` entries, one line each, not counted as questions; what the owner accepts goes
+  to `known.md`.
 
 ## Backlog templates
 

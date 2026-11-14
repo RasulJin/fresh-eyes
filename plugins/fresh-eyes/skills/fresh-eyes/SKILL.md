@@ -228,7 +228,9 @@ stop throws away a build or a sign-in someone put on it.
    <device>, <build>: still reproduces, <evidence>"`. For `quick BUG-N`: the same `set-status` with `--status
    verified|open` and `<result>` in the note.
 3. Intended bugs and declined improvements → append to `.fresh-eyes/known.md` (never raised again); record the
-   intended bugs as "rejected by user" counts in `report.md` (this is the false-positive measure).
+   intended bugs as "rejected by user" counts in `report.md` (this is the false-positive measure). Known
+   candidates the user accepts go there too; a `spec-text` pair they accept is a spec update (step 5), one they
+   turn down (the app is wrong) a new bug: write it as a finding for step 2.
 4. For each new real BUG write a regression flow `<maestro_dir>/fresh-eyes-<BUG-id>.yaml` (tag `fresh-eyes`): reach
    the state, run the probe, assert the expected state (`assertVisible` / `assertNotVisible` /
    `extendedWaitUntil`). Visual-only bugs get a comment that `quick` re-checks them.

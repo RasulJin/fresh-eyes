@@ -35,13 +35,15 @@ For each BUG with `verdict: "pending"`:
 2. Try to disprove it:
    - the "truncated" text is actually complete in the crop; the "clipped" row scrolls fully into view in a
      `swipe-inside` pack; the "overlap" is an intended badge; the "flash" is a deliberate crossfade;
-   - it is listed in `known.md`, is OS chrome, a dev overlay or test data shown correctly;
+   - it is listed in `known.md`, is OS chrome, a dev overlay or test data shown correctly, or the checklist's
+     "Do not flag" covers it (name the item in `verify_note`);
    - the spec rule does not say what the finding claims.
+   An icon's glyph (which symbol stands for something) is a proposal: set `kind` to `IMP` and leave it pending.
    A finding that rests on a rule marked `⚠ conflict` / `⚠ конфликт` (or any conflict the user has not decided)
    is never `rejected`: when the evidence shows the issue, it is `unsure` with a note that the owner decides.
    The same goes for a finding a question asks about (a `questions[]` entry whose `finding` is its id; a
-   question on its subject without `finding`: set it): never `confirmed`, `unsure` with `verify_note` "owner
-   decides: <question>".
+   question on its subject without `finding` or `class`: set it): never `confirmed`, `unsure` with `verify_note`
+   "owner decides: <question>".
    A frame that clearly shows the defect stays evidence when a resnap or repeat does not show it again: the bug
    may be intermittent (timing, state left by an earlier step). Then the finding is `unsure`, severity kept,
    `verify_note` "intermittent: seen in <pack>, not reproduced in <recheck pack>" — never `rejected`. Reject
@@ -67,14 +69,21 @@ other folders are read-only: set `same_as` and rule only on findings in your own
 
 Judge from the evidence, not from the app's source code: no hunting for causes or file:line (whoever fixes the
 bug does that). The exceptions are single lookups, and only in `source_root` (the checkout can be another
-version than the build): a hit area (`hitSlop`, padding, a 48 dp wrapper) or a screen-reader label, which a
-frame cannot show; and, before confirming that the app shows other words or lacks an element the spec asks for,
-a comment beside that text or element saying the choice is deliberate (a data limit, a decision): then the
-rule is a conflict, `unsure` plus a question with `finding`. No `source_root`: no lookups. A target drawn
-under the minimum whose hit area no frame shows (no source, or a source box the drawn bounds cut: a parent clips
-it) is not `unsure`: request `{"finding": "<id>", "pack": "<pack>", "do": "repeat-probe", "probe": "edge", "args":
-"--node nN --side top --dp 2"}` (its node in the pack's `nodes.json`; the side its parent clips, else its short
-side). Second pass: the node itself responded in the recheck → `rejected`, it did not → `confirmed`; no question.
+version than the build), each settling its finding without a question:
+- a hit area (`hitSlop`, padding, a 48 dp wrapper) or a screen-reader label, which a frame cannot show. On
+  Android uiautomator cuts bounds at the parent's edge: a box of at least the minimum from padding with a
+  negative margin, or a wrapper, reaches touches → `rejected`, "<n> dp box in <file>, bounds cut at the parent";
+- before confirming that the app shows other words than the spec quotes: the app's words under a string key →
+  `rejected`, "spec text: <rule> «<spec>» → «<app>» (<key>)", and the pair goes into the screen's one
+  `questions[]` entry with `"class": "spec-text"` (add it once, no `finding`);
+- before confirming other words or a missing element the spec asks for: a comment beside them saying the choice
+  is deliberate (a data limit, a decision) → `rejected`, "known candidate: <file>: «<comment>»", plus a
+  `questions[]` entry `{"class": "known", "text": "<screen>: <what> — <file>: «<comment>»"}` (no `finding`).
+No `source_root`: no lookups. A target drawn under the minimum whose hit area no frame shows (no source, or
+`hitSlop` reaching past its parent's edge, which Android drops) is not `unsure`: request `{"finding": "<id>",
+"pack": "<pack>", "do": "repeat-probe", "probe": "edge", "args": "--node nN --side top --dp 2"}` (its node in
+the pack's `nodes.json`; the side its parent clips, else its short side). Second pass: the node itself responded
+in the recheck → `rejected`, it did not → `confirmed`; no question.
 
 Before you confirm a finding, read its `steps` as the person who will fix it would: from the app's start, one
 action per item, buttons by their on-screen text, ending with what to look at. If they name cells, packs, step
