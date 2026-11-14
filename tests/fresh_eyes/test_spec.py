@@ -97,6 +97,22 @@ class StaleTest(unittest.TestCase):
             self.assertEqual(stale(SPEC, repo, CONFIG)["stale_screens"], ["settings"])
             self.assertEqual(stale(SPEC, repo, CONFIG, head=built)["stale_screens"], ["feed"])
 
+    def test_fix_docs_and_bug_commits_bring_code_to_the_spec(self):
+        with tmpdir() as repo:
+            self._git(repo, "init", "-q")
+            for sid in ("feed", "settings"):
+                self._write(repo, "app/%s.tsx" % sid, "export default 1;\n")
+            self._git(repo, "add", "-A")
+            self._git(repo, "commit", "-q", "-m", "base", date="2026-01-01T12:00:00")
+            for n, (sid, msg) in enumerate([("feed", "fix(feed): the list scrolls"), ("settings", "docs: notes"),
+                                            ("settings", "style!: lint"), ("feed", "polish the feed (BUG-12)")], 2):
+                self._write(repo, "app/%s.tsx" % sid, "export default %d;\n" % n)
+                self._git(repo, "commit", "-qam", msg, date="2026-01-05T12:00:00")
+            self.assertEqual(stale(SPEC, repo, CONFIG)["stale_screens"], [])
+            self._write(repo, "app/settings.tsx", "export default 9;\n")
+            self._git(repo, "commit", "-qam", "feat(settings): a new toggle", date="2026-01-06T12:00:00")
+            self.assertEqual(stale(SPEC, repo, CONFIG)["stale_screens"], ["settings"])
+
     def test_a_spec_dated_today_is_current(self):
         with tmpdir() as repo:
             self._repo(repo)

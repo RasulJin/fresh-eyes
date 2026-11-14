@@ -94,7 +94,8 @@ words / nothing (= the current diff).
    the user what is missing or how much is free; the verdict is INCOMPLETE.
    Then `python3 $S/spec.py stale --spec .fresh-eyes/spec.md --repo . --config .fresh-eyes/config.json --head
    <source.ref> --out $RUN/spec-stale.json`: screens whose code changed after the spec's `Updated` date (the
-   verdict turns their `spec:` findings into questions). `<source.ref>` is preflight.json's commit, so a checkout
+   verdict turns their `spec:` findings into questions; fix/docs/test/chore/style commits and commits naming a
+   BUG-N do not count). `<source.ref>` is preflight.json's commit, so a checkout
    on another branch does not hide the build's changes; leave `--head` out when there is no commit there.
 4. Screens:
    - `BUG-N`: read the entry in the backlog (heading + its fields); its replay becomes the coverage cell
@@ -122,8 +123,12 @@ words / nothing (= the current diff).
    the app signed out signs in with `accounts` itself; cells blocked with
    "signed out: <variable> not set" mean the user has to export that variable before the next run. A reply line
    `reach: <screen>: <how>`: write `<how>` into that screen's `reach` in `.fresh-eyes/config.json`, so the next
-   run does not hit the same wall. A navigator whose output has not grown for 10 minutes is stuck (a permission
-   prompt nobody answers, a loop): stop it and start a fresh one on the cells `coverage.py next` still lists.
+   run does not hit the same wall. Liveness: every `capture.py` call and every `nav.py` call with `--run $RUN`
+   refreshes `$RUN/<platform>/heartbeat`; `python3 $S/nav.py idle --run $RUN --platform <p>` prints its age. Only
+   a navigator that has run 10 minutes with `idle_s` over 600 is stuck (a permission prompt nobody answers, a
+   loop): stop it (TaskStop) and start a fresh one on the cells `coverage.py next` still lists. Never go by the
+   mtime of the agent's output file (a symlink: the time it was made). Check every 1–2 minutes, not in one long
+   wait: an agent that finished meanwhile is noticed only when the check returns.
 8. Review: first, per screen with done cells, `python3 $S/spec.py slice --spec .fresh-eyes/spec.md --screens
    <id>,<its neighbors> --stale $RUN/spec-stale.json --out $RUN/spec/<id>.md` (the global rules and those
    sections; neighbors' rules often apply); journeys: `--screens` = the screens of the journeys walked, `--out
@@ -151,7 +156,12 @@ words / nothing (= the current diff).
 10. `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`
     and `python3 $S/coverage.py map --cov $RUN/coverage.json --language <config>`. If the verdict names done
     cells no reviewer looked at, send those packs to a reviewer (`findings-<k>.json`), verify, and rerun it.
-11. Write `$RUN/report.md` by `$R/report-format.md` (see "Report").
+    Then `python3 $S/backlog.py match --index $RUN/backlog-index.md --findings <all findings*.json> --out
+    $RUN/imp.md --language <config>`: an IMP an open backlog entry already proposes gets its `backlog_id`, and
+    imp.md holds every IMP in full (the new ones numbered, the known ones a line each).
+11. Write `$RUN/report.md` by `$R/report-format.md` (see "Report"). Then `python3 $S/coverage.py score --run $RUN
+    --session "${CLAUDE_SESSION_ID}"`: the run's score card (`$RUN/score.json`, the metrics a script counts; the
+    judge fills M4, M7 and M11, a rerun keeps them).
 12. Review with the user, then write the backlog and regression flows (see "After the report").
 
 ## full
@@ -206,7 +216,8 @@ with `"gap": true` and platform gaps from `$R/platforms.md`: this setup can neve
 the verdict), confirmed bugs, each with its
 numbered steps, expected and actual copied from the finding (a finding the verdict lists in `merged` goes under
 the one its `same_as` points to, or the confirmed one with the same `log` line; any other finding is its own item);
-a confirmed bug with `backlog_id` goes under "still reproduces (BUG-N)", not among the new ones; improvements,
+a confirmed bug with `backlog_id` goes under "still reproduces (BUG-N)", not among the new ones; improvements
+(only the new ones from imp.md: one line per screen with their imp.md numbers and titles, then a link to imp.md),
 "look with your own eyes" (unsure, the findings the verdict lists in `asked` next to their question, the ones
 it lists in `stale` with one question per stale screen from its reason line; neither goes under bugs or into the
 backlog), questions. Link evidence crops by path. Keep it scannable.
@@ -217,8 +228,8 @@ stop throws away a build or a sign-in someone put on it.
 
 ## After the report
 
-1. Show the user a numbered list: confirmed bugs (new and "still reproduces") and improvements (title, screen,
-   platform, severity, crop path). Ask which bugs are real or intended and which improvements to take. Default
+1. Show the user a numbered list: confirmed bugs (new and "still reproduces") and the new improvements (their
+   imp.md numbers and titles). Ask which bugs are real or intended and which improvements to take. Default
    if they just say ok: all confirmed bugs are real and every improvement goes in as a proposal.
 2. New real bugs and taken improvements → backlog: write the finding to `$RUN/backlog-<k>.json`, then `python3
    $S/backlog.py append --file <backlog.path> --finding $RUN/backlog-<k>.json --template <template> --attach

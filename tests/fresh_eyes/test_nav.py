@@ -1,11 +1,14 @@
+import json
 import os
+import subprocess
+import sys
 import unittest
 from unittest import mock
 
-from tests.fresh_eyes.helpers import FIXTURES
+from tests.fresh_eyes.helpers import FIXTURES, SCRIPTS, tmpdir
 import nav
 from devices import Device
-from fe_common import FEError
+from fe_common import FEError, heartbeat, write_json
 from hierarchy import normalize
 
 
@@ -79,6 +82,28 @@ class InputTest(unittest.TestCase):
             node = nav.tap(Device("android", "emulator-5560", "fresh-eyes-pixel"), text="Apps")
         self.assertEqual(node["text"], "Apps")
         self.assertEqual(calls, [nav.center(node)])
+
+
+class HeartbeatTest(unittest.TestCase):
+    def idle(self, run):
+        out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "nav.py"), "idle", "--run", run],
+                             stdout=subprocess.PIPE, check=True).stdout
+        return json.loads(out)
+
+    def test_any_capture_or_nav_call_under_the_run_refreshes_its_platforms_heartbeat(self):
+        with tmpdir() as run:
+            self.assertEqual(self.idle(run), {"idle_s": None, "did": None})
+            heartbeat(os.path.join(run, "android", "feed", "default-none", "scroll-1"), "android", "snap")
+            self.assertFalse(os.path.exists(os.path.join(run, "android", "heartbeat")))  # not a run: no coverage.json
+            write_json(os.path.join(run, "coverage.json"), {"cells": []})
+            heartbeat(os.path.join(run, "android", "feed", "default-none", "scroll-1"), "android", "capture.py snap")
+            beat = os.path.join(run, "android", "heartbeat")
+            os.utime(beat, (os.path.getmtime(beat) - 700,) * 2)
+            out = self.idle(run)
+            self.assertGreaterEqual(out["idle_s"], 700)
+            self.assertEqual(out["did"], "capture.py snap")
+            heartbeat(run, "android", "nav.py wait")  # nav.py --run <run>
+            self.assertLess(self.idle(run)["idle_s"], 60)
 
 
 if __name__ == "__main__":

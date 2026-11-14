@@ -13,8 +13,11 @@ CLI (all print the compressed screen after acting; --platform defaults to androi
   nav.py swipe  --device ID --from X,Y --to X,Y [--ms 300]
   nav.py back   --device ID                      (iOS: edge swipe)
   nav.py wait   --device ID (--text RE | --label RE | --id SUFFIX) [--timeout 15]
+  nav.py idle   --run RUN [--platform android|ios]   (seconds since the platform's last heartbeat)
+--run RUN on any of them refreshes <run>/<platform>/heartbeat, as every capture.py call does.
 """
 import argparse
+import json
 import os
 import re
 import sys
@@ -124,6 +127,7 @@ def main():
         p.add_argument("--device", required=True)
         p.add_argument("--platform", choices=["android", "ios"], default="android")
         p.add_argument("--max-chars", type=int, default=3000)
+        p.add_argument("--run", help="the run folder: refreshes <run>/<platform>/heartbeat")
         if name in ("tap", "wait"):
             p.add_argument("--text"); p.add_argument("--label"); p.add_argument("--id")
         if name == "tap":
@@ -137,7 +141,16 @@ def main():
             p.add_argument("--from", dest="src", type=_xy, required=True)
             p.add_argument("--to", type=_xy, required=True)
             p.add_argument("--ms", type=int, default=300)
+    p = sub.add_parser("idle", help="seconds since <run>/<platform>/heartbeat was refreshed (null: never)")
+    p.add_argument("--run", required=True); p.add_argument("--platform", choices=["android", "ios"], default="android")
     a = ap.parse_args()
+    if a.cmd == "idle":
+        beat = os.path.join(a.run, a.platform, "heartbeat")
+        age = round(time.time() - os.path.getmtime(beat)) if os.path.exists(beat) else None
+        print(json.dumps({"idle_s": age, "did": fe_common.read_json(beat)["did"] if age is not None else None}))
+        return 0
+    if a.run:
+        fe_common.heartbeat(a.run, a.platform, "nav.py " + a.cmd)
     dev = Device(a.platform, a.device, "")
     if a.cmd == "tap":
         node = tap(dev, a.text, a.label, a.id, a.point, a.index)

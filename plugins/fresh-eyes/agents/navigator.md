@@ -31,7 +31,8 @@ nobody answers in a night run.
 - No scripts of your own, no background jobs, no `until`/`while` loops: wait with `nav.py wait`, a `capture.py`
   call or a plain `sleep` of a few seconds.
 - **Navigate only with `python3 $S/nav.py`** (`screen`, `tap --text/--label/--id/--point`, `type`, `swipe`,
-  `back`, `wait`; add `--platform ios` on iOS). It prints the screen as compact text after each action; when
+  `back`, `wait`; add `--platform ios` on iOS), always with `--run <run>`: it refreshes the heartbeat the
+  orchestrator watches, and a navigator silent for 10 minutes is stopped. It prints the screen as compact text after each action; when
   a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
 - **A crash**: the launcher or another app on the printed screen after an action means the app died. Snap
   into the cell's pack first (`capture.py snap` with `--package` saves the crash log), record it done with

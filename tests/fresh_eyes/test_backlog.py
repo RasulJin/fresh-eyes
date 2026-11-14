@@ -2,8 +2,8 @@ import os
 import unittest
 
 from tests.fresh_eyes.helpers import make_png, tmpdir
-from fe_common import FEError
-from backlog import append, attach, index, next_id, render, set_status
+from fe_common import FEError, read_json, write_json
+from backlog import append, attach, index, match, next_id, render, set_status
 
 BACKLOG = """# QA-бэклог
 
@@ -159,6 +159,52 @@ class BacklogTest(unittest.TestCase):
             p = write(d)
             with self.assertRaises(FEError):
                 set_status(p, "BUG-22", "done-ish", "n")
+
+
+
+# backlog-index.md lines and IMP titles from the 0.5.9 run (2026-11-13)
+INDEX = ["IMP-235 · Раздел «2. Какие данные» — сплошная простыня из 12 строк через точку с запятой - consent-doc",
+         "IMP-161 · Тап по месту в шапке поста уводит из приложения в Google Maps",
+         "IMP-238 · При прокрутке вниз уезжает вся шапка вместе с «Посты · Поездки» и не возвращается при прокрутке "
+         "вверх - feed",
+         "BUG-59 · Подсказки городов смешивают русский и английский - trip-wizard"]
+
+
+class MatchTest(unittest.TestCase):
+    def test_imps_an_open_entry_proposes_get_its_id_and_imp_md_lists_the_rest_in_full(self):
+        def imp(fid, screen, title, **kw):
+            return dict(dict(id=fid, kind="IMP", screen=screen, platform="android", severity="low", title=title,
+                             verdict="pending"), **kw)
+        with tmpdir() as run:
+            a = os.path.join(run, "android", "consent-doc", "findings.json")
+            b = os.path.join(run, "android", "feed-trips", "findings.json")
+            write_json(a, {"findings": [
+                imp("f1", "consent-doc", "Раздел «2. Какие данные» — 12 строк сплошным абзацем через точку с запятой"),
+                imp("f2", "consent-doc", "Адрес поддержки в тексте нельзя нажать", actual="Обычный текст",
+                    expected="Ссылка mailto", evidence=["android/consent-doc/default-none/screen_1000.png"]),
+                imp("f3", "consent-doc", "Шапка не отделена от текста", backlog_id="IMP-236"),  # set by the verifier
+                imp("f4", "consent-doc", "Раздел «2. Какие данные» сплошной", verdict="rejected"),
+                dict(imp("f5", "consent-doc", "Раздел «2. Какие данные» обрезан"), kind="BUG")],
+                "questions": [{"text": "Ссылкой?", "finding": "f2"}]})
+            write_json(b, {"findings": [
+                imp("f1", "post-detail", "Кнопка места уводит из приложения в Google Maps"),  # no screen in the entry
+                imp("f2", "feed-trips", "Переключатель «Посты · Поездки» уезжает с шапкой и не возвращается"),
+                imp("f3", "post-detail", "Тап по фото уводит в галерею")]})  # 2 stems shared: too few
+            out = match(INDEX, [a, b], os.path.join(run, "imp.md"), "ru")
+            self.assertEqual(out["new"], 3)
+            self.assertEqual((out["known"], out["matched"]), (3, 2))
+            ids = [f.get("backlog_id") for p in (a, b) for f in read_json(p)["findings"]]
+            # IMP-238 is the feed screen's: a look-alike on another screen stays new
+            self.assertEqual(ids, ["IMP-235", None, "IMP-236", None, None, "IMP-161", None, None])
+            text = read(os.path.join(run, "imp.md"))
+            self.assertTrue(text.startswith("# Новые улучшения: 3\n\n## 1. Адрес поддержки в тексте нельзя нажать\n"
+                                            "consent-doc · android · low · `android/consent-doc/findings.json#f2`\n"
+                                            "Обычный текст\n→ Ссылка mailto\n? Ссылкой?\n"
+                                            "`android/consent-doc/default-none/screen_1000.png`\n"), text)
+            self.assertIn("# Уже в бэклоге: 3\n", text)
+            self.assertIn("— IMP-161 «Тап по месту в шапке поста уводит из приложения в Google Maps» · "
+                          "`android/feed-trips/findings.json#f1`", text)
+            self.assertNotIn("обрезан", text)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,77 @@
+{
+ "reviewed_packs": [
+  "android/welcome/default-none"
+ ],
+ "findings": [
+  {
+   "id": "f1",
+   "kind": "BUG",
+   "severity": "low",
+   "title": "Кнопка-глаз «Показать пароль» на формах регистрации и входа с зоной нажатия ~34 dp",
+   "screen": "welcome",
+   "platform": "android",
+   "rule": "spec:G-target",
+   "verdict": "confirmed"
+  },
+  {
+   "id": "f2",
+   "kind": "BUG",
+   "severity": "low",
+   "title": "Переключатель RU/EN на формах регистрации и входа ниже 48 dp по высоте",
+   "screen": "welcome",
+   "platform": "android",
+   "rule": "spec:G-target",
+   "verdict": "unsure"
+  },
+  {
+   "id": "f3",
+   "kind": "BUG",
+   "severity": "low",
+   "title": "Быстрые тапы по «Войти через Google» не оставляют диалога согласия",
+   "screen": "welcome",
+   "platform": "android",
+   "rule": "spec:welcome#2",
+   "verdict": "rejected"
+  },
+  {
+   "id": "f4",
+   "kind": "BUG",
+   "severity": "low",
+   "title": "Ссылка «Пользовательское соглашение» открывает документ с другим названием «Условия использования»",
+   "screen": "welcome",
+   "platform": "android",
+   "rule": "taste",
+   "verdict": "confirmed"
+  },
+  {
+   "id": "f5",
+   "kind": "BUG",
+   "severity": "low",
+   "title": "Главная кнопка формы регистрации подписана «Регистрация», а не «Создать аккаунт»",
+   "screen": "welcome",
+   "platform": "android",
+   "rule": "spec:welcome#4",
+   "verdict": "unsure"
+  },
+  {
+   "id": "f6",
+   "kind": "IMP",
+   "severity": "low",
+   "title": "Ссылка «У меня уже есть аккаунт» — зона нажатия ~36 dp в высоту",
+   "screen": "welcome",
+   "platform": "android",
+   "rule": "taste",
+   "verdict": "pending"
+  }
+ ],
+ "questions": [
+  {
+   "text": "welcome#4 называет кнопку на форме регистрации «Создать аккаунт», в приложении она «Регистрация». Как правильно?",
+   "options": [
+    "Кнопка должна быть «Создать аккаунт»",
+    "«Регистрация» — задумано, поправить спецификацию"
+   ],
+   "finding": "f5"
+  }
+ ]
+}
