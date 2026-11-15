@@ -18,9 +18,11 @@ CLI:
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
 import re
+import sys
 import time
 from collections import Counter, defaultdict, deque
 
@@ -200,12 +202,50 @@ def _evidence_problem(path):
         meta = os.path.join(pack, "meta.json")
         if os.path.exists(meta) and read_json(meta).get("blocked"):
             return "%s is blocked: %s" % (pack, read_json(meta)["blocked"])
+        if _snap_problem(pack):
+            return _snap_problem(pack)
         around = os.path.join(pack, "around.json")
         if os.path.exists(around) and read_json(around).get("action_exit", 0) != 0:
             return "the recorded action failed in %s (exit %s)" % (pack, read_json(around)["action_exit"])
     if not any(os.path.exists(os.path.join(pk, f)) for pk in packs for f in ("meta.json", "around.json")):
         return "%s has no capture (meta.json / around.json)" % path
     return None
+
+
+def _snap_problem(pack):
+    """Why a folder with nodes.json is not what capture.py snap wrote (a pack put together by hand), or None."""
+    meta = os.path.join(pack, "meta.json")
+    m = read_json(meta) if os.path.isfile(meta) else {}
+    missing = [k for k in ("source", "time") if not m.get(k)]
+    if missing and os.path.isfile(os.path.join(pack, "nodes.json")):
+        return "%s has nodes.json but no %s in meta.json: not a capture.py snap" % (pack, "/".join(missing))
+    return None
+
+
+def _natural(path):
+    return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", path)]
+
+
+def _copies(packs):
+    """'step-9 is a copy of step-8': two snaps of a cell with the same screen.png bytes and the same meta.json
+    time are one snap saved twice, so a step was never snapped."""
+    seen, found = {}, []
+    for top in packs:
+        snaps = sorted((r for r, _, files in os.walk(top) if "screen.png" in files and "meta.json" in files),
+                       key=_natural)
+        for snap in snaps:
+            time_ = read_json(os.path.join(snap, "meta.json")).get("time")
+            if not time_:
+                continue
+            with open(os.path.join(snap, "screen.png"), "rb") as f:
+                key = (hashlib.md5(f.read()).hexdigest(), time_)
+            rel = os.path.relpath(snap, top)
+            rel = os.path.basename(top) if rel == "." else rel
+            if key in seen:
+                found.append("%s is a copy of %s" % (rel, seen[key]))
+            else:
+                seen[key] = rel
+    return found
 
 
 def shows_marker(pack, markers):
@@ -304,6 +344,7 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         problems = [pr for pr in (_evidence_problem(e) for e in packs) if pr] or \
             ([] if packs else ["no evidence pack given"])
         problems += ["%s is not under <run>/<platform>/<screen>/" % e for e in packs if pack_key(e) is None]
+        problems += ["%s: snap each step on its own, never copy a pack" % c for c in _copies(packs)]
         # a dead app cannot do the probe's later steps: its pack and the note are the cell (reviewed as a crash)
         meta0 = os.path.join(packs[0], "meta.json") if packs else ""
         crashed = bool(note) and os.path.isfile(meta0) and read_json(meta0).get("app_running") is False
@@ -545,12 +586,17 @@ def screens_from_diff(repo, base, config, head="HEAD", files=None):
     return {"screens": sorted(hits, key=lambda s: (-hits[s], s)), "unmapped": unmapped}
 
 
-def pack_groups(screen_dir, max_n=15):
+def pack_groups(screen_dir, max_n=15, dropped=None):
     """The screen's snaps (folders with a screen.png) in groups of at most max_n, one reviewer each. A pack's
-    sub-packs stay together unless they alone are more; a group never mixes the passes of `twice`."""
+    sub-packs stay together unless they alone are more; a group never mixes the passes of `twice`. A folder
+    capture.py did not write (_snap_problem) is left out, its reason appended to `dropped`."""
     groups, cur, cur_p2, max_n = [], [], False, max(1, max_n)
     for top in sorted(os.listdir(screen_dir), key=lambda t: (t.endswith("-p2"), t)):
         subs = sorted(r for r, _, files in os.walk(os.path.join(screen_dir, top)) if "screen.png" in files)
+        bad = [r for r in subs if _snap_problem(r)]
+        if dropped is not None:
+            dropped += [_snap_problem(r) for r in bad]
+        subs = [r for r in subs if r not in bad]
         if not subs:
             continue
         if cur and (len(cur) + len(subs) > max_n or top.endswith("-p2") != cur_p2):
@@ -675,7 +721,10 @@ def main():
     elif a.cmd == "map":
         print(coverage_map(read_json(a.cov), a.language))
     elif a.cmd == "packs":
-        print(json.dumps(pack_groups(a.dir, a.max), ensure_ascii=False))
+        dropped = []
+        print(json.dumps(pack_groups(a.dir, a.max, dropped), ensure_ascii=False))
+        for why in dropped:
+            print("dropped: " + why, file=sys.stderr)
     elif a.cmd == "prune":
         print(json.dumps({"freed_mb": round(prune(a.runs, a.keep) / 1e6, 1)}))
     elif a.cmd == "score":

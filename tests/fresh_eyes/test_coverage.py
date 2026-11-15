@@ -31,7 +31,7 @@ def full_steps(forms=()):
 
 def make_pack(root, cell, sub=True, **meta):
     path = os.path.join(root, cell["platform"], cell["screen"], "%s-%s" % (cell["state"], cell["probe"]))
-    base = {"platform": cell["platform"]}
+    base = {"platform": cell["platform"], "source": "uiautomator", "time": "2026-11-15T10:00:00"}  # as snap writes
     if cell["probe"] == "swipe-inside":  # snapped with --before, and the swipe moved the list
         base.update(before=path + "-before", moved=0.4)
     write_json(os.path.join(path, "meta.json"), dict(base, **meta))
@@ -425,6 +425,40 @@ class StatusTest(unittest.TestCase):
         set_status(cov, rapid["id"], "done", evidence=[pack(rapid, text="Поделиться")])
         self.assertEqual([c["status"] for c in cell.values()], ["done"] * 3)
 
+    def test_a_step_saved_twice_is_not_done(self):
+        # 0.5.11 run: journey share-post step-2 = step-4, post-detail scenario step-9 = step-8 (same bytes, same time)
+        cfg = dict(ONE_SCREEN, journeys=[{"id": "share-post", "steps": "x", "screens": ["profile-trips"]}])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        cell = next(c for c in cov["cells"] if c["id"] == "android/journey/share-post/journey")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        pack = make_pack(root, cell)
+
+        def step(n, png, when):
+            write_json(os.path.join(pack, "step-%d" % n, "meta.json"), {"time": when, "source": "uiautomator"})
+            with open(os.path.join(pack, "step-%d" % n, "screen.png"), "wb") as f:
+                f.write(png)
+        step(1, b"feed", "2026-11-15T13:48:39")
+        step(2, b"post", "2026-11-15T13:50:10")
+        step(3, b"sheet", "2026-11-15T13:49:49")
+        step(4, b"post", "2026-11-15T13:50:10")
+        with self.assertRaisesRegex(FEError, "step-4 is a copy of step-2"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        step(4, b"post", "2026-11-15T13:50:31")  # the same screen snapped again: a real step
+        set_status(cov, cell["id"], "done", evidence=[pack])
+        self.assertEqual(cell["status"], "done")
+
+    def test_a_pack_put_together_by_hand_is_not_evidence(self):
+        cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full")
+        cell = cov["cells"][0]
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        pack = make_pack(root, cell)
+        write_json(os.path.join(pack, "tap-1", "meta.json"), {"time": "2026-11-15T11:47:29"})  # no source
+        write_json(os.path.join(pack, "tap-1", "nodes.json"), [])
+        with self.assertRaisesRegex(FEError, "tap-1 has nodes.json but no source in meta.json"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+
     def test_a_light_frame_cannot_be_a_dark_cell(self):
         cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full")
         dark = next(c for c in cov["cells"] if c["state"] == "dark")
@@ -753,6 +787,20 @@ class PackGroupsTest(unittest.TestCase):
             open(os.path.join(d, "findings.json"), "w").close()
             groups = [[os.path.relpath(p, d) for p in g] for g in pack_groups(d, max_n=3)]
         self.assertEqual(groups, [["default-none"], snaps[1:4], snaps[4:6], ["dark-none-p2"]])
+
+    def test_a_folder_capture_py_did_not_write_goes_to_no_reviewer(self):
+        # 0.5.11 run: trip-detail *-nohierarchy packs, an 11-minute-old frame and nodes beside a blocked meta.json
+        with tmpdir() as d:
+            for rel, meta in (("default-tap-everything", {"time": "11:36", "source": "uiautomator"}),
+                              ("default-tap-everything-askvio-nohierarchy", {"time": "11:47", "blocked": "x"})):
+                write_json(os.path.join(d, rel, "meta.json"), meta)
+                write_json(os.path.join(d, rel, "nodes.json"), [])
+                open(os.path.join(d, rel, "screen.png"), "w").close()
+            dropped = []
+            groups = [[os.path.relpath(p, d) for p in g] for g in pack_groups(d, dropped=dropped)]
+        self.assertEqual(groups, [["default-tap-everything"]])
+        self.assertEqual(len(dropped), 1)
+        self.assertIn("askvio-nohierarchy has nodes.json but no source", dropped[0])
 
 
 class DiffScreensTest(unittest.TestCase):

@@ -3,7 +3,9 @@
 
 snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json, som.png (+som.json),
         crops/<check>-<k>.png (native resolution), meta.json. Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs,
-        5 = none of the --marker words on screen (another screen: meta.json blocked).
+        5 = none of the --marker words on screen (another screen: meta.json blocked); a `<pack>-recheck` snap
+        checks the screen's marker by itself when <pack> showed it. meta.json source: uiautomator, maestro (the
+        Maestro CLI, when the UI never gets idle) or xctest.
         --package (Android): meta.json app_running; a dead app also gets logcat.txt with its crash.
         --pages: then scrolls the screen's list half a screen at a time, a pack per page in scroll-<k>/, and back
         to the top (meta.json: scroll_pages, scroll_stop, scroll_restored).
@@ -78,15 +80,35 @@ def _crop_order(candidates):
     return order
 
 
+DERIVED = ("nodes.json", "hierarchy.txt", "candidates.json", "screen_1000.png", "som.png", "som.json")
+
+
+def recheck_marker(out):
+    """A `<pack>-recheck` snap must show the screen its pack showed: the screen's marker (coverage.json of the run)
+    when that pack has it. () when there is nothing to check."""
+    run, key = fe_common.run_dir(out), coverage.pack_key(out)
+    if not (out.rstrip(os.sep).endswith("-recheck") and run and key):
+        return ()
+    markers = next((c["marker"] for c in read_json(os.path.join(run, "coverage.json"))["cells"]
+                    if c["screen"] == key[1] and c.get("marker")), ())
+    pack = out.rstrip(os.sep)[:-len("-recheck")]
+    return tuple(markers) if markers and coverage.shows_marker(pack, markers) else ()
+
+
 def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=None, package=None, marker=()):
     dev = Device(platform, device_id, "")
     os.makedirs(out, exist_ok=True)
+    marker = marker or recheck_marker(out)
+    for name in DERIVED:  # a blocked re-snap must not leave an older screen's files beside its own frame
+        if os.path.exists(os.path.join(out, name)):
+            os.remove(os.path.join(out, name))
+    shutil.rmtree(os.path.join(out, "crops"), ignore_errors=True)
     # Hierarchy first: uiautomator returns once the UI is idle, so the screenshot taken right after shows the
     # same settled screen (screenshot-first caught mid-transition frames that disagreed with the hierarchy).
     try:
-        nodes, hierarchy_error = nav.screen_nodes(dev), None
+        (nodes, source), hierarchy_error = nav.hierarchy(dev), None
     except FEError as e:  # parse, adb and driver failures alike
-        nodes, hierarchy_error = None, e
+        nodes, source, hierarchy_error = None, None, e
     shot = devices.screenshot(dev, os.path.join(out, "screen.png"))
     w, h = image_size(shot)
     meta = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "platform": platform, "device": device_id,
@@ -125,7 +147,6 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
     downscale(full_som, os.path.join(out, "som.png"))
     os.remove(full_som)
     write_json(os.path.join(out, "som.json"), mapping)
-    shutil.rmtree(os.path.join(out, "crops"), ignore_errors=True)  # a re-snap must not keep crops of an old screen
     counters = {}
     for c in _crop_order(candidates)[:MAX_CROPS]:
         counters[c["check"]] = counters.get(c["check"], 0) + 1
@@ -145,7 +166,7 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
             continue  # bbox fully off-screen: nothing to show, the candidate still stands
     if before:
         meta.update(before=before, moved=moved_fraction(before_nodes, nodes))
-    meta.update(source="xctest" if platform == "ios" else "uiautomator", nodes=len(nodes), candidates=len(candidates),
+    meta.update(source=source, nodes=len(nodes), candidates=len(candidates),
                 keyboard_up=kb_top is not None, **{k: ctx[k] for k in ("px_per_dp", "keyboard_top")})
     write_json(os.path.join(out, "meta.json"), meta)
     return 0

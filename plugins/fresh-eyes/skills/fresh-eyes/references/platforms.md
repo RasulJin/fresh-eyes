@@ -7,7 +7,8 @@
   and boots them. Other devices (the user's emulator, a phone) are read-only to us.
 - **Android: one UiAutomation at a time.** While the Maestro MCP driver runs on a device, `uiautomator dump` is
   killed; force-stopping the driver kills the MCP session (it does not recover). So on Android fresh-eyes
-  navigates with `nav.py` (uiautomator + adb) and never uses the Maestro MCP.
+  navigates with `nav.py` (uiautomator + adb) and never uses the Maestro MCP. A UI that never gets idle
+  (uiautomator: `could not get idle state`) is read with `maestro hierarchy`, unless a Maestro driver runs there.
 - **iOS: the Maestro XCTest driver.** One MCP `inspect_screen` on the simulator starts Maestro's driver app, an
   HTTP server on localhost (found by the simulator's UDID in its process path). `nav.py` (with `--platform ios`) and
   `capture.py` use it for the hierarchy (in points; scripts scale to screenshot pixels), taps, swipes and typing

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Navigation by the view hierarchy, printed as compact text (~1.5k chars a screen instead of ~15k of MCP JSON).
 
-Android: uiautomator + adb. Only one process may hold UiAutomation, and the Maestro MCP driver holds it, so the
-MCP is never used on Android. iOS: the HTTP API of the Maestro XCTest driver that the MCP started (one MCP
+Android: uiautomator + adb (the Maestro CLI's hierarchy when the UI never gets idle). Only one process may hold
+UiAutomation, and the Maestro MCP driver holds it, so the MCP is never used on Android. iOS: the HTTP API of the
+Maestro XCTest driver that the MCP started (one MCP
 inspect_screen on the simulator starts it). Coordinates are screenshot pixels on both platforms. Matching follows
 Maestro: text/label are full-string, case-insensitive regexes; ids match by suffix.
 
@@ -37,19 +38,50 @@ def _dump_uiautomator(dev):
                          timeout=40).stdout.decode("utf-8", "replace")
 
 
-def screen_nodes(dev):
+def _dump_maestro(dev):
+    """`maestro hierarchy`: Maestro's driver reads the tree without waiting for an idle UI. Slow (~20 s: the CLI
+    installs its driver and removes it on exit). Never on a device a Maestro MCP session drives: the CLI kills it."""
+    from preflight import _maestro_path
+    exe = _maestro_path()
+    if not exe:
+        raise FEError("no Maestro CLI found")
+    devices._require_owned(dev, "install the Maestro driver")
+    if devices.maestro_driver_running(dev):
+        raise FEError("a Maestro driver already runs on %s (a Maestro MCP session?): the Maestro CLI would kill "
+                      "it, so it was not run" % dev.id)
+    try:
+        return fe_common.run([exe, "--device", dev.id, "hierarchy"], timeout=180).stdout.decode("utf-8", "replace")
+    finally:
+        if devices.maestro_driver_running(dev):  # ours, left running: it would hold UiAutomation from uiautomator
+            devices.stop_maestro_driver(dev)
+
+
+IDLE = "idle state"  # uiautomator dump: "could not get idle state" on a screen that animates forever
+
+
+def hierarchy(dev):
+    """(nodes, source). Android: uiautomator; when it fails (a UI that never gets idle), the Maestro CLI."""
     if dev.platform == "ios":
         base = devices.ios_driver(dev)
         raw = devices.ios_call(dev, "viewHierarchy", {"appIds": [], "excludeKeyboardElements": False}, base=base)
-        return normalize(raw, "xctest", devices.ios_scale(dev, base))
+        return normalize(raw, "xctest", devices.ios_scale(dev, base)), "xctest"
     last = None
     for _ in range(3):
         try:
-            return normalize(_dump_uiautomator(dev), "uiautomator")
+            return normalize(_dump_uiautomator(dev), "uiautomator"), "uiautomator"
         except FEError as e:
             last = e
+            if IDLE in str(e):
+                break  # each retry waits another 10 s for the same answer
             time.sleep(0.7)
-    raise FEError("no hierarchy (is the Maestro driver holding UiAutomation? %s)" % last)
+    try:
+        return normalize(_dump_maestro(dev), "maestro"), "maestro"
+    except FEError as e:
+        raise FEError("no hierarchy: uiautomator: %s; maestro: %s" % (last, e))
+
+
+def screen_nodes(dev):
+    return hierarchy(dev)[0]
 
 
 def _full(pattern, value):

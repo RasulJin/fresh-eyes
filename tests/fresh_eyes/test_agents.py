@@ -67,6 +67,13 @@ class AgentsTest(unittest.TestCase):
             with open(os.path.join(skill_dir, rel), encoding="utf-8") as f:
                 self.assertIn("`consents`", f.read(), rel)
 
+    def test_navigator_never_builds_a_pack_and_rechecks_on_the_packs_screen(self):
+        # 0.5.11: hand-made packs with an old frame, copied steps, a recheck snapped on another screen
+        nav = " ".join(frontmatter("navigator")[1].split())
+        for word in ("never copy, move or write a pack's files yourself", "`source: maestro`",
+                     "reach the pack's screen first", "never mark that entry done"):
+            self.assertIn(word, nav, word)
+
     def test_reviewer_and_verifier_read_a_spec_slice(self):
         for name in ("reviewer", "verifier"):
             body = frontmatter(name)[1]

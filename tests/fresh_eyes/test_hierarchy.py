@@ -143,5 +143,36 @@ class XctestTest(unittest.TestCase):
         self.assertEqual(sorted(b["label"] for b in self.by_cls["Button"]), ["Камера", "Основные"])
 
 
+# `maestro hierarchy` (Maestro 2.10, Android): the attribute names AndroidDriver.mapHierarchy writes; the root and
+# a wrapper have no bounds; flags come as booleans and as attribute strings.
+MAESTRO = {"attributes": {}, "children": [{"attributes": {"bounds": "[0,0][1080,2400]",
+                                                          "class": "android.widget.FrameLayout"}, "children": [
+    {"attributes": {}, "children": [
+        {"attributes": {"text": "Спросить Vio", "accessibilityText": "ask-vio", "resource-id": "vio-ask",
+                        "bounds": "[42,2100][1038,2250]", "class": "android.view.ViewGroup", "clickable": "true"},
+         "clickable": True, "enabled": True, "focused": False},
+        {"attributes": {"text": "Куда летим?", "hintText": "Город", "bounds": "[42,300][1038,400]",
+                        "class": "android.widget.EditText", "focused": "true", "enabled": "false"}}]}]}]}
+
+
+class MaestroTest(unittest.TestCase):
+    def test_tree_json_after_the_clis_own_lines(self):
+        nodes = normalize("Running on emulator-5560\n" + json.dumps(MAESTRO, ensure_ascii=False), "maestro")
+        self.assertEqual([n["text"] for n in nodes], ["", "Спросить Vio", "Куда летим?"])
+        frame, ask, field = nodes
+        self.assertEqual((ask["parent"], ask["bounds"], ask["label"], ask["rid"]),
+                         (frame["id"], [42, 2100, 996, 150], "ask-vio", "vio-ask"))
+        self.assertEqual((ask["clickable"], ask["enabled"], ask["cls"]), (True, True, "android.view.ViewGroup"))
+        self.assertEqual((field["focused"], field["enabled"], field["clickable"]), (True, False, False))
+
+    def test_no_json_raises_with_what_it_printed(self):
+        with self.assertRaisesRegex(HierarchyError, "Device not connected"):
+            normalize("Device not connected", "maestro")
+
+    def test_uiautomator_says_why_it_printed_no_tree(self):
+        with self.assertRaisesRegex(HierarchyError, "could not get idle state"):
+            normalize("ERROR: could not get idle state.\n", "uiautomator")
+
+
 if __name__ == "__main__":
     unittest.main()
