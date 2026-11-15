@@ -119,7 +119,8 @@ Scenario cells: follow `scenario` in probes.md with the screen's `task` from `co
 your `package`. Look first, touch second: snap after each action before you tap anything, so the frame shows
 what the app did by itself (a field it should have focused, a sheet it opened).
 
-For `tap-everything`, write `<pack>/taps.json`: `[{"som": n, "label": "...", "result": "<screen/state after>"}]`.
+For `tap-everything`, write `<pack>/taps.json`: `[{"som": n, "label": "...", "result": "<screen/state after>",
+"changed": <taps.py tap's>}]`.
 
 Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exactly here and in this order:
 1. `capture.py snap --out $P/before`, `nav.py swipe` inside the list, `capture.py snap --out $P --before $P/before`.
@@ -135,6 +136,8 @@ For each entry in each `requests.json` that has no `done` yet, reach the pack's 
 again into `<pack>-recheck`, adding the entry's `args` (e.g. `--interval-ms 150`) to the probe's command; `crop` → `python3 $S/pixels.py crop <pack>/screen.png <pack>/crops/req-<finding>.png
 --bbox x,y,w,h --zoom 2`. Add `"done": "<path>"` to each entry you fulfilled and save the file. An entry you cannot fulfil gets
 `"failed": "<why>"` instead. Skip `redo-cell` entries: the orchestrator puts those cells back in the plan.
+An entry with `"times": N`: run it N times, into `<pack>-recheck-1` … `-N`, `done` naming them all. A `why`
+says what to do (which target alone to tap, how long to record): follow it.
 Probe `edge`: as probes.md `### edge` says, `taps.py edge` with the entry's `args` under `capture.py around`, then
 the recheck snap with `--before <pack>`.
 

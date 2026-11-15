@@ -613,7 +613,8 @@ def pack_groups(screen_dir, max_n=15, dropped=None):
 def _load_findings(paths, run="."):
     """All findings (each tagged with its file relative to the run, for same_as) and all reviewed pack paths.
     A confirmed finding that a question asks about (its `finding`: "f3", or "<file>#f3" in another file) turns
-    unsure: the run asked the owner whether it is a bug, so it cannot also call it one."""
+    unsure: the run asked the owner whether it is a bug, so it cannot also call it one. Not one with backlog_id:
+    the owner already put that bug in the backlog."""
     findings, reviewed, asked = [], [], []
     for p in paths:
         try:
@@ -631,8 +632,8 @@ def _load_findings(paths, run="."):
                 file, _, fid = q["finding"].rpartition("#")
                 asked.append((os.path.normpath(file or rel), fid, q.get("text", "")))
     for f in findings:
-        if f.get("verdict") == "confirmed" and any(f.get("id") == fid and os.path.normpath(f["_file"]) == file
-                                                   for file, fid, _ in asked):
+        if f.get("verdict") == "confirmed" and not f.get("backlog_id") and any(
+                f.get("id") == fid and os.path.normpath(f["_file"]) == file for file, fid, _ in asked):
             f["verdict"], f["_asked"] = "unsure", True
     return findings, reviewed
 

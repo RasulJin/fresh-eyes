@@ -143,10 +143,14 @@ words / nothing (= the current diff).
    (`source.root` from preflight.json, or `none`). Journey cells get one reviewer per platform over
    `<run>/<platform>/journey/`;
    its findings carry the real screen they concern.
-9. Verify: once per run, `python3 $S/backlog.py index --file <backlog.path> --out $RUN/backlog-index.md` (open
-   backlog entries, one line each; only verifiers get it, reviewers never see the backlog; no `backlog` in
-   config: skip it). Then one
-   `fresh-eyes:verifier` per screen folder that has pending findings (up to 4 in parallel); the prompt is
+9. Verify: once per run, `python3 $S/backlog.py index --file <backlog.path> --ref <source.ref> --config
+   .fresh-eyes/config.json --out $RUN/backlog-index.md` (open backlog entries, one line each, as of the build's
+   commit: a checkout on another branch has another backlog; no commit in preflight.json: no `--ref`; only
+   verifiers get it, reviewers never see the backlog; no `backlog` in config: skip it), then `python3
+   $S/backlog.py match --index $RUN/backlog-index.md --findings <all findings*.json>` (a pending BUG gets the
+   open BUG entry it may repeat, for the verifier to check). Then one
+   `fresh-eyes:verifier` per screen folder that has pending findings or `requests` in a findings file (up to 4
+   in parallel); the prompt is
    `first pass`, that folder, its spec slice, `.fresh-eyes/known.md`, `$RUN/backlog-index.md`, `language`,
    `source_root`. Keep each verifier's agent id. The journey
    folder's verifier also gets the findings files of the screens its findings concern (to mark duplicates). Folders whose verifier

@@ -2,11 +2,11 @@
 """Write confirmed findings into a project's Markdown backlog and update entry statuses.
 
 CLI:
-  backlog.py index --file F --out OUT [--statuses open,in-progress,planned]
+  backlog.py index --file F --out OUT [--statuses open,in-progress,planned] [--ref COMMIT] [--config C]
   backlog.py append --file F --finding finding.json [--template ru-backlog] [--date YYYY-MM-DD]
                     [--attach CROP --images-dir D]
   backlog.py set-status --file F --id BUG-12 --status verified --note TEXT [--line N] [--template ru-backlog]
-  backlog.py match --index backlog-index.md --findings F [F ...] --out imp.md [--language ru|en]
+  backlog.py match --index backlog-index.md --findings F [F ...] [--out imp.md] [--language ru|en]
 """
 import argparse
 import json
@@ -15,7 +15,7 @@ import re
 import shutil
 import time
 
-from fe_common import FEError, cli, read_json, write_json
+from fe_common import FEError, cli, read_json, run, write_json
 
 TEMPLATES = {
     "ru-backlog": {
@@ -102,9 +102,9 @@ STATUS = re.compile(r"— `([^`\s]+)")  # the first `word` after a dash: `fixed 
 WHERE = re.compile(r"^\s*- \*\*(?:Где|Where)\*\*\s*[—:-]*\s*(.*)")
 
 
-def index(text, statuses=("open", "in-progress", "planned")):
+def index(text, statuses=("open", "in-progress", "planned"), names=None):
     """`ID · title - where` per entry whose status is listed or missing. An id's first entry decides: later
-    bullets naming it are rechecks, not entries."""
+    bullets naming it are rechecks, not entries. names: config screen name -> id, so `where` names the screen."""
     lines, out, seen = text.split("\n"), [], set()
     head = _head(r"(?:BUG|IMP)-\d+")
     for i, line in enumerate(lines):
@@ -125,9 +125,18 @@ def index(text, statuses=("open", "in-progress", "planned")):
             w = WHERE.match(body)
             if w:
                 where = w.group(1).split(",")[0].strip()
+                where = (names or {}).get(where, where)
                 break
         out.append("%s · %s" % (item_id, title) + (" - " + where if where else ""))
     return out
+
+
+def read_at(path, ref=None):
+    """The backlog file, or with ref its text in that commit: a checkout on another branch has an older backlog."""
+    if not ref:
+        return _read(path)
+    folder, name = os.path.split(os.path.abspath(path))
+    return run(["git", "-C", folder, "show", "%s:./%s" % (ref, name)]).stdout.decode("utf-8")
 
 
 def set_status(path, item_id, status, note, line=None, template="ru-backlog"):
@@ -166,12 +175,12 @@ def _stems(text):
     return {w[:5] for w in re.findall(r"[a-zа-я]{3,}", text.lower().replace("ё", "е")) if w not in STOP}
 
 
-def imp_entries(lines):
-    """(id, title, stems, screen) of the IMP lines `index` wrote; screen when the line ends in ` - <screen-id>`."""
+def entries(lines, prefix):
+    """(id, title, stems, screen) of the PREFIX lines `index` wrote; screen when the line ends in ` - <screen-id>`."""
     out = []
     for line in lines:
         item_id, _, rest = line.strip().partition(" · ")
-        if item_id.startswith("IMP-"):
+        if item_id.startswith(prefix + "-"):
             title, _, where = rest.rpartition(" - ")
             if not (title and re.fullmatch(r"[a-z0-9][a-z0-9-]*", where)):
                 title, where = rest, None
@@ -179,40 +188,49 @@ def imp_entries(lines):
     return out
 
 
-def match_imp(finding, entries):
-    """(id, title) of the open IMP that already proposes this one: the most shared stems, at least half of the
-    shorter title's, 2 on the same screen and 3 for an entry naming none; an entry on another screen never."""
+def match_entry(finding, entries, near=2):
+    """(id, title) of the open entry that already holds this finding: the most shared stems, at least half of the
+    shorter title's, `near` on the same screen and 3 for an entry naming none; an entry on another screen never."""
     mine, best = _stems(finding.get("title", "")), None
     for item_id, title, stems, where in entries:
         n = len(mine & stems)
-        if (not where or where == finding.get("screen")) and n >= (2 if where else 3) \
+        if (not where or where == finding.get("screen")) and n >= (near if where else 3) \
                 and n >= min(len(mine), len(stems)) / 2 and (best is None or n > best[0]):
             best = (n, item_id, title)
     return best[1:] if best else None
 
 
-def match(index_lines, paths, out, language="en"):
-    """Give each IMP the verifier left without backlog_id the open entry that already proposes it (findings files
-    written back), and write imp.md: the new IMPs in full, the known ones a line each. The report lists only the
-    new ones."""
-    entries = imp_entries(index_lines)
-    titles = {e[0]: e[1] for e in entries}
-    new, known, matched = [], [], 0
+def match(index_lines, paths, out=None, language="en"):
+    """Give each IMP without backlog_id the open entry that already proposes it, and each pending BUG the open BUG
+    entry on its screen sharing 3 stems (before the verifier, which keeps it only for the same defect: no question
+    to the owner about a bug already in the backlog); findings files written back. With out, write imp.md: the
+    new IMPs in full, the known ones a line each. The report lists only the new ones."""
+    imps, bugs = entries(index_lines, "IMP"), entries(index_lines, "BUG")
+    titles = {e[0]: e[1] for e in imps}
+    new, known, matched, bug_hits = [], [], 0, 0
     for p in paths:
         data = read_json(p)
         asked = {q.get("finding"): q.get("text", "") for q in data.get("questions") or [] if isinstance(q, dict)}
         hits = 0
         for f in data.get("findings", []):
+            if f.get("kind", "BUG") == "BUG":
+                hit = None if f.get("backlog_id") or f.get("verdict", "pending") != "pending" \
+                    else match_entry(f, bugs, 3)
+                if hit:
+                    f["backlog_id"], hits, bug_hits = hit[0], hits + 1, bug_hits + 1
+                continue
             if f.get("kind") != "IMP" or f.get("verdict") == "rejected":
                 continue
-            hit = None if f.get("backlog_id") else match_imp(f, entries)
+            hit = None if f.get("backlog_id") else match_entry(f, imps)
             if hit:
-                f["backlog_id"], hits = hit[0], hits + 1
-            ref = "%s#%s" % (os.path.relpath(p, os.path.dirname(os.path.abspath(out))), f.get("id"))
-            (known if f.get("backlog_id") else new).append((f, ref, asked.get(f.get("id"))))
+                f["backlog_id"], hits, matched = hit[0], hits + 1, matched + 1
+            if out:
+                ref = "%s#%s" % (os.path.relpath(p, os.path.dirname(os.path.abspath(out))), f.get("id"))
+                (known if f.get("backlog_id") else new).append((f, ref, asked.get(f.get("id"))))
         if hits:
             write_json(p, data)
-        matched += hits
+    if not out:
+        return {"matched": matched, "bugs": bug_hits}
     heads = IMP_HEADS.get(language, IMP_HEADS["en"])
     lines = ["# %s: %d" % (heads[0], len(new)), ""]
     for k, (f, ref, question) in enumerate(new, 1):
@@ -226,7 +244,7 @@ def match(index_lines, paths, out, language="en"):
                                       " «%s»" % titles[f["backlog_id"]] if f["backlog_id"] in titles else "", ref)
               for f, ref, _ in known]
     _write(out, "\n".join(lines) + "\n")
-    return {"new": len(new), "known": len(known), "matched": matched, "out": out}
+    return {"new": len(new), "known": len(known), "matched": matched, "bugs": bug_hits, "out": out}
 
 
 # Image names stay Latin: git quotes non-ASCII paths, and the rest of a backlog's images are Latin.
@@ -250,6 +268,8 @@ def main():
     p = sub.add_parser("index", help="open entries, one line each, for the verifier's dedup")
     p.add_argument("--file", required=True); p.add_argument("--out", required=True)
     p.add_argument("--statuses", default="open,in-progress,planned", help="comma list; an entry without one counts")
+    p.add_argument("--ref", help="read the backlog as of this commit (the build's), not the checkout's file")
+    p.add_argument("--config", help=".fresh-eyes/config.json: a `Где` naming a screen becomes its id")
     p = sub.add_parser("append"); p.add_argument("--file", required=True)
     p.add_argument("--finding", required=True, help="path to a JSON file holding one finding")
     p.add_argument("--template", default="ru-backlog"); p.add_argument("--date")
@@ -259,11 +279,13 @@ def main():
     p.add_argument("--line", type=int); p.add_argument("--template", default="ru-backlog")
     p = sub.add_parser("match", help="IMPs already in the backlog get its id; imp.md holds every IMP in full")
     p.add_argument("--index", required=True, help="backlog-index.md (a missing file: nothing is known)")
-    p.add_argument("--findings", nargs="+", required=True); p.add_argument("--out", required=True)
+    p.add_argument("--findings", nargs="+", required=True); p.add_argument("--out", help="imp.md")
     p.add_argument("--language", default="en")
     a = ap.parse_args()
     if a.cmd == "index":
-        lines = index(_read(a.file), a.statuses.split(","))
+        names = {s["name"]: s["id"] for s in read_json(a.config).get("screens", []) if s.get("name")} \
+            if a.config else None
+        lines = index(read_at(a.file, a.ref), a.statuses.split(","), names)
         _write(a.out, "".join(l + "\n" for l in lines))
         out = {"entries": len(lines), "out": a.out}
     elif a.cmd == "match":

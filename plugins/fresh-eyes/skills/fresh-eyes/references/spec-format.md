@@ -80,8 +80,8 @@ from `config.json`, in that order.
 When two sources disagree, keep the newer one, mark the rule `⚠ conflict` (in a Russian spec `⚠ конфликт`)
 with both versions and dates, and
 ask the user at the end of the run (orchestrator only — subagents put the question into `questions[]`).
-Never resolve a conflict silently, and never write "do not flag" into a conflict rule: a conflict is exactly
-what the reviewer must surface (as an `unsure` finding plus a question) until the user decides.
+Never resolve a conflict silently, and never write "do not flag" into a conflict rule: until the user decides,
+every run lists what it saw of it under "Open spec conflicts" (a `conflict` entry), without asking again.
 
 ## Growing it
 

@@ -3,7 +3,10 @@
 Every probe names a coverage cell; mutating cells are refused unless preflight allowed mutation.
 
 CLI:
-  taps.py rapid   --platform P --device ID --x X --y Y [--count 3] [--interval-ms 120] --coverage C --cell ID
+  taps.py rapid   --platform P --device ID --x X --y Y [--count 3] [--interval-ms 120] [--hold-ms 6000]
+                  --coverage C --cell ID      (returns --hold-ms after the first tap: a late sheet is on the video)
+  taps.py tap     --platform P --device ID --x X --y Y --coverage C --cell ID
+                  (one tap; returns once the screen settled, so the snap after it shows where the tap led)
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
   taps.py tap-back --platform P --device ID --x X --y Y [--delay-ms 100] --coverage C --cell ID
@@ -17,12 +20,19 @@ CLI:
 import argparse
 import json
 import os
+import tempfile
+import time
 
 import devices
 from devices import Device
 from fe_common import FEError, cli, heartbeat, read_json
 from motion import run_ceiling_ms
 from nav import _xy
+from pixels import changed_fraction
+
+SETTLE_GAP_S = 0.4  # two screenshots this far apart that match: the screen has settled
+SETTLE_MAX_S = 3.0
+SAME = 0.01  # changed share under which two frames show one screen (a caret, a clock tick)
 
 
 def guard(coverage_path, cell_id, platform=None):
@@ -52,10 +62,27 @@ def edge_point(bounds, side, dp, px_per_dp):
             "left": (x - off, y + h // 2), "right": (x + w - 1 + off, y + h // 2)}[side]
 
 
+def settle(dev, before, gap_s=SETTLE_GAP_S, max_s=SETTLE_MAX_S):
+    """After a tap: wait until two screenshots gap_s apart match and differ from `before` (taken before the tap),
+    at most max_s. A snap right after a tap caught the old screen or the transition (8 of 21 false BUGs, 0.5.11).
+    `changed: false` after max_s: the tap had no visible result."""
+    t0, prev, k = time.time(), None, 0
+    with tempfile.TemporaryDirectory() as d:
+        while True:
+            k += 1
+            cur = devices.screenshot(dev, os.path.join(d, "%d.png" % k))
+            changed = changed_fraction(before, cur) >= SAME
+            same = prev is not None and changed_fraction(prev, cur) < SAME
+            if (changed and same) or time.time() - t0 >= max_s:
+                return {"settled": same, "changed": changed, "ms": round((time.time() - t0) * 1000)}
+            prev = cur
+            time.sleep(gap_s)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("rapid", "outside", "back", "tap-back", "drag-back", "swipe-tap", "edge"):
+    for name in ("rapid", "tap", "outside", "back", "tap-back", "drag-back", "swipe-tap", "edge"):
         p = sub.add_parser(name)
         p.add_argument("--platform", required=True, choices=["android", "ios"])
         p.add_argument("--device", required=True)
@@ -68,6 +95,8 @@ def main():
             p.add_argument("--count", type=int, default=3 if name == "rapid" else 1)
             # a person's fast taps; 30 ms is the evil race a script alone makes, asked for explicitly
             p.add_argument("--interval-ms", type=int, default=120 if name == "rapid" else 0)
+        if name == "rapid":  # a system share sheet came 2.6 s after the taps, past a 2.2 s video (0.5.11)
+            p.add_argument("--hold-ms", type=int, default=6000)
         if name in ("tap-back", "swipe-tap"):
             p.add_argument("--delay-ms", type=int, default=100 if name == "tap-back" else None)
         if name in ("drag-back", "swipe-tap"):
@@ -86,7 +115,15 @@ def main():
     heartbeat(a.coverage, a.platform, "taps.py %s %s" % (a.cmd, a.cell))
     dev = Device(a.platform, a.device, "")
     if a.cmd == "rapid":
+        t0 = time.time()
         devices.rapid_taps(dev, a.x, a.y, a.count, a.interval_ms)
+        time.sleep(max(0.0, a.hold_ms / 1000.0 - (time.time() - t0)))
+    elif a.cmd == "tap":
+        with tempfile.TemporaryDirectory() as d:
+            before = devices.screenshot(dev, os.path.join(d, "before.png"))
+            devices.tap(dev, a.x, a.y)
+            print(json.dumps(dict({"probe": "tap", "cell": a.cell, "x": a.x, "y": a.y}, **settle(dev, before))))
+        return 0
     elif a.cmd == "edge":
         node = next((n for n in read_json(os.path.join(a.pack, "nodes.json")) if n["id"] == a.node), None)
         if node is None:

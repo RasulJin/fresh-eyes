@@ -20,10 +20,11 @@ IDLE_S = 600
 JUDGE = ("M4", "M7", "M11")
 LIMITS = {  # what each number is and when it passes
     "M1": ("manual orchestrator moves: numbered items of run-log.md (or the report's run log)", lambda v: v <= 1),
-    "M2": ("false BUGs (a 'spec text:' or 'known candidate:' reject too): rejected / ruled", lambda v: v <= 0.10),
+    "M2": ("false BUGs (a 'spec text:' or 'known candidate:' reject too, a 'flaky:' one not): rejected / ruled",
+           lambda v: v <= 0.10),
     "M3": ("BUGs left unsure / ruled", lambda v: v <= 0.15),
     "M4": ("judge: owner-facing BUGs ruled intended or duplicate / owner-facing BUGs", lambda v: v <= 0.05),
-    "M5": ("questions to the owner in report.md (a bullet of spec-text pairs alone is none)", lambda v: v <= 10),
+    "M5": ("questions to the owner in report.md: a screen's sub-items, a spec-text one none", lambda v: v <= 10),
     "M6": ("confirmed BUGs the verdict turned unsure for a stale spec", lambda v: v == 0),
     "M7": ("judge: done cells whose oracle was not checked", lambda v: v == 0),
     "M8": ("report.md lines", lambda v: v <= 300),
@@ -37,7 +38,10 @@ LIMITS = {  # what each number is and when it passes
 }
 ITEM = re.compile(r"(?:[-*]|\d+\.)\s")
 NUMBERED = re.compile(r"\d+\.\s")
-QUESTION = re.compile(r"(?:[-*]|\d+\.)\s(?!\s*(?:\*\*[^*]*\*\*:?\s*)?spec text:)", re.I)
+SPEC_TEXT = re.compile(r"\s*(?:[-*]|\d+\.)\s+(?:\*\*[^*]*\*\*:?\s*)?spec text:", re.I)
+SCREEN = re.compile(r"(?:[-*]|\d+\.)\s+\*\*[^*]+\*\*:?\s*$")  # `- **feed**:` alone: its sub-items are the questions
+SUB = re.compile(r"\s+(?:[-*]|\d+\.)\s")
+FLAKY = re.compile(r"\s*flaky:", re.I)  # seen once, not reproduced in the repeats: not disproved, so not a false BUG
 CONSENT = re.compile(r"\bconsent:", re.I)  # the navigator's blocked note, "consent: <the dialog's title>"
 
 
@@ -58,6 +62,23 @@ def items(text, heading, pattern=ITEM):
             level = len(h.group(1)) if re.match(heading, h.group(2), re.I) else None
         elif not h and level is not None and pattern.match(line):
             n += 1
+    return n
+
+
+def questions(text):
+    """M5: under a questions heading, a screen's bullet (`- **feed**:` alone) counts its sub-items, any other
+    bullet once (its sub-items are its options); a `spec text:` item counts none."""
+    n, level, group = 0, None, False
+    for line in text.splitlines():
+        h = re.match(r"(#+)\s+(.*)", line)
+        if h and (level is None or len(h.group(1)) <= level):
+            level, group = (len(h.group(1)) if re.match(r"(вопрос|question)", h.group(2), re.I) else None), False
+        elif not h and level is not None:
+            if ITEM.match(line):
+                group = bool(SCREEN.match(line))
+                n += not (group or SPEC_TEXT.match(line))
+            elif group and SUB.match(line):
+                n += not SPEC_TEXT.match(line)
     return n
 
 
@@ -107,13 +128,15 @@ def score(run, sid=None, out=None):
     log = os.path.join(run, "run-log.md")
     m = {"M1": sum(1 for line in _read(log).splitlines() if NUMBERED.match(line)) if os.path.exists(log)
          else items(text, r"(ход прогона|run log)", NUMBERED) if text and RUN_LOG.search(text) else None,
-         "M5": items(text, r"(вопрос|question)", QUESTION) if text is not None else None,
+         "M5": questions(text) if text is not None else None,
          "M8": len(text.splitlines()) if text is not None else None}
     paths = sorted(glob.glob(os.path.join(run, "*", "*", "findings*.json")))
     findings, _ = coverage._load_findings(paths, run)  # a confirmed finding an open question asks about: unsure
     n = Counter(f.get("verdict", "pending") for f in findings if f.get("kind", "BUG") == "BUG")
+    flaky = sum(1 for f in findings if f.get("kind", "BUG") == "BUG" and f.get("verdict") == "rejected"
+                and FLAKY.match(f.get("verify_note") or ""))
     ruled = n["confirmed"] + n["unsure"] + n["rejected"]
-    m["M2"] = round(n["rejected"] / ruled, 3) if ruled else 0.0
+    m["M2"] = round((n["rejected"] - flaky) / ruled, 3) if ruled else 0.0
     m["M3"] = round(n["unsure"] / ruled, 3) if ruled else 0.0
     cov = read_json(os.path.join(run, "coverage.json"))
     ss = os.path.join(run, "spec-stale.json")
@@ -137,6 +160,7 @@ def score(run, sid=None, out=None):
     for k in corrected:
         card[k]["by"] = "judge"
     card["M6"]["of"] = n["confirmed"]
+    card["M2"]["flaky"] = flaky
     card["passed"] = sum(1 for k in LIMITS if card[k]["ok"])
     card["unknown"] = [k for k in LIMITS if card[k]["ok"] is None]
     write_json(out, card)

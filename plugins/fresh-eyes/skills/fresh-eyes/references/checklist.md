@@ -62,6 +62,7 @@ gives (dp from candidates, sizes against the screen) and write the change with n
 ## Behaviour defects (need an action, video or two frames)
 
 - **Double fire**: rapid taps open two sheets / send twice / navigate twice. Oracle: dismiss once, nothing left.
+  What the pack's `single/` (one tap) shows too, a late sheet or a browser keeping Back, is not a double.
 - **Dead or wrong tap**: something looks tappable but does nothing; the label says one thing, the tap does another.
 - **Overlay order**: a sheet slides under a card; tapping outside does not dismiss; a scrim does not block.
 - **Interrupted animation**: Back / tap / drag during a transition leaves a half-open state, an invisible window
@@ -168,3 +169,7 @@ raised again, so a proposal left out costs more than one written.
   next to the UI's, unless the spec has a rule for them.
 - Which glyph an icon shows, also under a spec icon rule: an IMP. A missing or broken icon (an empty box, a
   placeholder glyph) is a BUG.
+- A tap whose result no frame shows (no snap after it, one from before the transition, another screen on it):
+  no dead tap, a `requests` entry (reviewer.md). A dead tap is a settled snap like the one before it
+  (`taps.json` `"changed": false`).
+- What a ⚠ conflict rule itself leaves to the owner: no BUG, a `conflict` entry in `questions[]`.

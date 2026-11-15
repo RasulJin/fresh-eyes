@@ -23,11 +23,12 @@ short drags) before the next cell.
 - Reveals: double sheets/dialogs, double send, double navigation (stacked screens).
 - Target: the primary action that opens or sends something (Share, Send, Submit, Buy), never `⋯`, Back or Close.
 - `python3 $S/taps.py rapid --platform P --device ID --x X --y Y --count 3 ...` (120 ms apart, a person's fast
-  taps) wrapped in `capture.py around` to record (x, y in screenshot pixels: the center of the node in a fresh
-  `nav.py screen` taken right before; rows move after state changes, so never reuse coordinates from an earlier
-  screen). The evil race no person makes, `--interval-ms 30`, only when a request asks for it.
+  taps; it returns 6 s after the first, so a late system sheet or browser is on the video) wrapped in `capture.py
+  around` to record (x, y in screenshot pixels: the center of the node in a fresh `nav.py screen` taken right
+  before; rows move after state changes, never reuse them). `--interval-ms 30` only when a request asks for it.
 - Oracle: one Back/dismiss later nothing of it is left on screen: `taps.py back` once, then
   `capture.py snap --out <pack>/afterback` (`coverage.py set` refuses the cell without it).
+- Control, same pack: the same with `--count 1` into `<pack>/single` and `<pack>/single/afterback`.
 - Mutating: no (but if the button sends something, the probe belongs to a mutating cell).
 
 ### tap-outside
@@ -168,7 +169,8 @@ short drags) before the next cell.
 - Reveals: dead taps, wrong destinations, labels that lie ("Follow" opening the profile), disabled controls
   that look enabled.
 - Steps: for each clickable node in `nodes.json` (skip destructive labels: delete, remove, log out, pay, send),
-  tap it, snap, go back. Record "tapped N → screen/state" in the pack's `taps.json`.
+  `taps.py tap --x X --y Y` on its center (it returns once two frames 0.4 s apart match and differ from the one
+  before the tap, ≤3 s), snap, go back. `taps.json`: "tapped N → screen/state" and its `changed`.
 - Reply/comment buttons and inputs only focus a field, they change no data: tap them too, and first, so the
   later taps leave and return with the keyboard having been up.
 
