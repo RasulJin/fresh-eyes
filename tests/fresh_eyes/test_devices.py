@@ -195,6 +195,21 @@ class DevicesTest(unittest.TestCase):
         devices.launch(Device("android", "emulator-5560", "fresh-eyes-pixel"), "com.example.app")
         self.assertIn("am start -n com.example.app/.MainActivity", " | ".join(c[-1] for c in fake.calls))
 
+    def test_photos_are_counted_in_the_gallery_and_pushed_only_to_owned_devices(self):
+        self.patch({"content query": "Row: 0 _id=31\nRow: 1 _id=32\n"})
+        self.assertEqual(devices.photo_count(Device("android", "emulator-5560", "fresh-eyes-pixel")), 2)
+        self.patch({"content query": "No result found.\n"})
+        self.assertEqual(devices.photo_count(Device("android", "emulator-5560", "fresh-eyes-pixel")), 0)
+        fake = self.patch({})
+        devices.push_photos(Device("android", "emulator-5560", "fresh-eyes-pixel"), ["/x/photo-1.jpg"])
+        joined = [" ".join(c) for c in fake.calls]
+        self.assertTrue(any("push /x/photo-1.jpg /sdcard/DCIM/fresh-eyes/photo-1.jpg" in c for c in joined))
+        self.assertIn("file:///sdcard/DCIM/fresh-eyes/photo-1.jpg", joined[-1])
+        fake = self.patch({"emu avd name": "Pixel_8\nOK\n"})
+        with self.assertRaises(FEError):
+            devices.push_photos(Device("android", "emulator-5554", "Pixel_8"), ["/x/photo-1.jpg"])
+        self.assertFalse(any("push" in " ".join(c) for c in fake.calls))
+
     def test_disable_stylus_handwriting(self):
         fake = self.patch({})
         devices.disable_stylus_handwriting(Device("android", "emulator-5560", "fresh-eyes-pixel"))

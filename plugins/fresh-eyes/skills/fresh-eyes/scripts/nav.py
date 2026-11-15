@@ -10,11 +10,15 @@ Maestro: text/label are full-string, case-insensitive regexes; ids match by suff
 CLI (all print the compressed screen after acting; --platform defaults to android):
   nav.py screen --device ID [--platform android|ios]
   nav.py tap    --device ID (--text RE | --label RE | --id SUFFIX | --point X,Y) [--index N]
-  nav.py type   --device ID (--text "text" | --env VAR)   (Android: ASCII only; --env for secrets)
+  nav.py type   --device ID (--text "text" | [--env VAR] [--keychain SERVICE])   (Android: ASCII only; secrets:
+                 the variable when set, else the macOS keychain item; never printed)
   nav.py swipe  --device ID --from X,Y --to X,Y [--ms 300]
   nav.py back   --device ID                      (iOS: edge swipe)
   nav.py wait   --device ID (--text RE | --label RE | --id SUFFIX) [--timeout 15]
   nav.py idle   --run RUN [--platform android|ios]   (seconds since the platform's last heartbeat)
+  nav.py idle   --run RUN [--platform P] --until S (--cells ID,... | --requests FILE...)   (blocks up to S seconds:
+                 "done" when those cells are recorded / requests answered, "stuck" when no heartbeat came, else
+                 "running")
 --run RUN on any of them refreshes <run>/<platform>/heartbeat, as every capture.py call does.
 """
 import argparse
@@ -146,6 +150,59 @@ def wait_for(dev, text=None, label=None, rid=None, timeout=15):
             time.sleep(1)
 
 
+def secret(var=None, service=None):
+    """A test credential: the environment variable when set, else the macOS keychain item (`security`)."""
+    if var and os.environ.get(var):
+        return os.environ[var]
+    if service:
+        proc = fe_common.run(["security", "find-generic-password", "-s", service, "-w"], check=False)
+        if proc.returncode == 0 and proc.stdout.strip():
+            return proc.stdout.decode("utf-8").rstrip("\n")
+    raise FEError("not set: %s" % " and ".join(filter(None, (var and "environment variable " + var,
+                                                              service and "keychain item " + service))))
+
+
+POLL_S = 5
+
+
+def _left(run, cells, requests):
+    """What the navigator still has to do: its todo cells and its requests entries without done/failed."""
+    left = 0
+    if cells:
+        status = {c["id"]: c["status"] for c in fe_common.read_json(os.path.join(run, "coverage.json"))["cells"]}
+        unknown = [c for c in cells if c not in status]
+        if unknown:
+            raise FEError("not in coverage.json: %s" % ", ".join(unknown))
+        left += sum(status[c] == "todo" for c in cells)
+    for path in requests:
+        left += sum(1 for e in fe_common.read_json(path)
+                    if e.get("do") != "redo-cell" and "done" not in e and "failed" not in e)
+    return left
+
+
+def wait_idle(run, platform, until, cells=(), requests=()):
+    """One blocking wait instead of polling: returns "done" as soon as nothing is left, else after `until` s
+    "running" (a heartbeat came: wait again) or "stuck" (none came during the whole wait)."""
+    beat = os.path.join(run, platform, "heartbeat")
+    start = time.time()
+    while True:
+        try:
+            left = _left(run, cells, requests)
+        except ValueError:  # a requests.json mid-write: read it on the next poll
+            left = None
+        now = time.time()
+        mtime = os.path.getmtime(beat) if os.path.exists(beat) else None
+        if left == 0:
+            state = "done"
+        elif now - start >= until:
+            state = "running" if mtime is not None and mtime >= start else "stuck"
+        else:
+            time.sleep(min(POLL_S, until - (now - start)))
+            continue
+        return {"state": state, "left": left, "idle_s": round(now - mtime) if mtime is not None else None,
+                "did": fe_common.read_json(beat)["did"] if mtime is not None else None}
+
+
 def _xy(s):
     x, y = s.split(",")
     return int(x), int(y)
@@ -166,16 +223,27 @@ def main():
             p.add_argument("--point", type=_xy); p.add_argument("--index", type=int, default=0)
         if name == "wait":
             p.add_argument("--timeout", type=float, default=15)
-        if name == "type":  # --env: a secret read here from the environment, never printed or passed as text
-            g = p.add_mutually_exclusive_group(required=True)
-            g.add_argument("--text"); g.add_argument("--env", metavar="VAR")
+        if name == "type":  # a secret is read here (environment, else keychain), never printed or passed as text
+            p.add_argument("--text"); p.add_argument("--env", metavar="VAR")
+            p.add_argument("--keychain", metavar="SERVICE")
         if name == "swipe":
             p.add_argument("--from", dest="src", type=_xy, required=True)
             p.add_argument("--to", type=_xy, required=True)
             p.add_argument("--ms", type=int, default=300)
     p = sub.add_parser("idle", help="seconds since <run>/<platform>/heartbeat was refreshed (null: never)")
     p.add_argument("--run", required=True); p.add_argument("--platform", choices=["android", "ios"], default="android")
+    p.add_argument("--until", type=float, help="block up to this many seconds (under Bash's 10-minute limit)")
+    p.add_argument("--cells", help="comma list: the navigator's cell ids")
+    p.add_argument("--requests", nargs="+", default=[], help="requests-mode navigator: its requests.json files")
     a = ap.parse_args()
+    if a.cmd == "type" and (a.text is None) == (a.env is None and a.keychain is None):
+        ap.error("type needs --text, or --env and/or --keychain")
+    if a.cmd == "idle" and a.until:
+        if not (a.cells or a.requests):
+            ap.error("idle --until needs --cells or --requests")
+        cells = [c for c in (a.cells or "").split(",") if c]
+        print(json.dumps(wait_idle(a.run, a.platform, a.until, cells, a.requests)))
+        return 0
     if a.cmd == "idle":
         beat = os.path.join(a.run, a.platform, "heartbeat")
         age = round(time.time() - os.path.getmtime(beat)) if os.path.exists(beat) else None
@@ -188,9 +256,7 @@ def main():
         node = tap(dev, a.text, a.label, a.id, a.point, a.index)
         print("tapped %s %r" % (node.get("id"), node.get("text") or node.get("label", "")))
     elif a.cmd == "type":
-        text = os.environ.get(a.env, "") if a.env else a.text
-        if not text:
-            raise FEError("environment variable %s is not set" % a.env)
+        text = a.text if a.text is not None else secret(a.env, a.keychain)
         if dev.platform == "ios":
             devices.ios_type(dev, text)
         else:
@@ -198,7 +264,7 @@ def main():
             for k, (raw, arg) in enumerate(adb_text_chunks(text)):  # all escaped (and checked) before typing
                 time.sleep(CHUNK_PAUSE_S if k else 0)
                 fe_common.run([devices.adb_path(), "-s", dev.id, "shell", "input", "text", arg],
-                              redact=(text, raw, arg) if a.env else ())
+                              redact=(text, raw, arg) if a.text is None else ())
         time.sleep(0.5)
     elif a.cmd == "swipe":
         devices.swipe(dev, a.src[0], a.src[1], a.to[0], a.to[1], a.ms)

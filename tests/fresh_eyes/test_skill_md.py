@@ -53,5 +53,23 @@ class SkillMdTest(unittest.TestCase):
             self.assertIn(word, body, word)
 
 
+    def test_pipeline_and_one_blocking_wait_0_5_12(self):
+        # 0.5.11 run: the orchestrator piped reviews by hand and watched the heartbeat with its own script (M1, M10)
+        body = " ".join(text().split())
+        for word in ("Pipeline: as soon as a screen's cells", "nav.py idle --run $RUN --platform <p> --until 540",
+                     "never by polling", "pending BUG findings", "--keychain fresh-eyes-<role>-email"):
+            self.assertIn(word, body, word)
+        self.assertNotIn("Check every 1–2 minutes", body)
+
+    def test_credentials_and_photos_reach_the_navigator(self):
+        plugin = os.path.dirname(os.path.dirname(SKILL_DIR))
+        with open(os.path.join(plugin, "agents", "navigator.md"), encoding="utf-8") as f:
+            nav = " ".join(f.read().split())
+        self.assertIn("--keychain fresh-eyes-<role>-password", nav)
+        self.assertIn('"no photos on the device", never done', nav)
+        with open(os.path.join(SKILL_DIR, "references", "config-format.md"), encoding="utf-8") as f:
+            self.assertIn("security add-generic-password -U -a \"$USER\" -s fresh-eyes-viewer-email -w", " ".join(f.read().split()))
+
+
 if __name__ == "__main__":
     unittest.main()

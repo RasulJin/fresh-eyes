@@ -60,9 +60,12 @@ nobody answers in a night run.
 - Never print or write secrets. Signed out (a device restored from a snapshot or the small device often is):
   bring the app to its `app language` first (rule above), then sign in once per device with the first role
   in `config.json` → `accounts`, the way a person would (the start screen's sign-in button, skip the
-  onboarding hints), typing only with `nav.py type --env <email_env>` and `--env <password_env>`. Never create
-  an account. If `nav.py type` says the variable is not set, or signing in
+  onboarding hints), typing only with `nav.py type --env <email_env> --keychain fresh-eyes-<role>-email` and
+  `--env <password_env> --keychain fresh-eyes-<role>-password`. Never create
+  an account. If `nav.py type` says it is not set, or signing in
   fails, mark the cells `blocked` with note "signed out: <variable> not set" or "signed out: <why>".
+- A form that needs a photo while the picker shows none (double-submit of a post): `blocked` with note
+  "no photos on the device", never done.
 - Consent dialogs (terms, community rules, privacy, an AI or data-sharing notice: anything asking the account
   to agree): press its accepting button (Accept, I agree, Got it) only when an entry of `consents` in
   `config.json` matches it, its `text` part of the dialog and its `button` that label: the owner allowed it.
