@@ -518,6 +518,25 @@ def install(dev, artifact):
         _simctl("install", dev.id, artifact, timeout=300)
 
 
+PHOTO_DIR = "/sdcard/DCIM/fresh-eyes"
+
+
+def photo_count(dev):
+    """Images the gallery (MediaStore) lists: with none, a form that needs a photo cannot be submitted."""
+    out = _shell(dev, "content query --uri content://media/external/images/media --projection _id", check=False)
+    return len(re.findall(r"^Row: ", out, flags=re.M))
+
+
+def push_photos(dev, paths):
+    """Put test photos into the gallery: adb push, then the media scan (Android 11+ indexes pushed files itself)."""
+    _require_owned(dev, "add photos")
+    _shell(dev, "mkdir -p %s" % PHOTO_DIR)
+    for path in paths:
+        remote = "%s/%s" % (PHOTO_DIR, os.path.basename(path))
+        _adb(dev.id, "push", path, remote)
+        _shell(dev, "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://%s" % remote, check=False)
+
+
 def clear_app(dev, app_id):
     _require_owned(dev, "clear app data")
     _app_id(app_id)

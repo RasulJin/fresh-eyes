@@ -48,14 +48,25 @@ class PreflightTest(unittest.TestCase):
             "stop_maestro_driver": lambda dev: (calls.append("stop_maestro"), state.update(maestro=False)),
             "terminate": lambda dev, app: calls.append("terminate"),
             "app_build": lambda dev, app: "b" * 64,
+            "photo_count": lambda dev: state.get("photos", 3),
+            "push_photos": lambda dev, paths: (calls.append(("push_photos", len(paths))), state.update(photos=3)),
+            "_adb": self.no_real_adb,
         }
         for name, fn in patches.items():
             p = mock.patch.object(devices, name, fn)
             p.start()
             self.addCleanup(p.stop)
+        p = mock.patch.object(preflight, "_smoke", lambda dev, app: state.get("smoke"))
+        p.start()
+        self.addCleanup(p.stop)
+        self.state = state
         self.bundle(metro="x " + STAGING + " y")
         self.disk(free_gb=100)
         return calls
+
+    @staticmethod
+    def no_real_adb(*args, **kwargs):  # a test reaching adb drives whatever emulator is running (5560 often is)
+        raise AssertionError("real adb call in a test: %s" % (args,))
 
     def disk(self, free_gb):
         p = mock.patch.object(preflight.shutil, "disk_usage", lambda path: types.SimpleNamespace(free=free_gb * 2 ** 30))
@@ -278,6 +289,97 @@ class PreflightTest(unittest.TestCase):
         cfg = dict(config(), consents=[{"text": "Community rules", "button": "Accept"}, {"text": "is an AI"}])
         self.assertIn("may accept: Community rules; is an AI", preflight._brief(preflight.check(cfg, "quick")))
         self.assertIn("may accept: none", preflight._brief(preflight.check(config(), "quick")))
+
+    def test_test_accounts_come_from_the_environment_or_the_keychain(self):
+        # 0.5.11: the desktop app's session had no FE_* variables; the orchestrator signed in by its own script
+        self.fake_devices()
+        cfg = dict(config(), accounts={"viewer": {"email_env": "FE_T_EMAIL", "password_env": "FE_T_PASSWORD"}})
+        keychain, asked = set(), []
+
+        def security(cmd, timeout=60, input=None, check=True, redact=()):
+            asked.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0 if cmd[-1] in keychain else 44, b"", b"")
+        with mock.patch.object(preflight, "run", security), mock.patch.dict(os.environ, {"FE_T_EMAIL": "e"}):
+            os.environ.pop("FE_T_PASSWORD", None)
+            res = preflight.check(cfg, "quick")
+            self.assertFalse(res["ok"])
+            self.assertTrue(res["platforms"]["android"]["ok"])
+            self.assertIn("FE_T_PASSWORD / keychain fresh-eyes-viewer-password", res["unchecked"][0])
+            self.assertNotIn("FE_T_EMAIL", res["unchecked"][0])  # the variable is set
+            keychain.add("fresh-eyes-viewer-password")
+            self.assertTrue(preflight.check(cfg, "quick")["ok"])
+        self.assertTrue(asked and all("-w" not in cmd for cmd in asked))  # presence only, no secret read
+
+    def test_full_mode_stops_on_an_app_that_dies_at_launch(self):
+        self.fake_devices()
+        self.bundle(installed="x " + STAGING)
+        self.assertTrue(preflight.check(config(), "full")["platforms"]["android"]["ok"])
+        self.state["smoke"] = "the app crashed within 10 s of launch: com.mapbox.maps.MapboxConfigurationException"
+        res = preflight.check(config(), "full")
+        self.assertFalse(res["ok"])
+        self.assertIn("MapboxConfigurationException", " ".join(res["unchecked"]))
+        self.assertTrue(preflight.check(config(), "quick")["ok"])  # Metro builds reload: quick has no smoke
+
+    def smoke(self, alive, crash):
+        calls = []
+
+        def adb(dev_id, *args, **kwargs):
+            calls.append(args)
+            return {"pidof": alive}.get(args[1] if len(args) > 1 else "", crash if "-d" in args else "")
+        with mock.patch.object(devices, "_adb", adb), mock.patch.object(devices, "launch", lambda d, a: None), \
+                mock.patch.object(devices, "terminate", lambda d, a: None), \
+                mock.patch.object(preflight.time, "sleep", lambda s: None):
+            out = preflight._smoke(PIXEL, "com.example.app")
+        self.assertEqual(calls[0], ("logcat", "-b", "crash", "-c"))  # an older crash does not count
+        return out
+
+    def test_smoke_reads_the_first_line_of_the_exception(self):
+        crash = ("E/AndroidRuntime( 4242): FATAL EXCEPTION: main\n"
+                 "E/AndroidRuntime( 4242): Process: com.example.app, PID: 4242\n"
+                 "E/AndroidRuntime( 4242): com.mapbox.maps.MapboxConfigurationException: no access token\n"
+                 "E/AndroidRuntime( 4242): \tat com.mapbox.maps.MapView.<init>(MapView.kt:1)\n")
+        self.assertIsNone(self.smoke("4242", ""))
+        self.assertEqual(self.smoke("", crash), "the app crashed within 10 s of launch: "
+                                                "com.mapbox.maps.MapboxConfigurationException: no access token")
+        self.assertIn("is gone", self.smoke("", ""))  # no crash logged, still not running
+        native = "F/libc    ( 4242): Fatal signal 6 (SIGABRT), code -1 in tid 4242 (com.example.app)\n"
+        self.assertIn("Fatal signal 6", self.smoke("", native))
+
+    def test_fix_wakes_no_platform_without_a_build_of_the_source(self):
+        # 0.5.11: --fix booted two iOS simulators without a build; the run stopped them by hand
+        self.fake_devices(listed=())
+        booted = []
+        with mock.patch.object(devices, "ensure_owned", lambda platform, kind="default": booted.append(kind)):
+            with tmpdir() as repo:
+                cfg = dict(config(), builds={"full": {"android": {"artifact": "app.apk"}}})
+                with mock.patch.object(preflight, "_source", lambda project, ref, metro: {"ref": "x", "root": repo}):
+                    st = preflight.check(cfg, "full", fix=True, project=repo, source="built")["platforms"]["android"]
+                    self.assertEqual(booted, [])
+                    self.assertIn("no build artifact", " ".join(st["problems"]))
+                    open(os.path.join(repo, "app.apk"), "w").close()
+                    preflight.check(cfg, "full", fix=True, project=repo, source="built")
+                    self.assertEqual(booted, ["default"])
+                    preflight.check(cfg, "quick", fix=True, project=repo)  # no --source: as before
+                    self.assertEqual(booted, ["default", "default"])
+
+    def test_an_empty_gallery_gets_the_fixture_photos(self):
+        # 0.5.11: post-create double-submit "done" with "No photos yet": the post could not be sent
+        calls = self.fake_devices()
+        self.state["photos"] = 0
+        res = preflight.check(config(), "quick", fix=False)
+        self.assertTrue(res["ok"])
+        self.assertIn("no photos", " ".join(res["unchecked"]))
+        with mock.patch.object(preflight.time, "sleep", lambda s: None):
+            res = preflight.check(config(), "quick", fix=True)
+        self.assertIn(("push_photos", 3), calls)
+        self.assertEqual(res["platforms"]["android"]["photos"], 3)
+        self.assertNotIn("no photos", " ".join(res["unchecked"]))
+        self.assertEqual(len(preflight.PHOTOS), 3)
+        for path in preflight.PHOTOS:
+            with open(path, "rb") as f:
+                head = f.read(3)
+            self.assertEqual(head, b"\xff\xd8\xff", path)
+            self.assertLessEqual(os.path.getsize(path), 50 * 1024, path)
 
     def test_brief_exit_zero_on_problems(self):
         self.fake_devices(listed=())

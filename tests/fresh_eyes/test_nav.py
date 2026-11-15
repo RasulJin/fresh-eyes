@@ -84,6 +84,111 @@ class InputTest(unittest.TestCase):
         self.assertEqual(calls, [nav.center(node)])
 
 
+class SecretTest(unittest.TestCase):
+    def security(self, items):
+        calls = []
+
+        def run(cmd, timeout=60, input=None, check=True, redact=()):
+            calls.append(cmd)
+            value = items.get(cmd[cmd.index("-s") + 1])
+            return subprocess.CompletedProcess(cmd, 0 if value else 44, (value or "").encode() + b"\n", b"")
+        p = mock.patch.object(nav.fe_common, "run", run)
+        p.start()
+        self.addCleanup(p.stop)
+        return calls
+
+    def test_the_environment_wins_then_the_keychain(self):
+        calls = self.security({"fresh-eyes-viewer-password": "s3cret pass"})
+        with mock.patch.dict(os.environ, {"FE_T_PASSWORD": "from-env"}):
+            self.assertEqual(nav.secret("FE_T_PASSWORD", "fresh-eyes-viewer-password"), "from-env")
+        self.assertEqual(calls, [])
+        os.environ.pop("FE_T_PASSWORD", None)
+        self.assertEqual(nav.secret("FE_T_PASSWORD", "fresh-eyes-viewer-password"), "s3cret pass")
+        self.assertEqual(calls[-1], ["security", "find-generic-password", "-s", "fresh-eyes-viewer-password", "-w"])
+
+    def test_missing_names_where_it_looked_without_a_value(self):
+        self.security({})
+        with self.assertRaises(FEError) as e:
+            nav.secret("FE_T_PASSWORD", "fresh-eyes-viewer-password")
+        self.assertIn("FE_T_PASSWORD", str(e.exception))
+        self.assertIn("keychain item fresh-eyes-viewer-password", str(e.exception))
+
+    def test_type_takes_text_or_a_secret_source(self):
+        script = os.path.join(SCRIPTS, "nav.py")
+        for args in ([], ["--text", "a", "--keychain", "s"]):
+            out = subprocess.run([sys.executable, script, "type", "--device", "emulator-0"] + args,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(out.returncode, 2, args)
+            self.assertIn(b"--env and/or --keychain", out.stderr)
+
+
+class WaitIdleTest(unittest.TestCase):
+    def setUp(self):
+        self.clock = [1000.0]
+        for name, fn in (("time", lambda: self.clock[0]), ("sleep", lambda s: self.tick(s))):
+            p = mock.patch.object(nav.time, name, fn)
+            p.start()
+            self.addCleanup(p.stop)
+        self.during = None
+
+    def tick(self, seconds):
+        self.clock[0] += seconds
+        if self.during:
+            self.during(self.clock[0])
+
+    def run_folder(self, run):
+        write_json(os.path.join(run, "coverage.json"), {"cells": [
+            {"id": "android/feed/default/none", "status": "todo"}, {"id": "android/feed/dark/none", "status": "todo"},
+            {"id": "android/menu/default/none", "status": "todo"}]})
+
+    def beat(self, run, at):
+        heartbeat(run, "android", "capture.py snap")
+        os.utime(os.path.join(run, "android", "heartbeat"), (at, at))
+
+    def test_done_as_soon_as_its_cells_are_recorded(self):
+        with tmpdir() as run:
+            self.run_folder(run)
+            cells = ["android/feed/default/none", "android/feed/dark/none"]
+
+            def navigator(now):
+                self.beat(run, now)
+                if now >= 1030:
+                    cov = {"cells": [{"id": c, "status": "done" if c in cells else "todo"}
+                                     for c in cells + ["android/menu/default/none"]]}
+                    write_json(os.path.join(run, "coverage.json"), cov)
+            self.during = navigator
+            out = nav.wait_idle(run, "android", 540, cells)
+            self.assertEqual((out["state"], out["left"]), ("done", 0))
+            self.assertLess(self.clock[0], 1040)  # not the whole 540 s
+            with self.assertRaises(FEError):
+                nav.wait_idle(run, "android", 540, ["android/feed/nope/none"])
+
+    def test_running_when_a_beat_came_stuck_when_none_did(self):
+        with tmpdir() as run:
+            self.run_folder(run)
+            self.beat(run, 900)  # the last navigator's beat, before this wait: a new one is not stuck yet
+            self.during = lambda now: self.beat(run, now) if now < 1100 else None
+            out = nav.wait_idle(run, "android", 540, ["android/menu/default/none"])
+            self.assertEqual((out["state"], out["left"]), ("running", 1))
+            self.assertEqual(self.clock[0], 1540)
+            self.during = None
+            out = nav.wait_idle(run, "android", 540, ["android/menu/default/none"])
+            self.assertEqual(out["state"], "stuck")
+            self.assertGreaterEqual(out["idle_s"], 540)
+
+    def test_requests_mode_is_done_when_every_entry_is_answered(self):
+        with tmpdir() as run:
+            self.run_folder(run)
+            req = os.path.join(run, "android", "feed", "requests.json")
+            write_json(req, [{"finding": "f1", "do": "resnap", "done": "p"}, {"do": "redo-cell", "cell": "c"},
+                             {"finding": "f2", "do": "crop"}])
+            self.during = lambda now: write_json(req, [{"done": "p"}, {"do": "redo-cell"}, {"failed": "gone"}]) \
+                if now >= 1020 else None
+            out = nav.wait_idle(run, "android", 540, requests=[req])
+            self.assertEqual(out["state"], "done")
+            self.assertLess(self.clock[0], 1030)
+
+
 class HeartbeatTest(unittest.TestCase):
     def idle(self, run):
         out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "nav.py"), "idle", "--run", run],

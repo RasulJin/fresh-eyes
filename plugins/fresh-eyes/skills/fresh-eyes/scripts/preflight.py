@@ -2,31 +2,40 @@
 """Check (and with --fix, repair) everything that would hide bugs or make a run unsafe, before a run starts.
 
 Writes preflight.json: {ok, platforms:{p:{ok, device, name, owned, small_device, app, app_installed, build,
-soft_keyboard, animations, problems}}, env:{name, verified, api_host}, mutating_allowed, tools:{...},
+soft_keyboard, animations, photos, problems}}, env:{name, verified, api_host}, mutating_allowed, tools:{...},
 source:{ref, root}|null, disk_free_gb, unchecked:[...]}
 build: sha256 of the installed app; `coverage.py verdict` compares it again at the end of the run.
 source: where the code the tested build was made from lives (`--source built` after building it from this checkout,
 `--source <git ref>` for an installed build made elsewhere: exported to .fresh-eyes/cache/src-<sha>; Metro builds
 are the working tree). Reviewers look up hit areas and comments only there; unknown → not looked up.
+Not ready either: a role of config `accounts` without credentials (its variables unset and no keychain items
+fresh-eyes-<role>-email|password), or, in full mode, an Android app that dies within SMOKE_S of launch.
+With --fix an empty gallery gets the photos of references/fixtures/; with --source, --fix boots no device of a
+platform without a build artifact on disk (it would test no build or an old one).
 
 CLI: preflight.py --project DIR --mode quick|full [--fix] [--brief] [--platforms android,ios] [--source built|REF]
      --out preflight.json
 """
 import argparse
+import glob
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
 import devices
-from fe_common import FEError, read_json, write_json
+from fe_common import FEError, read_json, run, write_json
 
 MIN_FREE_GB = 15  # at 8.6 GB free the emulator took seconds per call and a full run hung after 5 cells
+SMOKE_S = 10
+PHOTOS = sorted(glob.glob(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "references",
+                                       "fixtures", "*.jpg")))
 
 
 def _maestro_path():
@@ -142,6 +151,11 @@ def _prepare(dev, platform, app_id, fix):
         st["stylus_off"] = not devices.stylus_handwriting_on(dev)
         if not st["stylus_off"]:
             st["problems"].append("stylus handwriting is on: Gboard shows a stylus toolbar instead of the keyboard")
+        st["photos"] = devices.photo_count(dev)
+        if not st["photos"] and fix:
+            devices.push_photos(dev, PHOTOS)
+            time.sleep(2)  # the scan is asynchronous
+            st["photos"] = devices.photo_count(dev)
         if devices.maestro_driver_running(dev) and fix:
             devices.stop_maestro_driver(dev)
         st["screen_readable"] = not devices.maestro_driver_running(dev)
@@ -160,23 +174,24 @@ def _prepare(dev, platform, app_id, fix):
     return st
 
 
-def _platform_state(config, platform, kind_needed_small, fix, artifact=None):
+def _platform_state(config, platform, kind_needed_small, fix, artifact=None, wake=True):
     app_id = (config.get("app") or {}).get("%s_id" % platform)
     owned = [d for d in devices.list_devices() if d.platform == platform and devices.is_owned(d)]
     state = {"ok": False, "device": None, "name": None, "owned": False, "small_device": False,
              "app_installed": False, "soft_keyboard": True, "animations": True, "problems": []}
     main = next((d for d in owned if not d.name.endswith(("small", "16e"))), None)
-    if main is None and fix:
+    if main is None and fix and wake:
         try:
             main = devices.ensure_owned(platform)
         except FEError as e:
             state["problems"].append(str(e))
     if main is None:
-        state["problems"].append("no booted %s device named fresh-eyes*; run with --fix" % platform)
+        state["problems"].append("no booted %s device named fresh-eyes*; %s" % (platform, "run with --fix" if wake else
+                                 "not booted: no build artifact of --source for it on disk"))
         return state
     state.update(device=main.id, name=main.name, owned=True, app=app_id)
     small = next((d for d in owned if d.name.endswith(("small", "16e"))), None)
-    if small is None and fix and kind_needed_small:
+    if small is None and fix and kind_needed_small and wake:
         try:
             small = devices.ensure_owned(platform, "small")
         except FEError as e:
@@ -256,6 +271,42 @@ def _env(config, mode, states, project=".", fix=False):
     return res
 
 
+def _smoke(dev, app_id):
+    """Full mode: a release build missing a key from its env (a map SDK token) dies on start and fails every
+    cell. Launch it, wait SMOKE_S, then it must run and the crash buffer must not name it. None, or the problem."""
+    devices._adb(dev.id, "logcat", "-b", "crash", "-c", check=False)
+    devices.terminate(dev, app_id)
+    devices.launch(dev, app_id)
+    time.sleep(SMOKE_S)
+    alive = devices._adb(dev.id, "shell", "pidof", app_id, check=False).strip()
+    lines = devices._adb(dev.id, "logcat", "-b", "crash", "-d", "-v", "brief", check=False).splitlines()
+    named = [l for l in lines if app_id in l]
+    if alive and not named:
+        return None
+    at = next((k for k, l in enumerate(lines) if "Process: " + app_id in l), None)
+    first = lines[at + 1] if at is not None and at + 1 < len(lines) else (named or ["no crash in the log"])[0]
+    return "the app %s within %d s of launch: %s" % ("crashed" if named else "is gone", SMOKE_S,
+                                                    first.split("): ", 1)[-1].strip()[:200])
+
+
+def _credentials(config):
+    """Credentials of config `accounts` the navigator could not type: neither its environment variable is set
+    nor the keychain has the item (`security find-generic-password` without -w reads no secret)."""
+    missing = []
+    for role, acc in sorted((config.get("accounts") or {}).items()):
+        for field in ("email", "password"):
+            var, service = acc.get(field + "_env"), "fresh-eyes-%s-%s" % (role, field)
+            if var and os.environ.get(var):
+                continue
+            try:
+                found = run(["security", "find-generic-password", "-s", service], check=False).returncode == 0
+            except FEError:  # no `security`: not a Mac
+                found = False
+            if not found:
+                missing.append("%s / keychain %s" % (var, service) if var else "keychain " + service)
+    return missing
+
+
 def build_drift(pre):
     """Devices whose app is no longer the build preflight saw: someone installed another build on our device
     during the run, so its findings may be about that build."""
@@ -312,11 +363,26 @@ def check(config, mode, fix=False, project=".", only=None, source=None):
                             "problems": ["not requested in this run (--platforms)"]}
             continue
         art = (((config.get("builds") or {}).get(mode) or {}).get(p) or {}).get("artifact")
-        platforms[p] = _platform_state(config, p, wants_small, fix, art and os.path.join(project, art))
+        art = art and os.path.join(project, art)
+        platforms[p] = _platform_state(config, p, wants_small, fix, art,
+                                       wake=not source or bool(art and os.path.exists(art)))
+        if mode == "full" and p == "android" and platforms[p]["ok"]:
+            st = platforms[p]
+            problem = _smoke(devices.Device(p, st["device"], st["name"]), st["app"])
+            if problem:
+                st["ok"] = False
+                st["problems"].append(problem)
     ok_platforms = [p for p, s in platforms.items() if s["ok"]]
     env = _env(config, mode, platforms, project, fix)
     unchecked = ["%s: %s" % (p, "; ".join(s["problems"])) for p, s in platforms.items() if not s["ok"]]
     unchecked += env["problems"]
+    unchecked += ["%s: the gallery has no photos: a form that needs one cannot be submitted (preflight --fix adds "
+                  "some)" % p for p, s in platforms.items() if s["ok"] and s.get("photos") == 0]
+    missing = _credentials(config)
+    if missing:
+        unchecked.insert(0, "test accounts: not set: %s. Export the variables or add the keychain items "
+                            "(config-format.md `accounts`): a signed-out device cannot be signed in"
+                         % ", ".join(missing))
     src = _source(project, source, env["metro"])
     if src is None:
         unchecked.append("the code of the installed build is unknown (preflight --source built|<git ref>): hit "
@@ -328,7 +394,8 @@ def check(config, mode, fix=False, project=".", only=None, source=None):
     if free_gb < MIN_FREE_GB:
         unchecked.append("the computer's disk has %.1f GB free (less than %d): emulators stall on a full disk and "
                          "the run hangs; free space first" % (free_gb, MIN_FREE_GB))
-    return {"ok": bool(ok_platforms) and tools["ffmpeg"] and tools["ffprobe"] and free_gb >= MIN_FREE_GB,
+    return {"ok": bool(ok_platforms) and tools["ffmpeg"] and tools["ffprobe"] and free_gb >= MIN_FREE_GB
+            and not missing,
             "mode": mode, "platforms": platforms, "disk_free_gb": round(free_gb, 1),
             "env": {k: env[k] for k in ("name", "verified", "api_host")},
             "mutating_allowed": bool(env["verified"] and env["name"] in ("staging", "local")),

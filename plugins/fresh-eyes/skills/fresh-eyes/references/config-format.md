@@ -62,8 +62,12 @@ noted. Example (generic values):
   inside the app). Only `name` `staging` or `local` can enable mutation.
 - `accounts`: names of environment variables holding test credentials. Values never go into files or reports.
   The first role is the one a navigator signs in with when it finds the app signed out. Export the variables in
-  the shell that starts Claude Code (a headless `claude -p` run inherits them); without them a signed-out
-  device's cells end blocked.
+  the shell that starts Claude Code (a headless `claude -p` run inherits them), or, for sessions that do not see
+  them (the desktop app), keep the values in the macOS keychain under services `fresh-eyes-<role>-email` and
+  `fresh-eyes-<role>-password`, once per value:
+  `security add-generic-password -U -a "$USER" -s fresh-eyes-viewer-email -w` (it asks for the value; nothing
+  lands in shell history). A set variable wins over the keychain. Preflight is not ready while a value is in
+  neither.
 - `consents` (optional): the consent dialogs the owner lets the test accounts accept (terms, community rules,
   an AI or data-sharing notice): `text`, a part of the dialog's text (its title), and `button`, the label to
   press. The navigator presses an accepting button only on a dialog listed here; any other consent dialog that

@@ -21,7 +21,8 @@ the heavy work runs in subagents that exchange files with you.
 3. Only change devices whose name starts with `fresh-eyes`. The user's own emulators and phones are read-only.
 4. Never run the Maestro CLI on a device the Maestro MCP is driving (it kills the MCP session).
 5. Subagents get paths and return ≤10 lines. Keep screenshots and videos out of this conversation. Wait for
-   every agent you start before the next step and never end your turn while one runs: a headless run
+   every agent you start before the next step (the pipeline of quick step 8 excepted) and never end your turn
+   while one runs: a headless run
    (`claude -p`) stops background agents 10 minutes after the turn ends.
 6. Never write secrets (passwords, tokens, test credentials) into files, prompts or reports.
 7. Questions to the user come from you (subagents cannot ask): spec conflicts, "bug or intended?", go-aheads.
@@ -114,7 +115,8 @@ words / nothing (= the current diff).
    --screens a,b [--recheck BUG-N] [--max-screens N] --out $RUN/coverage.json`. Tell the user the cell count and the unchecked
    items in one line. If the plan has seeded states, run `hooks.seed` now (the plan only has them when
    preflight allowed mutation) and `hooks.cleanup` after the run.
-6. Smoke: navigator on the first cell of each ready platform. If it ends `blocked`, stop and report why.
+6. Smoke: navigator on the first cell of each ready platform. If it ends `blocked` or with "app crashed" (it
+   signed in first: a crash after sign-in shows here), stop and report why with its pack's `logcat.txt`.
    Any navigator reply `needs: ios-driver` (here, in step 7 or in requests mode): call the Maestro MCP
    `inspect_screen` on that simulator once, then call the navigator again with what it had left.
 7. Navigation: one `fresh-eyes:navigator` per platform (they may run in parallel), ≤15 cells per call, until
@@ -122,17 +124,22 @@ words / nothing (= the current diff).
    the cell ids, `package: <app.android_id>` (it goes to every `capture.py snap --package`, which saves the
    crash log when the app died), and `app language: <app.locale>` when config sets it. A navigator that finds
    the app signed out signs in with `accounts` itself; cells blocked with
-   "signed out: <variable> not set" mean the user has to export that variable before the next run; cells
+   "signed out: <variable> not set" mean the user has to export that variable or add its keychain item
+   (`$R/config-format.md`) before the next run; cells
    blocked with "consent: <text>" need the user's yes for that dialog in config `consents` (ask after the
    report, never let an agent accept it). A reply line
    `reach: <screen>: <how>`: write `<how>` into that screen's `reach` in `.fresh-eyes/config.json`, so the next
    run does not hit the same wall. Liveness: every `capture.py` call and every `nav.py` call with `--run $RUN`
-   refreshes `$RUN/<platform>/heartbeat`; `python3 $S/nav.py idle --run $RUN --platform <p>` prints its age. Only
-   a navigator that has run 10 minutes with `idle_s` over 600 is stuck (a permission prompt nobody answers, a
-   loop): stop it (TaskStop) and start a fresh one on the cells `coverage.py next` still lists. Never go by the
-   mtime of the agent's output file (a symlink: the time it was made). Check every 1–2 minutes, not in one long
-   wait: an agent that finished meanwhile is noticed only when the check returns.
-8. Review: first, per screen with done cells, `python3 $S/spec.py slice --spec .fresh-eyes/spec.md --screens
+   refreshes `$RUN/<platform>/heartbeat`. Right after starting a navigator, wait in one blocking call (Bash
+   timeout 600000), never by polling: `python3 $S/nav.py idle --run $RUN --platform <p> --until 540 --cells
+   <its cell ids>` (requests mode: `--requests <its requests.json paths>`). `"state"`: `done` = its cells are
+   recorded; `running` = it is working, call again; `stuck` = no heartbeat for 9 minutes (a permission prompt
+   nobody answers, a loop): stop it (TaskStop) and start a fresh one on the cells `coverage.py next` still lists.
+   Never go by the mtime of the agent's output file (a symlink: the time it was made).
+8. Pipeline: as soon as a screen's cells on a platform are recorded (`idle` said `done`, or its navigator
+   replied), run this step and step 9's first pass for that screen while the next navigator works. Requests
+   mode and second passes wait until all navigation is done.
+   Review: first, per screen with done cells, `python3 $S/spec.py slice --spec .fresh-eyes/spec.md --screens
    <id>,<its neighbors> --stale $RUN/spec-stale.json --out $RUN/spec/<id>.md` (the global rules and those
    sections; neighbors' rules often apply); journeys: `--screens` = the screens of the journeys walked, `--out
    $RUN/spec/journey.md`. Then per screen × platform with done cells `python3 $S/coverage.py packs --dir
@@ -146,7 +153,8 @@ words / nothing (= the current diff).
 9. Verify: once per run, `python3 $S/backlog.py index --file <backlog.path> --out $RUN/backlog-index.md` (open
    backlog entries, one line each; only verifiers get it, reviewers never see the backlog; no `backlog` in
    config: skip it). Then one
-   `fresh-eyes:verifier` per screen folder that has pending findings (up to 4 in parallel); the prompt is
+   `fresh-eyes:verifier` per screen folder that has pending BUG findings (up to 4 in parallel; IMPs alone need
+   none); the prompt is
    `first pass`, that folder, its spec slice, `.fresh-eyes/known.md`, `$RUN/backlog-index.md`, `language`,
    `source_root`. Keep each verifier's agent id. The journey
    folder's verifier also gets the findings files of the screens its findings concern (to mark duplicates). Folders whose verifier
@@ -178,8 +186,8 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
 - Fresh install on the owned devices: `devices.py app --do clear` (Android wipes the data; iOS uninstalls, so
   follow with `--do install --artifact <builds.full.ios.artifact>`), then `--do locale --locale <app.locale>` when
   config sets it, then launch. Sign-in: the navigator types
-  `nav.py type --env <accounts.<role>.email_env>` and `--env <…password_env>` (the values live in the user's
-  environment, never in prompts or files). No `accounts` in config → keep the installed state instead of
+  `nav.py type --env <accounts.<role>.email_env> --keychain fresh-eyes-<role>-email`, the same for the password
+  (the values live in the user's environment or keychain, never in prompts or files). No `accounts` in config → keep the installed state instead of
   clearing, and say so in the report.
 - The navigator gets one journey or one screen per call.
 - `full --resume`: take the newest `.fresh-eyes/runs/*-full/`, re-run preflight into it, and continue with
