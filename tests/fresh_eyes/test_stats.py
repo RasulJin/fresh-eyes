@@ -73,6 +73,28 @@ class ScoreTest(unittest.TestCase):
             self.assertEqual((m1["value"], m1["ok"]), (None, None))  # no run log anywhere: unknown, not a free pass
             self.assertIn("M10", card["unknown"])
 
+    def test_m5_counts_a_screens_questions_one_by_one(self):
+        # 0.5.11: one bullet per screen held 3 questions joined by ";", the script said 10 and the judge 16
+        text = ("## Вопросы\n- **flight-search**:\n  - Коралловая пометка задумана? (баг / задумано)\n"
+                "  - Чужое время у Pegasus? (пометка / кэш)\n  - spec text: flight-search#3 «Откуда» → «Из»\n"
+                "- **import**: Серая кнопка задумана? (да / нет)\n  - варианты: да / нет\n"
+                "- **sign-up**: spec text: welcome#3 «А» → «Б»\n- **thread**:\n  1. Строка родителя всегда?\n"
+                "## Открытые конфликты спеки\n- feed: G-hint\n")
+        self.assertEqual(stats.questions(text), 4)  # 2 + 1 (options are no question) + 0 + 1; conflicts none
+
+    def test_m2_leaves_out_a_flaky_reject(self):
+        with tmpdir() as d:
+            run = os.path.join(d, "run")
+            shutil.copytree(os.path.join(FIXTURES, "score-run"), run)
+            path = os.path.join(run, "android", "welcome", "findings.json")
+            data = read_json(path)
+            data["findings"].append({"id": "f8", "kind": "BUG", "severity": "low", "verdict": "rejected",
+                                     "verify_note": "flaky: seen in default-none, not reproduced in default-none-recheck"})
+            write_json(path, data)
+            card = read_json(stats.score(run)["out"])
+        self.assertEqual((card["M2"]["value"], card["M2"]["flaky"]), (0.286, 1))  # 2 false of 7 ruled
+        self.assertEqual(card["M3"]["value"], 0.286)
+
 
 if __name__ == "__main__":
     unittest.main()
