@@ -206,6 +206,44 @@ class MatchTest(unittest.TestCase):
                           "`android/feed-trips/findings.json#f1`", text)
             self.assertNotIn("обрезан", text)
 
+    def test_a_pending_bug_gets_the_open_bug_entry_of_its_screen_before_the_verifier(self):
+        # 0.5.11: trip-wizard#f1 went to the owner as a question while BUG-44 was open
+        lines = INDEX + ["BUG-44 · (подсказки городов в мастере обрезаны над «Дальше» при открытой клавиатуре)",
+                         "BUG-65 · Свайп влево по затемнению не закрывает меню - side-menu"]
+        def bug(fid, screen, title, **kw):
+            return dict(dict(id=fid, kind="BUG", screen=screen, severity="medium", title=title, verdict="pending"),
+                        **kw)
+        with tmpdir() as run:
+            p = os.path.join(run, "android", "trip-wizard", "findings.json")
+            write_json(p, {"findings": [
+                bug("f1", "trip-wizard", "При открытой клавиатуре подсказки городов уходят под кнопку «Дальше»"),
+                bug("f2", "trip-wizard", "Подсказки городов смешивают русский и английский", verdict="unsure"),
+                bug("f3", "side-menu", "Свайп влево по меню закрывает не то меню"),  # BUG-65's screen and words
+                bug("f4", "feed", "Свайп влево по затемнению не закрывает меню"),  # BUG-65 is side-menu's
+                bug("f5", "trip-wizard", "Подсказки городов мелкие"),  # 2 stems shared: too few
+                bug("f6", "consent-doc", "Раздел «2. Какие данные» обрезан")]})  # an IMP entry never holds a BUG
+            self.assertEqual(match(lines, [p]), {"matched": 0, "bugs": 2})  # no --out: no imp.md
+            self.assertEqual([f.get("backlog_id") for f in read_json(p)["findings"]],
+                             ["BUG-44", None, "BUG-65", None, None, None])  # only pending ones: f2 is ruled
+            self.assertFalse(os.path.exists(os.path.join(run, "imp.md")))
+
+    def test_index_reads_the_backlog_at_a_commit_and_names_screens_by_id(self):
+        import subprocess
+        with tmpdir() as d:
+            p = write(d, "### BUG-60 · Подпись смещена — `open`\n- **Где** — Мастер поездки, android\n")
+            git = ["git", "-C", d, "-c", "user.name=t", "-c", "user.email=t@t"]
+            subprocess.run(git + ["init", "-q"], check=True)
+            subprocess.run(git + ["add", "."], check=True)
+            subprocess.run(git + ["commit", "-qm", "b"], check=True)
+            write(d, "### BUG-61 · Новее сборки — `open`\n")  # the checkout moved on: not what was built
+            from backlog import read_at
+            text = read_at(p, "HEAD")
+            self.assertEqual(index(text, names={"Мастер поездки": "trip-wizard"}),
+                             ["BUG-60 · Подпись смещена - trip-wizard"])
+            self.assertIn("BUG-61", read_at(p))
+            with self.assertRaises(FEError):
+                read_at(p, "no-such-ref")
+
 
 if __name__ == "__main__":
     unittest.main()

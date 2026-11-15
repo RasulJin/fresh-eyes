@@ -601,6 +601,10 @@ class VerdictTest(unittest.TestCase):
         write_json(own, {"findings": [dict(finding("medium"), id="f1")], "questions": [{"text": "q"}]})
         findings, _ = _load_findings([own], self.root)  # a question without `finding` changes nothing
         self.assertEqual(findings[0]["verdict"], "confirmed")
+        write_json(own, {"findings": [dict(finding("medium"), id="f1", backlog_id="BUG-44")],
+                         "questions": [{"text": "Intended?", "finding": "f1"}]})
+        findings, _ = _load_findings([own], self.root)  # already in the backlog: the owner decided it is a bug
+        self.assertEqual(findings[0]["verdict"], "confirmed")
 
     def test_unreviewed_evidence_blocks_clean(self):
         packs = done_all(self.cov, self.root)
