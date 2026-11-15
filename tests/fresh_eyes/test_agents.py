@@ -57,6 +57,21 @@ class AgentsTest(unittest.TestCase):
         reviewer = " ".join(frontmatter("reviewer")[1].split())
         self.assertIn("then no BUG: a `spec-text` or `known` entry", reviewer)
 
+    def test_questions_only_when_spec_code_and_backlog_are_silent(self):
+        # 0.5.11: 7 of 11 asked findings were settled by the spec, a code comment or an open backlog entry
+        body = " ".join(frontmatter("verifier")[1].split())
+        for word in ("only when the spec, the code and the backlog are silent", '"spec conflict: <rule id>, open"',
+                     '"class": "conflict"', "or a behaviour a question asks about", "from `backlog.py match`",
+                     "and no question: the owner put it in the backlog", '"flaky: seen in <pack>',
+                     "a medium two", "An entry `from` a findings file"):
+            self.assertIn(word, body, word)
+        reviewer = " ".join(frontmatter("reviewer")[1].split())
+        for word in ("a tap whose result no frame shows", "an entry in the output's `requests`",
+                     '{"class": "conflict"'):
+            self.assertIn(word, reviewer, word)
+        nav = " ".join(frontmatter("navigator")[1].split())
+        self.assertIn('An entry with `"times": N`', nav)
+
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
         nav = " ".join(frontmatter("navigator")[1].split())

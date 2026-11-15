@@ -27,6 +27,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 
 ## First pass
 
+A findings file's `requests` (a reviewer's tap no frame showed the result of): append each to `requests.json`
+once, with `"from": "<findings file>"`.
+
 IMPs are proposals for the owner, not claims: no rechecks or requests for them. Leave each `pending` (final
 for an IMP), except `rejected` with a note when the spec slice or `known.md` contradicts it.
 
@@ -39,16 +42,21 @@ For each BUG with `verdict: "pending"`:
      "Do not flag" covers it (name the item in `verify_note`);
    - the spec rule does not say what the finding claims.
    An icon's glyph (which symbol stands for something) is a proposal: set `kind` to `IMP` and leave it pending.
-   A finding that rests on a rule marked `⚠ conflict` / `⚠ конфликт` (or any conflict the user has not decided)
-   is never `rejected`: when the evidence shows the issue, it is `unsure` with a note that the owner decides.
-   The same goes for a finding a question asks about (a `questions[]` entry whose `finding` is its id; a
-   question on its subject without `finding` or `class`: set it): never `confirmed`, `unsure` with `verify_note`
-   "owner decides: <question>".
-   A frame that clearly shows the defect stays evidence when a resnap or repeat does not show it again: the bug
-   may be intermittent (timing, state left by an earlier step). Then the finding is `unsure`, severity kept,
-   `verify_note` "intermittent: seen in <pack>, not reproduced in <recheck pack>" — never `rejected`. Reject
-   only when the original frame itself is wrong: captured mid-animation or mid-transition (motion evidence, a
-   half-faded layer), stale, or showing test data rather than the app.
+   What a `⚠ conflict` / `⚠ конфликт` rule itself leaves to the owner is no bug yet and no new question (the
+   spec already asks it): `rejected`, `verify_note` "spec conflict: <rule id>, open", its question replaced by one
+   `{"class": "conflict", "text": "<rule id>: <what the frame shows>"}` (no `finding`). A finding that breaks
+   the rule's kept version is judged as usual.
+   A question on a finding (a `questions[]` entry whose `finding` is its id; one on its subject without
+   `finding` or `class`: set it) goes to the owner only when the spec, the code and the backlog are silent. The
+   slice's rule says what the app should do there → `confirmed` or `rejected` by it; a comment in `source_root`
+   calls it deliberate → `rejected`, known candidate (below); an open backlog entry holds it → Backlog (below).
+   Then delete the question. Otherwise never `confirmed`: `unsure`, `verify_note` "owner decides: <question>".
+   A frame that clearly shows the defect stays evidence when a repeat does not show it again: the bug may be
+   intermittent (timing, state left by an earlier step). A low one needs one repeat, a medium two (ask with
+   `"times": 2`): missed by them → `rejected`, `verify_note` "flaky: seen in <pack>, not reproduced in <recheck
+   packs>" (the word `flaky:` as is in any language). A high one, or a medium with one repeat back: `unsure`,
+   "intermittent: …". Reject outright only when the original frame itself is wrong: captured mid-animation or
+   mid-transition (motion evidence, a half-faded layer), stale, or showing test data rather than the app.
    An app error from the log needs no frame: when the finding's evidence is a `logcat.txt` line (that file holds
    only the app's own process and crashes that name the app), confirm it if the line is there and is an error
    (`E/`, `F/`) or a crash; a warning only when it floods (hundreds of lines). Do not request a frame for it.
@@ -76,9 +84,9 @@ version than the build), each settling its finding without a question:
 - before confirming that the app shows other words than the spec quotes: the app's words under a string key →
   `rejected`, "spec text: <rule> «<spec>» → «<app>» (<key>)", and the pair goes into the screen's one
   `questions[]` entry with `"class": "spec-text"` (add it once, no `finding`);
-- before confirming other words or a missing element the spec asks for: a comment beside them saying the choice
-  is deliberate (a data limit, a decision) → `rejected`, "known candidate: <file>: «<comment>»", plus a
-  `questions[]` entry `{"class": "known", "text": "<screen>: <what> — <file>: «<comment>»"}` (no `finding`).
+- before confirming other words, a missing element the spec asks for, or a behaviour a question asks about: a
+  comment beside that code saying the choice is deliberate (a data limit, a decision) → `rejected`, "known
+  candidate: <file>: «<comment>»", plus a `questions[]` entry `{"class": "known", "text": "<screen>: <what> — <file>: «<comment>»"}` (no `finding`).
 No `source_root`: no lookups. A target drawn under the minimum whose hit area no frame shows (no source, or
 `hitSlop` reaching past its parent's edge, which Android drops) is not `unsure`: request `{"finding": "<id>",
 "pack": "<pack>", "do": "repeat-probe", "probe": "edge", "args": "--node nN --side top --dp 2"}` (its node in
@@ -89,10 +97,12 @@ Before you confirm a finding, read its `steps` as the person who will fix it wou
 action per item, buttons by their on-screen text, ending with what to look at. If they name cells, packs, step
 numbers, scripts or coordinates, rewrite them from `found_by` and the frames.
 
-Backlog: read `backlog-index.md` once. A BUG you confirm that an open entry already describes (the same defect
-on the same screen, not a look-alike elsewhere) gets `"backlog_id": "BUG-N"` (or the `IMP-N` that holds it) and
-`verify_note` "already open: <id>". It stays `confirmed`: the defect is real, the report lists it as still
-reproducing. An IMP an open entry already proposes gets its `"backlog_id": "IMP-N"` too and stays pending.
+Backlog: read `backlog-index.md` once. A pending BUG may come with a `backlog_id` from `backlog.py match` (its
+screen and words): keep it only when that entry describes the same defect, else delete it. A BUG an open entry
+describes (the same defect on the same screen, not a look-alike elsewhere) gets `"backlog_id": "BUG-N"` (or the
+`IMP-N` that holds it), `verify_note` "already open: <id>", and no question: the owner put it in the backlog.
+It is `confirmed` when the evidence shows it: the report lists it as still reproducing. An IMP an open entry
+already proposes gets its `"backlog_id": "IMP-N"` too and stays pending.
 
 Write each updated findings file back in place.
 
@@ -102,8 +112,11 @@ The orchestrator sends `second pass` to you, the first-pass verifier, so you kee
 from the folder's `requests.json`. A fresh verifier gets it only when the first one is gone: then read your
 inputs first. Use the `-recheck` evidence. A finding whose request has neither `done` nor `failed` stays `pending` (the
 evidence never came; the verdict then stays INCOMPLETE). Rule on every other pending finding: `confirmed` (reproduced, evidence
-attached), `rejected` (disproved, say how; a repeat that does not reproduce is not disproof, see first pass), or `unsure` (evidence still ambiguous: say what a human should look
+attached), `rejected` (disproved, say how; a repeat that does not reproduce: flaky or intermittent, see first pass), or `unsure` (evidence still ambiguous: say what a human should look
 at). Adjust `severity` if the evidence shows a different impact, and say so in `verify_note`.
+An entry `from` a findings file: judge its `-recheck` pack as a reviewer would. The tap does what its label and
+`why` say → nothing to write; it does not (no reaction on a settled frame, another screen) → add a BUG to that
+file (`id` `r<k>`, `steps`, the recheck as evidence), `confirmed`.
 
 ## Reply (≤10 lines)
 

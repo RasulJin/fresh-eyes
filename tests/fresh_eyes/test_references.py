@@ -47,8 +47,20 @@ class ReferencesTest(unittest.TestCase):
                      "an IMP"):
             self.assertIn(word, section, word)
         schema = " ".join(read("report-format.md").split())
-        self.assertIn('"class": "spec-text | known (optional)"', schema)
+        self.assertIn('"class": "spec-text | known | conflict (optional)"', schema)
         self.assertIn("## Known candidates", schema)
+
+    def test_no_bug_and_no_question_for_what_the_owner_already_has(self):
+        # 0.5.11: 8 of 21 false BUGs were taps with no after-frame; feed#f2 asked about a conflict the spec asks
+        section = " ".join(read("checklist.md").split("## Do not flag", 1)[1].split())
+        for word in ("A tap whose result no frame shows", '`"changed": false`', "a `conflict` entry"):
+            self.assertIn(word, section, word)
+        schema = " ".join(read("report-format.md").split())
+        for word in ("## Open spec conflicts", "counts the sub-items (M5)", "`flaky:`", '"times": 2'):
+            self.assertIn(word, schema, word)
+        probes = " ".join(read("probes.md").split())
+        for word in ("returns 6 s after the first", "`<pack>/single`", "`taps.py tap --x X --y Y`"):
+            self.assertIn(word, probes, word)
 
     def test_no_project_specific_data(self):
         for name in FILES:

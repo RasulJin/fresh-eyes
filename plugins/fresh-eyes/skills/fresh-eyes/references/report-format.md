@@ -28,7 +28,8 @@
   "verdict": "pending|confirmed|unsure|rejected", "verify_note": "",
   "same_as": "<findings file relative to the run>#<id> (optional)", "backlog_id": "BUG-N | IMP-N (optional)"}],
  "questions": [{"text": "", "options": [""], "finding": "<id> | <findings file relative to the run>#<id>",
-                "class": "spec-text | known (optional)"}]}
+                "class": "spec-text | known | conflict (optional)"}],
+ "requests": [{"pack": "", "do": "repeat-probe", "probe": "tap-everything", "why": ""}]}
 ```
 
 - Text fields (`title`, `expected`, `actual`, `steps`, `verify_note`, `questions`) are in the config's
@@ -49,7 +50,9 @@ then returns it in `merged`, and the report lists it under that finding.
 - `questions[].class` (no `finding`, no BUG behind it, no effect on the verdict): `spec-text`, the app shows
   other words than the spec quotes and `source_root` holds them under a string key, one entry per screen with
   its pairs (`<rule> «<spec>» → «<app>» (<key>)`; is the spec out of date?); `known`, a comment in `source_root`
-  calls the choice deliberate (`<screen>: <what> — <file>: «<comment>»`; add it to `known.md`?).
+  calls the choice deliberate (`<screen>: <what> — <file>: «<comment>»`; add it to `known.md`?); `conflict`, what
+  a `⚠ conflict` rule leaves to the owner (`<rule id>: <what the frame shows>`; the spec already asks it).
+- `requests` (optional, reviewer): a tap no frame showed the result of; the verifier has it redone (verifier.md).
 - `reviewed_packs`: every pack whose evidence the reviewer actually opened (its `som.png`, or its crops plus
   `candidates.json`), and only those. A done cell whose packs no reviewer listed keeps the verdict INCOMPLETE.
 - `invariants` (when the slice has a `### Invariants`): `[{"id", "pack", "result": "ok|broken|not shown"}]`, each
@@ -66,7 +69,8 @@ then returns it in `merged`, and the report lists it under that finding.
 ## `requests.json` (verifier → navigator, in the screen folder)
 
 `[{"finding": "f1", "pack": "<path>", "do": "resnap|repeat-probe|crop", "probe": "<id>", "bbox": [..],
-"args": "<extra probe flags, optional: --interval-ms 150>"}, {"do": "redo-cell", "cell": "<cell id>", "why": ""}]`;
+"args": "<extra probe flags, optional: --interval-ms 150>", "times": 2, "why": "", "from": "<findings file>"},
+{"do": "redo-cell", "cell": "<cell id>", "why": ""}]` (`times`, `why`, `from` optional; `from`: a reviewer's);
 the navigator adds `"done": "<path>"` or `"failed": "<why>"` to each entry but `redo-cell`, which the
 orchestrator handles (the cell back to `todo`, navigated and reviewed again, then `done`).
 
@@ -100,7 +104,8 @@ findings files. Beside it: `imp.md` (written by `backlog.py match`, never by han
 the new ones numbered with screen, platform, severity, file#id, actual → expected, verify note, question and
 crop, then the ones an open entry already proposes a line each with its IMP-N; the owner picks by those
 numbers, and match sets that `backlog_id` on the IMPs the verifier left without one), `rejected.md` (one line per rejected finding:
-title, screen, kind and severity, file#id, the first sentence of `verify_note`) and `run-log.md` (each step the
+title, screen, kind and severity, file#id, the first sentence of `verify_note`; a `flaky:` one was seen once and
+missed by the repeats, M2 does not count it false) and `run-log.md` (each step the
 orchestrator took by hand, numbered, what and why; then the test data the run left on the backend).
 
 ```markdown
@@ -146,8 +151,13 @@ Also: <title of a finding merged into it> (<file>#<id>)
 ## Known candidates
 - <screen>: <what the app does> — <file>: «<the comment>»
 
+## Open spec conflicts
+- <screen>: <rule id> — <what the frame shows> · <file>
+
 ## Questions
-- **<screen>**: <question> (<options>); <question>; spec text: <rule> «<spec>» → «<app>», …
+- **<screen>**:
+  - <question> (<options>)
+  - spec text: <rule> «<spec>» → «<app>», …
 
 ## Regression flows written
 - <maestro_dir>/fresh-eyes-<id>.yaml
@@ -158,10 +168,12 @@ Also: <title of a finding merged into it> (<file>#<id>)
 - Unsure, by class, never one block per finding, in this order and only classes that have findings: `stale`
   (the verdict's `stale`), `asked` (the verdict's `asked`; its question is under Questions), `intermittent`
   (`verify_note` "intermittent: …"), then the rest (what a person should look at). Lows share one line of ids.
-- Questions: one bullet per screen, never one per finding, at most 10: the screen's `questions[]` with their
-  options, its stale question and its `spec-text` pairs joined. More screens: the 10 with the most severe
-  findings, and one line counting the rest (they stay in the findings files). Keep the marker `spec text:` as is
-  in any language: `coverage.py score` does not count a bullet of spec-text pairs alone as a question (M5).
+- Questions: one bullet per screen, never one per finding, at most 10: the screen in bold alone, under it a
+  sub-item per question with its options (its `questions[]`, its stale question), then one sub-item with its
+  `spec-text` pairs. More screens: the 10 with the most severe findings, and one line counting the rest (they stay in the
+  findings files). `coverage.py score` counts the sub-items (M5); keep the marker `spec text:` as is in any
+  language: that sub-item is no question.
+- Open spec conflicts: the `conflict` entries, one line each, no question (the spec already asks the owner).
 - Known candidates: the `known` entries, one line each, not counted as questions; what the owner accepts goes
   to `known.md`.
 

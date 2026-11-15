@@ -82,12 +82,16 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    sure the evidence makes you; `taste` findings are capped at 0.6.
 7. Things you suspect but cannot see well enough (needs a zoom, another frame, a repeat): still write the
    finding with low confidence and say in `actual` what evidence is missing. The verifier will chase it.
-8. Spec conflicts or "bug or intended?" doubts go to `questions[]` with short options and `finding` = the id
-   of the finding they are about — **in addition to** a finding, never instead of one (only a `spec-text` or
-   `known` entry, checklist "Do not flag", stands alone). If the spec is silent
-   and you are unsure whether something is intended (a reference app does it differently, siblings disagree),
-   still write it as a finding with `rule: taste` and confidence ≤ 0.5, so it reaches "look with your own eyes".
-   A doubt that only lives in `questions[]` gets lost.
+   Except a tap whose result no frame shows (no snap after it, one from before the transition, another screen
+   on it): no finding, an entry in the output's `requests`: `{"pack": "<that tap's pack>", "do": "repeat-probe",
+   "probe": "tap-everything", "why": "tap «<label>» alone, snap after: <what it should open>"}`; the verifier rules on it.
+8. "Bug or intended?" doubts go to `questions[]` with short options and `finding` = the id of the finding they
+   are about — **in addition to** a finding, never instead of one (only a `spec-text`, `known` or `conflict`
+   entry, checklist "Do not flag", stands alone). What a `⚠ conflict` rule itself leaves to the owner (the spec
+   already asks): no finding, `{"class": "conflict", "text": "<rule id>: <what the frame shows>"}`. If the spec
+   is silent and you are unsure whether something is intended (a reference app does it differently, siblings
+   disagree), still write it as a finding with `rule: taste` and confidence ≤ 0.5, so it reaches "look with
+   your own eyes". A doubt that only lives in `questions[]` gets lost.
 
 Consistency inside the app beats reference apps: if one surface breaks the app's own pattern (sharp corners where
 other sheets/cards/dialogs are rounded, another icon for the same section, another style for the same control),
@@ -107,7 +111,8 @@ do-not-flag section covers. Do not describe the screen; report problems.
 ## Output
 
 Write `<run>/<platform>/<screen>/findings.json` — or the file name the orchestrator gives — (schema in
-report-format.md, all `verdict: "pending"`, evidence paths relative to the run folder, `reviewed_packs`), and
+report-format.md, all `verdict: "pending"`, evidence paths relative to the run folder, `reviewed_packs`,
+`requests` when step 7 made any), and
 `"invariants": [{"id": "<rule id>", "pack": "<path>", "result": "ok|broken|not shown"}]` when the slice has any.
 
 ## Reply (≤10 lines)
