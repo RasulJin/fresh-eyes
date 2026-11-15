@@ -171,7 +171,7 @@ Also: <title of a finding merged into it> (<file>#<id>)
 - Questions: one bullet per screen, never one per finding, at most 10: the screen in bold alone, under it a
   sub-item per question with its options (its `questions[]`, its stale question), then one sub-item with its
   `spec-text` pairs. More screens: the 10 with the most severe findings, and one line counting the rest (they stay in the
-  findings files). `coverage.py score` counts the sub-items (M5); keep the marker `spec text:` as is in any
+  findings files). At most 10 question sub-items in all, the same way. `coverage.py score` counts the sub-items (M5); keep the marker `spec text:` as is in any
   language: that sub-item is no question.
 - Open spec conflicts: the `conflict` entries, one line each, no question (the spec already asks the owner).
 - Known candidates: the `known` entries, one line each, not counted as questions; what the owner accepts goes

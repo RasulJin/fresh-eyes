@@ -140,7 +140,8 @@ again into `<pack>-recheck`, adding the entry's `args` (e.g. `--interval-ms 150`
 --bbox x,y,w,h --zoom 2`. Add `"done": "<path>"` to each entry you fulfilled and save the file. An entry you cannot fulfil gets
 `"failed": "<why>"` instead. Skip `redo-cell` entries: the orchestrator puts those cells back in the plan.
 An entry with `"times": N`: run it N times, into `<pack>-recheck-1` … `-N`, `done` naming them all. A `why`
-says what to do (which target alone to tap, how long to record): follow it.
+says what to do (which target alone to tap, how long to record): follow it. A tap's recheck: snap
+`<pack>-recheck` before the tap (it checks the screen), `taps.py tap`, then snap `<pack>-recheck/after`.
 Probe `edge`: as probes.md `### edge` says, `taps.py edge` with the entry's `args` under `capture.py around`, then
 the recheck snap with `--before <pack>`.
 

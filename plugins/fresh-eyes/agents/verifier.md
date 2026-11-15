@@ -114,7 +114,7 @@ inputs first. Use the `-recheck` evidence. A finding whose request has neither `
 evidence never came; the verdict then stays INCOMPLETE). Rule on every other pending finding: `confirmed` (reproduced, evidence
 attached), `rejected` (disproved, say how; a repeat that does not reproduce: flaky or intermittent, see first pass), or `unsure` (evidence still ambiguous: say what a human should look
 at). Adjust `severity` if the evidence shows a different impact, and say so in `verify_note`.
-An entry `from` a findings file: judge its `-recheck` pack as a reviewer would. The tap does what its label and
+An entry `from` a findings file: judge its `-recheck` pack (the tap's result: its `after/`) as a reviewer would. The tap does what its label and
 `why` say → nothing to write; it does not (no reaction on a settled frame, another screen) → add a BUG to that
 file (`id` `r<k>`, `steps`, the recheck as evidence), `confirmed`.
 

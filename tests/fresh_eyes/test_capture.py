@@ -160,6 +160,8 @@ class SnapTest(unittest.TestCase):
             with mock.patch.object(nav, "_dump_uiautomator", lambda dev: post):  # the thread recheck taken on Post
                 self.assertEqual(capture.snap("android", "emulator-5560", pack + "-recheck"), 5)
                 self.assertIn("wrong screen", read_json(os.path.join(pack + "-recheck", "meta.json"))["blocked"])
+                self.assertEqual(capture.snap("android", "emulator-5560", pack + "-recheck-2"), 5)  # "times": 2
+                self.assertEqual(capture.snap("android", "emulator-5560", pack + "-recheck/after"), 0)  # a tap's result
                 other = os.path.join(run, "android", "settings", "default-tap-everything", "tap-2")
                 capture.snap("android", "emulator-5560", other)  # a tap that opened another screen
                 self.assertEqual(capture.snap("android", "emulator-5560", other + "-recheck"), 0)

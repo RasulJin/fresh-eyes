@@ -87,11 +87,12 @@ def recheck_marker(out):
     """A `<pack>-recheck` snap must show the screen its pack showed: the screen's marker (coverage.json of the run)
     when that pack has it. () when there is nothing to check."""
     run, key = fe_common.run_dir(out), coverage.pack_key(out)
-    if not (out.rstrip(os.sep).endswith("-recheck") and run and key):
+    m = re.search(r"-recheck(-\d+)?$", out.rstrip(os.sep))  # -recheck-N: a request with "times"
+    if not (m and run and key):
         return ()
     markers = next((c["marker"] for c in read_json(os.path.join(run, "coverage.json"))["cells"]
                     if c["screen"] == key[1] and c.get("marker")), ())
-    pack = out.rstrip(os.sep)[:-len("-recheck")]
+    pack = out.rstrip(os.sep)[:m.start()]
     return tuple(markers) if markers and coverage.shows_marker(pack, markers) else ()
 
 

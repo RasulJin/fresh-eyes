@@ -154,8 +154,8 @@ words / nothing (= the current diff).
    .fresh-eyes/config.json --out $RUN/backlog-index.md` (open backlog entries, one line each, as of the build's
    commit: a checkout on another branch has another backlog; no commit in preflight.json: no `--ref`; only
    verifiers get it, reviewers never see the backlog; no `backlog` in config: skip it), then `python3
-   $S/backlog.py match --index $RUN/backlog-index.md --findings <all findings*.json>` (a pending BUG gets the
-   open BUG entry it may repeat, for the verifier to check). Then one
+   $S/backlog.py match --index $RUN/backlog-index.md --findings <the findings*.json going to a verifier now>` (a
+   pending BUG gets the open BUG entry it may repeat, for the verifier to check; never a file a verifier holds). Then one
    `fresh-eyes:verifier` per screen folder that has pending BUG findings or `requests` in a findings file (up to 4
    in parallel; IMPs alone need none); the prompt is
    `first pass`, that folder, its spec slice, `.fresh-eyes/known.md`, `$RUN/backlog-index.md`, `language`,

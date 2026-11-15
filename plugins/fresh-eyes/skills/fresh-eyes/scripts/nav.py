@@ -38,8 +38,8 @@ SETTLE_S = 1.0
 
 
 def _dump_uiautomator(dev):
-    return fe_common.run([devices.adb_path(), "-s", dev.id, "exec-out", "uiautomator", "dump", "/dev/tty"],
-                         timeout=40).stdout.decode("utf-8", "replace")
+    proc = fe_common.run([devices.adb_path(), "-s", dev.id, "exec-out", "uiautomator", "dump", "/dev/tty"], timeout=40)
+    return (proc.stdout + proc.stderr).decode("utf-8", "replace")  # stderr: "could not get idle state" comes there
 
 
 def _dump_maestro(dev):

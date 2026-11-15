@@ -121,6 +121,13 @@ class HierarchyFallbackTest(unittest.TestCase):
         self.assertEqual(self.stopped, ["emulator-5560"])  # or uiautomator stays locked out
         self.assertEqual(nav.screen_nodes(self.DEV), nodes)
 
+    def test_the_dump_carries_stderr_where_the_idle_error_comes(self):
+        mock.patch.stopall()
+        done = subprocess.CompletedProcess([], 0, b"", b"ERROR: could not get idle state.\n")
+        with mock.patch.object(nav.fe_common, "run", lambda cmd, **kw: done), \
+                mock.patch.object(nav.devices, "adb_path", lambda: "adb"):
+            self.assertIn(nav.IDLE, nav._dump_uiautomator(self.DEV))
+
     def test_never_on_a_device_a_maestro_session_drives(self):
         self.driver.append(True)  # a Maestro MCP driver was there before us
         with self.assertRaisesRegex(FEError, "idle state.*Maestro MCP session"):
