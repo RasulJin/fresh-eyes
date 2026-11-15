@@ -49,15 +49,23 @@ def write_json(path, obj):
     os.replace(tmp, path)
 
 
+def run_dir(path):
+    """The run folder: the first one with coverage.json at or above `path`; None outside a run."""
+    d = os.path.abspath(path)
+    while not os.path.exists(os.path.join(d, "coverage.json")):
+        if os.path.dirname(d) == d:
+            return None
+        d = os.path.dirname(d)
+    return d
+
+
 def heartbeat(path, platform, did):
     """Refresh <run>/<platform>/heartbeat, <run> being the folder with coverage.json at or above `path` (nav.py
     --run, capture.py --out): the orchestrator stops a navigator only when it is 10 minutes old. Never fails the
     command it marks."""
-    d = os.path.abspath(path)
-    while not os.path.exists(os.path.join(d, "coverage.json")):
-        if os.path.dirname(d) == d:
-            return
-        d = os.path.dirname(d)
+    d = run_dir(path)
+    if d is None:
+        return
     try:
         write_json(os.path.join(d, platform, "heartbeat"), {"did": did})
     except OSError:

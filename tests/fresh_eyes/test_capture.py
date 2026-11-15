@@ -17,6 +17,21 @@ from hierarchy import HierarchyError
 from motion import DEFAULT_CEILING_MS
 
 
+def _no_maestro(dev):
+    raise HierarchyError("no Maestro CLI in tests")
+
+
+_MAESTRO = mock.patch.object(nav, "_dump_maestro", _no_maestro)  # a test must never reach a real device
+
+
+def setUpModule():
+    _MAESTRO.start()
+
+
+def tearDownModule():
+    _MAESTRO.stop()
+
+
 def fake_screenshot(dev, dst):
     shutil.copyfile(os.path.join(FIXTURES, "settings.png"), dst)
     return dst
@@ -101,6 +116,54 @@ class SnapTest(unittest.TestCase):
             self.assertIn("hierarchy unavailable", meta["blocked"])
             self.assertTrue(os.path.exists(os.path.join(pack, "screen.png")))
 
+    def test_snap_records_how_it_read_the_hierarchy(self):
+        from tests.fresh_eyes.test_hierarchy import MAESTRO
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            xml = f.read()
+        with tmpdir() as d:
+            with mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml):
+                self.assertEqual(capture.snap("android", "emulator-5560", os.path.join(d, "a")), 0)
+            with mock.patch.object(nav, "_dump_uiautomator", lambda dev: "ERROR: could not get idle state.\n"), \
+                    mock.patch.object(nav, "_dump_maestro", lambda dev: json.dumps(MAESTRO)):
+                self.assertEqual(capture.snap("android", "emulator-5560", os.path.join(d, "b")), 0)
+            self.assertEqual([read_json(os.path.join(d, k, "meta.json"))["source"] for k in "ab"],
+                             ["uiautomator", "maestro"])
+
+    def test_a_blocked_resnap_keeps_no_file_of_the_older_screen(self):
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            xml = f.read()
+
+        def boom(dev):
+            raise HierarchyError("could not get idle state")
+        with tmpdir() as d:
+            pack = os.path.join(d, "p")
+            with mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml):
+                capture.snap("android", "emulator-5560", pack)
+            with mock.patch.object(nav, "_dump_uiautomator", boom), \
+                    mock.patch.object(nav, "_dump_maestro", boom):
+                self.assertEqual(capture.snap("android", "emulator-5560", pack), 3)
+            self.assertEqual(sorted(os.listdir(pack)), ["meta.json", "screen.png"])  # this moment's frame only
+            self.assertNotIn("source", read_json(os.path.join(pack, "meta.json")))
+
+    def test_a_recheck_snap_must_show_the_screen_of_its_pack(self):
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            xml = f.read()
+        post = ('<hierarchy><node bounds="[0,0][1080,2400]" class="F" text="Пост" content-desc="" '
+                'resource-id="" clickable="false"/></hierarchy>')
+        with tmpdir() as run:
+            write_json(os.path.join(run, "coverage.json"), {"cells": [
+                {"id": "android/settings/default/none", "screen": "settings", "marker": ["Network & internet"]}]})
+            pack = os.path.join(run, "android", "settings", "default-tap-everything", "tap-1")
+            with mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml):
+                capture.snap("android", "emulator-5560", pack)
+                self.assertEqual(capture.snap("android", "emulator-5560", pack + "-recheck"), 0)
+            with mock.patch.object(nav, "_dump_uiautomator", lambda dev: post):  # the thread recheck taken on Post
+                self.assertEqual(capture.snap("android", "emulator-5560", pack + "-recheck"), 5)
+                self.assertIn("wrong screen", read_json(os.path.join(pack + "-recheck", "meta.json"))["blocked"])
+                other = os.path.join(run, "android", "settings", "default-tap-everything", "tap-2")
+                capture.snap("android", "emulator-5560", other)  # a tap that opened another screen
+                self.assertEqual(capture.snap("android", "emulator-5560", other + "-recheck"), 0)
+
     def _snap_with_app(self, pid):
         crash = "\n".join(["E/AndroidRuntime( 4242): FATAL EXCEPTION: main",
                            "E/AndroidRuntime( 4242): Process: com.example.app, PID: 4242",
@@ -171,6 +234,7 @@ class IosSnapTest(unittest.TestCase):
         self.assertEqual(cam["bounds"], [48, 1300, 1110, 156])
         self.assertEqual(meta["px_per_dp"], 3.0)
         self.assertEqual(meta["keyboard_top"], 1614)
+        self.assertEqual(meta["source"], "xctest")
 
 
 class LogsTest(unittest.TestCase):

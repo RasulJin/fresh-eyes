@@ -1,5 +1,5 @@
-"""Normalize a view hierarchy (uiautomator XML, Maestro iOS driver JSON) into flat nodes, and compress them to
-text. Bounds are multiplied by `scale` (iOS sources are in points, screenshots in pixels).
+"""Normalize a view hierarchy (uiautomator XML, Maestro iOS driver JSON, `maestro hierarchy` JSON) into flat
+nodes, and compress them to text. Bounds are multiplied by `scale` (iOS sources are in points, screenshots in pixels).
 
 Node: {id, parent, depth, cls, text, label, rid, bounds:[x,y,w,h], clickable, focused, enabled}
 """
@@ -50,7 +50,7 @@ class _Builder:
 def _from_uiautomator(raw, scale):
     end = raw.rfind("</hierarchy>")
     if end < 0:
-        raise HierarchyError("uiautomator dump has no </hierarchy>")
+        raise HierarchyError("uiautomator dump has no </hierarchy>: %s" % raw.strip()[:120])
     try:
         root = ET.fromstring(raw[:end + len("</hierarchy>")])
     except ET.ParseError as e:
@@ -128,7 +128,31 @@ def _from_xctest(raw, scale):
     return b.nodes
 
 
-_PARSERS = {"uiautomator": _from_uiautomator, "xctest": _from_xctest}
+def _from_maestro(raw, scale):
+    """`maestro hierarchy` on Android: Maestro's TreeNode JSON (the CLI may print lines before it). Its driver reads
+    the tree without waiting for an idle UI. No password flag: Android gives accessibility a password's dots only."""
+    start = raw.find("{")
+    if start < 0:
+        raise HierarchyError("maestro hierarchy printed no JSON: %s" % raw.strip()[:120])
+    data = json.JSONDecoder().raw_decode(raw, start)[0]
+    b = _Builder(scale)
+
+    def walk(el, parent, depth):
+        for child in el.get("children") or []:
+            a, pid = child.get("attributes") or {}, parent
+            bounds = _bounds(a.get("bounds"))
+            if bounds is not None:
+                pid = b.add(parent, depth, bounds, a.get("class"), a.get("text"), a.get("accessibilityText"),
+                            a.get("resource-id"), _truthy(child.get("clickable", a.get("clickable"))),
+                            _truthy(child.get("focused", a.get("focused"))),
+                            _truthy(child.get("enabled", a.get("enabled")), True))
+            walk(child, pid, depth + 1)
+
+    walk(data, None, 0)
+    return b.nodes
+
+
+_PARSERS = {"uiautomator": _from_uiautomator, "xctest": _from_xctest, "maestro": _from_maestro}
 
 
 def normalize(raw, source, scale=1.0):

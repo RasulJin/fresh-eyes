@@ -84,6 +84,50 @@ class InputTest(unittest.TestCase):
         self.assertEqual(calls, [nav.center(node)])
 
 
+class HierarchyFallbackTest(unittest.TestCase):
+    """uiautomator gives up on a screen that never gets idle (an endless animation): the Maestro CLI reads it."""
+    DEV = Device("android", "emulator-5560", "")
+
+    def setUp(self):
+        import preflight
+        from tests.fresh_eyes.test_hierarchy import MAESTRO
+        self.dumps, self.cli, self.stopped, self.driver = [], [], [], []
+
+        def uiautomator(dev):
+            self.dumps.append(dev.id)
+            return "ERROR: could not get idle state.\n"
+
+        def run(cmd, timeout=60, **kw):
+            self.cli.append(cmd)
+            self.driver.append(True)  # the CLI's own driver may be left running
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(MAESTRO).encode(), b"")
+        for target, name, fn in ((nav, "_dump_uiautomator", uiautomator), (nav.fe_common, "run", run),
+                                 (preflight, "_maestro_path", lambda: "/opt/maestro/bin/maestro"),
+                                 (nav.devices, "_require_owned", lambda dev, what: None),
+                                 (nav.devices, "maestro_driver_running", lambda dev: bool(self.driver)),
+                                 (nav.devices, "stop_maestro_driver",
+                                  lambda dev: (self.stopped.append(dev.id), self.driver.clear())),
+                                 (nav.time, "sleep", lambda s: None)):
+            p = mock.patch.object(target, name, fn)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_idle_failure_goes_straight_to_the_maestro_cli_and_stops_its_driver(self):
+        nodes, source = nav.hierarchy(self.DEV)
+        self.assertEqual(source, "maestro")
+        self.assertIn("Спросить Vio", [n["text"] for n in nodes])
+        self.assertEqual(self.dumps, ["emulator-5560"])  # no 10 s retries of the same answer
+        self.assertEqual(self.cli, [["/opt/maestro/bin/maestro", "--device", "emulator-5560", "hierarchy"]])
+        self.assertEqual(self.stopped, ["emulator-5560"])  # or uiautomator stays locked out
+        self.assertEqual(nav.screen_nodes(self.DEV), nodes)
+
+    def test_never_on_a_device_a_maestro_session_drives(self):
+        self.driver.append(True)  # a Maestro MCP driver was there before us
+        with self.assertRaisesRegex(FEError, "idle state.*Maestro MCP session"):
+            nav.hierarchy(self.DEV)
+        self.assertEqual((self.cli, self.stopped), ([], []))
+
+
 class HeartbeatTest(unittest.TestCase):
     def idle(self, run):
         out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "nav.py"), "idle", "--run", run],

@@ -40,6 +40,10 @@ nobody answers in a night run.
   redo that cell: a new snap would overwrite the crash.
 - Android non-ASCII typing: a Maestro **CLI** flow with `inputText`, always with `--device <your device id>`
   (slow, ~35 s).
+- A screen that never gets idle (an endless animation): `nav.py` and `capture.py` read it through the Maestro
+  CLI by themselves (~20 s a call, `source: maestro` in meta.json); they refuse while a Maestro driver runs.
+- Packs come only from `capture.py`: never copy, move or write a pack's files yourself. Each step gets its own
+  snap, even on the same screen (`coverage.py` refuses `step-N is a copy of step-M`).
 - iOS: `nav.py` talks to the Maestro driver the orchestrator started. If `nav.py` says "no Maestro iOS driver",
   stop and reply `needs: ios-driver` with the cells or requests left (the orchestrator restarts it and calls
   you again).
@@ -90,7 +94,8 @@ nobody answers in a night run.
    (PKG: your `package`; add `--pages` on `default/none`, see probes.md; `--keyboard` when an input is focused, `--before <pack>` for before/after probes like
    `swipe-inside` and `keyboard-open`; `--expect-differs <default pack>` for state cells like dark/font-xl —
    exit code 4 means the state had not applied yet: wait 2 s and snap again, at most 3 times, then mark the
-   cell blocked with note "state did not apply"). Exit code 3 means blocked (no hierarchy): retry once, then mark blocked.
+   cell blocked with note "state did not apply"). Exit code 3 means blocked (no hierarchy): retry once, then mark
+   blocked with the snap's `blocked` as note; its pack keeps that moment's frame, add nothing to it.
    The snap of a `none` or `keyboard-open` cell, and any snap that starts a probe step on the screen, gets
    `--marker <the cell's marker words in coverage.json>` (never one taken after a swipe, or a tap that opens
    something: they may hide the header). Exit 5: another screen is up; reach the screen again, redo the step.
@@ -124,7 +129,9 @@ Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exa
 
 ## Requests mode (for the verifier)
 
-For each entry in each `requests.json` that has no `done` yet: `resnap` → new `snap` into `<pack>-recheck`; `repeat-probe` → run the probe
+For each entry in each `requests.json` that has no `done` yet, reach the pack's screen first: `resnap` → new
+`snap` into `<pack>-recheck` (exit 5: another screen is up; reach it and redo, never mark that entry done);
+`repeat-probe` → run the probe
 again into `<pack>-recheck`, adding the entry's `args` (e.g. `--interval-ms 150`) to the probe's command; `crop` → `python3 $S/pixels.py crop <pack>/screen.png <pack>/crops/req-<finding>.png
 --bbox x,y,w,h --zoom 2`. Add `"done": "<path>"` to each entry you fulfilled and save the file. An entry you cannot fulfil gets
 `"failed": "<why>"` instead. Skip `redo-cell` entries: the orchestrator puts those cells back in the plan.
