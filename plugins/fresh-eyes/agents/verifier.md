@@ -88,6 +88,9 @@ For each BUG with `verdict: "pending"`:
 5. A cell whose probe never tested its oracle (snapped on another screen, the gesture never reached what it
    should interrupt): `{"do": "redo-cell", "cell": "<cell id>", "why": "<one line>"}`; the orchestrator runs it
    again, and on the second pass you rule on its findings from the new pack (the entry's `done`).
+   A scenario or journey step whose frame equals the one before is marked `"unchanged": true` in `steps.json`
+   (the navigator writes it: the action changed nothing; judge that against the step's `expect`). Two equal step
+   frames without that mark are a copy, not evidence: no ruling on them, a `redo-cell`.
 
 Duplicates: when two findings (in this folder's files, or one here and one in a file you were given) report
 the same defect, set `same_as` on the one with weaker evidence, pointing at the other with its file relative

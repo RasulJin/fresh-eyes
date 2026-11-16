@@ -140,6 +140,12 @@ class AgentsTest(unittest.TestCase):
         self.assertIn("Code `CONFLICT` (one defect ruled both ways): each pair of its `conflicts` goes to one verifier",
                       skill)
 
+    def test_an_unchanged_step_is_marked_and_a_copy_is_redone_0_5_13(self):
+        # 0.5.12 run: vio-guide step-21 retaken after step-22, byte for byte step-27
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        self.assertIn('marked `"unchanged": true` in `steps.json`', verifier)
+        self.assertIn("are a copy, not evidence: no ruling on them, a `redo-cell`", verifier)
+
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
         nav = " ".join(frontmatter("navigator")[1].split())
