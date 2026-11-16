@@ -8,7 +8,7 @@ from unittest import mock
 from tests.fresh_eyes.helpers import make_png, tmpdir
 import devices
 import taps
-from fe_common import FEError, write_json
+from fe_common import FEError, read_json, write_json
 from taps import edge_point, guard
 
 CELL = {"id": "android/feed/default/rapid-tap", "platform": "android", "screen": "feed", "state": "default",
@@ -117,6 +117,66 @@ class SettleTest(unittest.TestCase):
         self.assertEqual((out["settled"], out["changed"]), (False, True))
         self.assertGreaterEqual(t, 3.0)
         self.assertLess(t, 3.6)
+
+
+def node(i, text, y, rid="", cls="android.widget.TextView"):
+    return {"id": "n%d" % i, "parent": None, "depth": 1, "cls": cls, "text": text, "label": "", "rid": rid,
+            "bounds": [0, y, 1080, 120], "clickable": True, "focused": False, "enabled": True}
+
+
+ROWS = [node(1, "Row A", 400, "app:id/row_a"), node(2, "Row B", 700, "app:id/row_b"),
+        node(3, "Row C", 1000, "app:id/row_c")]
+SCROLLED = [dict(n, id="n%d" % (k + 7), bounds=[0, n["bounds"][1] - 300, 1080, 120]) for k, n in enumerate(ROWS)]
+
+
+class TapByNodeTest(unittest.TestCase):
+    """0.5.12's false high: a tap at a mark's old point after the list had scrolled under it."""
+    def run_tap(self, args, now=SCROLLED, kb_top=None):
+        taps_, snaps = [], []
+        with tmpdir() as d:
+            cov = run_dir(d, [dict(CELL, id="android/feed/default/tap-everything", probe="tap-everything")], False)
+            pack = os.path.join(d, "android", "feed", "default-tap-everything")
+            write_json(os.path.join(pack, "nodes.json"), ROWS)
+            write_json(os.path.join(pack, "som.json"), [{"n": k + 1, "node_ids": [n["id"]], "bbox": n["bounds"]}
+                                                        for k, n in enumerate(ROWS)])
+            after = os.path.join(pack, "tap-1")
+            argv = ["taps.py", "tap", "--platform", "android", "--device", "e", "--after", after,
+                    "--coverage", cov, "--cell", "android/feed/default/tap-everything"] + args
+            out = io.StringIO()
+            with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(out), \
+                    mock.patch.object(taps.nav, "hierarchy", lambda dev: (now, "uiautomator")), \
+                    mock.patch.object(devices, "keyboard_top", lambda dev, nodes=(): kb_top), \
+                    mock.patch.object(devices, "screenshot", lambda dev, dst: make_png(dst, 1080, 2400)), \
+                    mock.patch.object(devices, "tap", lambda dev, x, y: taps_.append((x, y))), \
+                    mock.patch.object(taps, "settle", lambda dev, before: {"settled": True, "changed": True,
+                                                                            "ms": 800}), \
+                    mock.patch.object(taps.capture, "snap", lambda p, dv, o, **kw: snaps.append(o) or 0):
+                taps.main()
+            return taps_, snaps, read_json(os.path.join(after, "tap.json"))
+
+    def test_a_mark_is_tapped_where_its_node_is_now(self):
+        tapped, snaps, rec = self.run_tap(["--som", "3"])
+        self.assertEqual(tapped, [(540, 760)])
+        self.assertEqual((rec["point"], rec["bounds"], rec["by"]), ([540, 760], [0, 700, 1080, 120], "som"))
+        self.assertTrue(snaps[0].endswith("tap-1"))
+
+    def test_old_coordinates_are_refused(self):
+        with self.assertRaises(FEError) as e:
+            self.run_tap(["--x", "540", "--y", "1060", "--expect-id", "row_c"])
+        self.assertIn("outside", str(e.exception))
+        self.assertEqual(self.run_tap(["--x", "540", "--y", "760", "--expect-id", "row_c"])[0], [(540, 760)])
+
+    def test_a_point_needs_the_node_it_is_meant_for(self):
+        for args in (["--x", "540", "--y", "760"], ["--id", ""], [], ["--id", "row_a", "--som", "1"]):
+            with self.assertRaises(SystemExit, msg=args), contextlib.redirect_stderr(io.StringIO()):
+                self.run_tap(args)
+
+    def test_a_node_gone_or_under_the_keyboard_is_refused(self):
+        with self.assertRaises(FEError):
+            self.run_tap(["--som", "3"], now=SCROLLED[:2])
+        with self.assertRaises(FEError) as e:
+            self.run_tap(["--id", "row_c"], kb_top=650)
+        self.assertIn("under the keyboard", str(e.exception))
 
 
 class RapidHoldTest(unittest.TestCase):

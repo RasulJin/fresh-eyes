@@ -34,6 +34,9 @@ nobody answers in a night run.
   `back`, `wait`; add `--platform ios` on iOS), always with `--run <run>`: it refreshes the heartbeat the
   orchestrator watches, and a navigator silent for 10 minutes is stopped. It prints the screen as compact text after each action; when
   a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
+  It refuses an empty `--id`/`--text` and a target under the open keyboard (the tap would land on a key): hide
+  the keyboard with `nav.py back` first. Probe taps go through `taps.py tap`, which finds its node in a dump
+  taken right before the tap; never reuse coordinates from an older screen.
 - **A crash**: the launcher or another app on the printed screen after an action means the app died. Snap
   into the cell's pack first (`capture.py snap` with `--package` saves the crash log), record it done with
   `--note "app crashed after <action>"`, and only then relaunch with `devices.py app --do launch`. Do not
@@ -141,7 +144,8 @@ again into `<pack>-recheck`, adding the entry's `args` (e.g. `--interval-ms 150`
 `"failed": "<why>"` instead. Skip `redo-cell` entries: the orchestrator puts those cells back in the plan.
 An entry with `"times": N`: run it N times, into `<pack>-recheck-1` … `-N`, `done` naming them all. A `why`
 says what to do (which target alone to tap, how long to record): follow it. A tap's recheck: snap
-`<pack>-recheck` before the tap (it checks the screen), `taps.py tap`, then snap `<pack>-recheck/after`.
+`<pack>-recheck` before the tap (it checks the screen), then `taps.py tap --label <target> --after
+<pack>-recheck/after` (or `--id`, or `--som N` from that snap): it snaps the result there itself, with `tap.json`.
 Probe `edge`: as probes.md `### edge` says, `taps.py edge` with the entry's `args` under `capture.py around`, then
 the recheck snap with `--before <pack>`.
 

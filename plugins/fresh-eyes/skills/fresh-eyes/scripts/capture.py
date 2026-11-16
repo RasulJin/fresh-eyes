@@ -6,7 +6,8 @@ snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json,
         5 = none of the --marker words on screen (another screen: meta.json blocked); a `<pack>-recheck` snap
         checks the screen's marker by itself when <pack> showed it. meta.json source: uiautomator, maestro (the
         Maestro CLI, when the UI never gets idle) or xctest.
-        --package (Android): meta.json app_running; a dead app also gets logcat.txt with its crash.
+        --package (Android; default: the run's app, another one is refused): meta.json app_running; a dead app
+        also gets logcat.txt with its crash.
         --pages: then scrolls the screen's list half a screen at a time, a pack per page in scroll-<k>/, and back
         to the top (meta.json: scroll_pages, scroll_stop, scroll_restored).
 around: records the screen around an action command, then motion analysis: video.mp4, motion.json,
@@ -96,8 +97,19 @@ def recheck_marker(out):
     return tuple(markers) if markers and coverage.shows_marker(pack, markers) else ()
 
 
+def run_app(path, platform):
+    """The app under test of the run `path` lies in (preflight.json: config app.<platform>_id); None outside one."""
+    run = fe_common.run_dir(path)
+    pf = os.path.join(run, "preflight.json") if run else ""
+    return ((read_json(pf).get("platforms") or {}).get(platform) or {}).get("app") if os.path.isfile(pf) else None
+
+
 def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=None, package=None, marker=()):
     dev = Device(platform, device_id, "")
+    app = run_app(out, platform)
+    if package and app and package != app:  # 0.5.12: a mistyped package read as a crash of the app
+        raise FEError("--package %s is not the app under test %s (config app.%s_id)" % (package, app, platform))
+    package = package or app
     os.makedirs(out, exist_ok=True)
     marker = marker or recheck_marker(out)
     for name in DERIVED:  # a blocked re-snap must not leave an older screen's files beside its own frame

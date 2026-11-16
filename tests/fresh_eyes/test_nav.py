@@ -74,14 +74,45 @@ class InputTest(unittest.TestCase):
         with self.assertRaises(FEError):
             nav.adb_text_arg("Привет")
 
-    def test_tap_uses_center_of_found_node(self):
+    def _tap(self, kb_top=None, **kw):
         calls = []
         with mock.patch.object(nav, "screen_nodes", lambda dev: settings_nodes()), \
                 mock.patch.object(nav.devices, "tap", lambda dev, x, y: calls.append((x, y))), \
+                mock.patch.object(nav.devices, "keyboard_top", lambda dev, nodes=(): kb_top), \
                 mock.patch.object(nav.time, "sleep", lambda s: None):
-            node = nav.tap(Device("android", "emulator-5560", "fresh-eyes-pixel"), text="Apps")
+            node = nav.tap(Device("android", "emulator-5560", "fresh-eyes-pixel"), **kw)
+        return node, calls
+
+    def test_tap_uses_center_of_found_node(self):
+        node, calls = self._tap(text="Apps")
         self.assertEqual(node["text"], "Apps")
         self.assertEqual(calls, [nav.center(node)])
+
+    def test_an_empty_id_or_text_taps_nothing(self):
+        # 0.5.12 flight-search: --id "" matched every node and changed the origin to Бали
+        for kw in ({"rid": ""}, {"text": ""}, {"label": ""}, {}):
+            with self.assertRaises(FEError, msg=kw):
+                self._tap(**kw)
+
+    def test_a_target_under_the_keyboard_is_refused(self):
+        # 0.5.12 vio-guide: taps on a chip and «Save trip» landed on Gboard and opened its clipboard
+        apps = nav.find_node(settings_nodes(), text="Apps")
+        x, y, w, h = apps["bounds"]
+        with self.assertRaises(FEError) as e:
+            self._tap(kb_top=y, text="Apps")
+        self.assertIn("under the keyboard", str(e.exception))
+        with self.assertRaises(FEError):
+            self._tap(kb_top=y + h // 2, point=(x + 5, y + h - 2))
+        _, calls = self._tap(kb_top=y + h // 2, text="Apps")  # half covered: its visible half
+        self.assertEqual(calls, [(x + w // 2, y + h // 4)])
+
+    def test_visible_box_clips_to_the_screen(self):
+        node = {"bounds": [-50, 2300, 200, 200], "cls": "", "rid": "", "text": "x", "label": ""}
+        self.assertEqual(nav.visible_box(node, None, (1080, 2400)), [0, 2300, 150, 100])
+        with self.assertRaises(FEError):
+            nav.visible_box(dict(node, bounds=[0, 2500, 100, 100]), None, (1080, 2400))
+        key = dict(node, rid="com.google.android.inputmethod.latin:id/key", bounds=[0, 2000, 100, 100])
+        self.assertEqual(nav.visible_box(key, 1800, (1080, 2400)), [0, 2000, 100, 100])  # a key is meant
 
 
 class HierarchyFallbackTest(unittest.TestCase):

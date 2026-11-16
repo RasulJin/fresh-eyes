@@ -7,17 +7,15 @@ preflight allowed mutation.
 
 Fast probes go straight to the device (`taps.py`, both platforms): a model round-trip or a Maestro flow (which
 waits for the screen to settle) is too slow to reproduce races. Navigation to the state goes through `nav.py`.
-iOS input goes through the Maestro XCTest driver, which serializes touches: rapid taps land ~225 ms apart there
-(enough for double-submit windows, not for a sub-100 ms race), and Back is a left-edge swipe.
+iOS input goes through the Maestro XCTest driver: rapid taps land ~225 ms apart there, Back is a left-edge swipe.
 
 ### none
-Just look. `capture.py snap`, on Android always with `--package <app.android_id>`: `"app_running": false` in its
-output and meta.json is a crash, its log goes to the pack's `logcat.txt`. With `--keyboard` when an input is
-focused. On the `default` state add `--pages`: the snap then scrolls the screen's list half a screen at a time
-into `scroll-<k>/` and back, so the checks see the whole screen, not its first viewport. `scroll_stop` says why
-the pages ended: `end`, `limit`, `keyboard covers list` (drags stay above an open keyboard), or the page snap
-that failed. `"scroll_restored": false` in its output: swipe the list back to the top with `nav.py swipe` (slow,
-short drags) before the next cell.
+Just look. `capture.py snap` (Android: `"app_running": false` in its output and meta.json is a crash, its log
+goes to the pack's `logcat.txt`), with `--keyboard` when an input is focused. On the `default` state add
+`--pages`: the snap then scrolls the screen's list half a screen at a time into `scroll-<k>/` and back, so the
+checks see the whole screen. `scroll_stop` says why the pages ended: `end`, `limit`, `keyboard covers list`
+(drags stay above an open keyboard), or the page snap that failed. `"scroll_restored": false` in its output:
+swipe the list back to the top with `nav.py swipe` (slow, short drags) before the next cell.
 
 ### rapid-tap
 - Reveals: double sheets/dialogs, double send, double navigation (stacked screens).
@@ -169,8 +167,10 @@ short drags) before the next cell.
 - Reveals: dead taps, wrong destinations, labels that lie ("Follow" opening the profile), disabled controls
   that look enabled.
 - Steps: for each clickable node in `nodes.json` (skip destructive labels: delete, remove, log out, pay, send),
-  `taps.py tap --x X --y Y` on its center (it returns once two frames 0.4 s apart match and differ from the one
-  before the tap, ≤3 s), snap, go back. `taps.json`: "tapped N → screen/state" and its `changed`.
+  `taps.py tap --som N --after <pack>/tap-<k>` (its mark in the pack's `som.json`, or `--id`/`--label`; `--x --y`
+  only with `--expect-id`): it finds the node in a dump taken just before the tap (refused: gone, off screen,
+  under the keyboard), waits until the screen settles (≤3 s) and snaps the result with `tap.json`. Go back.
+  `taps.json`: "tapped N → screen/state" and its `changed`.
 - Reply/comment buttons and inputs only focus a field, they change no data: tap them too, and first, so the
   later taps leave and return with the keyboard having been up.
 

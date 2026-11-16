@@ -192,6 +192,26 @@ class SnapTest(unittest.TestCase):
         self.assertFalse(meta["app_running"])
         self.assertIn("java.lang.IllegalStateException: boom", log)
 
+    def test_a_package_other_than_the_runs_app_is_refused_and_the_runs_is_the_default(self):
+        # 0.5.12 feed tap-3: --package com.voiza.app read as app_running false, a false crash and a resnap
+        pids = []
+
+        def adb(dev_id, *args, **kw):
+            pids.append(args[-1])
+            return "4242\n"
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            xml = f.read()
+        with tmpdir() as run, mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml), \
+                mock.patch.object(devices, "_adb", adb):
+            write_json(os.path.join(run, "coverage.json"), {"cells": []})
+            write_json(os.path.join(run, "preflight.json"), {"platforms": {"android": {"app": "com.example.app"}}})
+            pack = os.path.join(run, "android", "settings", "default-none")
+            with self.assertRaises(capture.FEError):
+                capture.snap("android", "emulator-5560", pack, package="com.exampel.app")
+            self.assertEqual(capture.snap("android", "emulator-5560", pack), 0)
+            self.assertEqual(pids, ["com.example.app"])
+            self.assertTrue(read_json(os.path.join(pack, "meta.json"))["app_running"])
+
     def test_snap_of_a_running_app_writes_no_log(self):
         meta, log = self._snap_with_app("4242\n")
         self.assertTrue(meta["app_running"])

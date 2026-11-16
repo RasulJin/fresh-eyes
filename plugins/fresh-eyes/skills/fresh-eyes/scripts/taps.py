@@ -5,8 +5,12 @@ Every probe names a coverage cell; mutating cells are refused unless preflight a
 CLI:
   taps.py rapid   --platform P --device ID --x X --y Y [--count 3] [--interval-ms 120] [--hold-ms 6000]
                   --coverage C --cell ID      (returns --hold-ms after the first tap: a late sheet is on the video)
-  taps.py tap     --platform P --device ID --x X --y Y --coverage C --cell ID
-                  (one tap; returns once the screen settled, so the snap after it shows where the tap led)
+  taps.py tap     --platform P --device ID (--id SUFFIX | --label RE | --text RE | --som N
+                  | --x X --y Y --expect-id SUFFIX) [--index N] --after DIR --coverage C --cell ID
+                  (one tap on the node where a dump taken right before shows it: refused when it is not there, off
+                  screen or under the keyboard; --x --y must lie in that node. --som N: mark N of DIR's parent
+                  pack, found again by its class, id, text and label. Once the screen settled, DIR gets the snap of
+                  where the tap led and tap.json: the point, the node and its bounds at the tap)
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
   taps.py tap-back --platform P --device ID --x X --y Y [--delay-ms 100] --coverage C --cell ID
@@ -23,9 +27,11 @@ import os
 import tempfile
 import time
 
+import capture
 import devices
+import nav
 from devices import Device
-from fe_common import FEError, cli, heartbeat, read_json
+from fe_common import FEError, cli, heartbeat, image_size, read_json, write_json
 from motion import run_ceiling_ms
 from nav import _xy
 from pixels import changed_fraction
@@ -79,6 +85,60 @@ def settle(dev, before, gap_s=SETTLE_GAP_S, max_s=SETTLE_MAX_S):
             time.sleep(gap_s)
 
 
+def som_node(pack, n, nodes):
+    """The node mark n of pack/som.json stood for, in a fresh dump: same class, id, text and label, the nearest to
+    where it was (rows move after a scroll: 0.5.12's false high tapped a mark's old point). An unlabeled one only
+    at its old bounds: its neighbours look the same."""
+    mark = next((m for m in read_json(os.path.join(pack, "som.json")) if m["n"] == n), None)
+    if mark is None:
+        raise FEError("no mark %d in %s/som.json" % (n, pack))
+    old = next(o for o in read_json(os.path.join(pack, "nodes.json")) if o["id"] == mark["node_ids"][0])
+    key = ("cls", "rid", "text", "label")
+    same = [o for o in nodes if all(o[k] == old[k] for k in key)
+            and (old["rid"] or old["text"] or old["label"] or o["bounds"] == old["bounds"])]
+    if not same:
+        raise FEError("mark %d (%r) is not on screen now: tap it by --id/--label, or snap the screen again"
+                      % (n, nav._name(old)))
+    cx, cy = nav.center(old)
+    return min(same, key=lambda o: abs(nav.center(o)[0] - cx) + abs(nav.center(o)[1] - cy))
+
+
+def target(a, nodes, kb_top, screen_wh, som_pack):
+    """((x, y), node, by): where the tap lands, on which node, named how."""
+    if a.som is not None:
+        node, by = som_node(som_pack, a.som, nodes), "som"
+    elif a.x is not None:
+        node, by = nav.find_node(nodes, rid=a.expect_id, index=a.index), "expect-id"
+    else:
+        node, by = nav.find_node(nodes, a.text, a.label, a.id, a.index), "id" if a.id else "label" if a.label \
+            else "text"
+    x, y, w, h = box = nav.visible_box(node, kb_top, screen_wh)
+    if a.x is None:
+        return nav.center({"bounds": box}), node, by
+    if not (x <= a.x < x + w and y <= a.y < y + h):
+        raise FEError("(%d, %d) is outside %r, which is at %s now: tap it by --id instead"
+                      % (a.x, a.y, nav._name(node), box))
+    return (a.x, a.y), node, by
+
+
+def tap(a, dev, after, som_pack):
+    """One tap on a node from a fresh dump, the settled result snapped into `after` with tap.json beside it."""
+    nodes, source = nav.hierarchy(dev)
+    kb_top = devices.keyboard_top(dev, nodes)
+    with tempfile.TemporaryDirectory() as d:
+        before = devices.screenshot(dev, os.path.join(d, "before.png"))
+        screen_wh = image_size(before)
+        (x, y), node, by = target(a, nodes, kb_top, screen_wh, som_pack)
+        devices.tap(dev, x, y)
+        result = settle(dev, before)
+    code = capture.snap(a.platform, a.device, after)
+    write_json(os.path.join(after, "tap.json"), dict(
+        {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "point": [x, y], "by": by,
+         "node": {k: node[k] for k in ("cls", "rid", "text", "label")}, "bounds": node["bounds"],
+         "keyboard_top": kb_top, "screen_wh": list(screen_wh), "source": source, "snap_exit": code}, **result))
+    return code, nodes, node, result
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -89,8 +149,14 @@ def main():
         p.add_argument("--coverage", required=True)
         p.add_argument("--cell", required=True)
         if name not in ("back", "drag-back", "edge"):
-            p.add_argument("--x", type=int, required=True)
-            p.add_argument("--y", type=int, required=True)
+            p.add_argument("--x", type=int, required=name != "tap")
+            p.add_argument("--y", type=int, required=name != "tap")
+        if name == "tap":
+            for flag in ("--id", "--label", "--text", "--expect-id"):
+                p.add_argument(flag)
+            p.add_argument("--som", type=int, help="a mark of the som.json in the parent of --after")
+            p.add_argument("--index", type=int, default=0)
+            p.add_argument("--after", required=True, help="the pack the tap's result is snapped into")
         if name in ("rapid", "back"):
             p.add_argument("--count", type=int, default=3 if name == "rapid" else 1)
             # a person's fast taps; 30 ms is the evil race a script alone makes, asked for explicitly
@@ -111,6 +177,13 @@ def main():
             p.add_argument("--side", required=True, choices=["top", "bottom", "left", "right"])
             p.add_argument("--dp", type=float, default=2)
     a = ap.parse_args()
+    if a.cmd == "tap":
+        named = [f for f, v in (("--id", a.id), ("--label", a.label), ("--text", a.text), ("--som", a.som),
+                                ("--x --y", a.x)) if v not in (None, "")]
+        if len(named) != 1 or (a.x is None) != (a.y is None):
+            ap.error("tap needs one target: --id, --label, --text, --som, or --x --y with --expect-id")
+        if a.x is not None and not a.expect_id:
+            ap.error("--x --y only with --expect-id: a point from an older screen lands on whatever moved there")
     guard(a.coverage, a.cell, a.platform)
     heartbeat(a.coverage, a.platform, "taps.py %s %s" % (a.cmd, a.cell))
     dev = Device(a.platform, a.device, "")
@@ -119,11 +192,10 @@ def main():
         devices.rapid_taps(dev, a.x, a.y, a.count, a.interval_ms)
         time.sleep(max(0.0, a.hold_ms / 1000.0 - (time.time() - t0)))
     elif a.cmd == "tap":
-        with tempfile.TemporaryDirectory() as d:
-            before = devices.screenshot(dev, os.path.join(d, "before.png"))
-            devices.tap(dev, a.x, a.y)
-            print(json.dumps(dict({"probe": "tap", "cell": a.cell, "x": a.x, "y": a.y}, **settle(dev, before))))
-        return 0
+        code, _, node, result = tap(a, dev, a.after, os.path.dirname(os.path.normpath(a.after)))
+        print(json.dumps(dict({"probe": "tap", "cell": a.cell, "node": nav._name(node), "after": a.after,
+                               "snap_exit": code}, **result), ensure_ascii=False))
+        return code
     elif a.cmd == "edge":
         node = next((n for n in read_json(os.path.join(a.pack, "nodes.json")) if n["id"] == a.node), None)
         if node is None:
