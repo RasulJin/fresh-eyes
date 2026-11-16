@@ -34,6 +34,9 @@ nobody answers in a night run.
   `back`, `wait`; add `--platform ios` on iOS), always with `--run <run>`: it refreshes the heartbeat the
   orchestrator watches, and a navigator silent for 10 minutes is stopped. It prints the screen as compact text after each action; when
   a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
+  It refuses an empty `--id`/`--text` and a target under the open keyboard (the tap would land on a key): hide
+  the keyboard with `nav.py back` first. Probe taps go through `taps.py tap`, which finds its node in a dump
+  taken right before the tap; never reuse coordinates from an older screen.
 - **A crash**: the launcher or another app on the printed screen after an action means the app died. Snap
   into the cell's pack first (`capture.py snap` with `--package` saves the crash log), record it done with
   `--note "app crashed after <action>"`, and only then relaunch with `devices.py app --do launch`. Do not
@@ -42,8 +45,9 @@ nobody answers in a night run.
   (slow, ~35 s).
 - A screen that never gets idle (an endless animation): `nav.py` and `capture.py` read it through the Maestro
   CLI by themselves (~20 s a call, `source: maestro` in meta.json); they refuse while a Maestro driver runs.
-- Packs come only from `capture.py`: never copy, move or write a pack's files yourself. Each step gets its own
-  snap, even on the same screen (`coverage.py` refuses `step-N is a copy of step-M`).
+- Packs come only from `capture.py` and `taps.py`: never copy, move or write a pack's files yourself. Each step
+  gets its own snap, even on the same screen (`coverage.py` refuses `step-N is a copy of step-M`). Every snap
+  goes inside its cell's pack (`<state>-<probe>/...`), never into a folder of its own beside the packs.
 - iOS: `nav.py` talks to the Maestro driver the orchestrator started. If `nav.py` says "no Maestro iOS driver",
   stop and reply `needs: ios-driver` with the cells or requests left (the orchestrator restarts it and calls
   you again).
@@ -64,6 +68,10 @@ nobody answers in a night run.
   `--env <password_env> --keychain fresh-eyes-<role>-password`. Never create
   an account. If `nav.py type` says it is not set, or signing in
   fails, mark the cells `blocked` with note "signed out: <variable> not set" or "signed out: <why>".
+- Screens without an account (their `reach` signs out, or starts from a fresh install): the app's own theme
+  survives signing out, and one left on Light keeps every signed-out screen light, so their `dark` cells end
+  "state did not apply". Before you sign out, pick the app's system option (as in the system) the way
+  `app_theme` in `config.json` says; run those cells; sign back in and put the app's theme back afterwards.
 - A form that needs a photo while the picker shows none (double-submit of a post): `blocked` with note
   "no photos on the device", never done.
 - Consent dialogs (terms, community rules, privacy, an AI or data-sharing notice: anything asking the account
@@ -88,9 +96,12 @@ nobody answers in a night run.
    screen, mark the cell blocked with note "not enough items". `loading`/`error`: run `hooks.loading` / `hooks.error` from
    `config.json` (repo root) right before the snap, and undo it after if the hook says how.
    `theme-mismatch`: `--what dark`, then pick the app's own Light theme the way `app_theme` in `config.json`
-   says, come back and snap without `--expect-differs` (done right, it looks like `default`); restore with
-   `--what light` and leave the app on Light. A `dark` cell where the app stays light (exit 4) while
-   `app_theme` is set: the app's own theme is pinned, so pick its Dark, snap again, then pick Light back.
+   says, come back and snap without `--expect-differs` but with `--app-theme <that option's label>` (done right,
+   it looks like `default`); restore with `--what light` and leave the app on Light. `dark` snaps get
+   `--app-theme <the app's option now picked>` too (its system one, or its Dark). Both write `theme-note.json`
+   (the phone's night mode and that option); `coverage.py` refuses a theme-mismatch pack without it. A `dark`
+   cell where the app stays light (exit 4) while `app_theme` is set: the app's own theme is pinned, so pick its
+   Dark, snap again, then pick Light back.
 3. **Run the probe** exactly as `probes.md` says. Fast probes use `taps.py` (with `--coverage` and `--cell`).
    Wrap transitions and probes in `capture.py around ... -- <command>` so they are recorded.
 4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --package PKG --out <run>/<platform>/<screen>/<state>-<probe>`
@@ -109,11 +120,14 @@ nobody answers in a night run.
    It also refuses a state or `keyboard-open` pack that shows none of the screen's `marker`:
    you snapped another screen, so go there and snap again. If it is that screen and it is blank or broken, set
    done with `--note` saying what it shows.
-6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell.
+6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell, and end the cell on its
+   screen at rest (nothing open, a pager on a page): the next cell's first snap checks it.
 
 Journey cells (`<platform>/journey/<id>/journey`): follow the journey's `steps` from `config.json` end to end;
-snap after every step into `<run>/<platform>/journey/<id>-journey/step-<n>/` and write `steps.json`
-(`[{"n": 1, "did": "...", "screen": "..."}]`). If the journey creates test data, delete it afterwards.
+snap after every step's action (never before it) into `<run>/<platform>/journey/<id>-journey/step-<n>/`, n being
+the step's place in `steps` (the first `→` part is 1), and write `steps.json`
+(`[{"n": 1, "did": "...", "screen": "..."}]`; a step that left the screen as it was: `"unchanged": true`). If
+the journey creates test data, delete it afterwards.
 
 Second pass: a cell id ending in `#2` belongs to an independent second pass. Its pack takes the suffix `-p2`
 (`<state>-<probe>-p2`, journeys `<id>-journey-p2`); take your own path and do not open the first pass's packs.
@@ -122,26 +136,31 @@ Scenario cells: follow `scenario` in probes.md with the screen's `task` from `co
 your `package`. Look first, touch second: snap after each action before you tap anything, so the frame shows
 what the app did by itself (a field it should have focused, a sheet it opened).
 
-For `tap-everything`, write `<pack>/taps.json`: `[{"som": n, "label": "...", "result": "<screen/state after>",
-"changed": <taps.py tap's>}]`.
+For `tap-everything`, `taps.py tap --pack <pack>` writes each row of `<pack>/taps.json` itself (label, `changed`,
+`result`) and snaps the result into `<pack>/tap-<row>`: never write or edit `taps.json` by hand.
 
 Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exactly here and in this order:
 1. `capture.py snap --out $P/before`, `nav.py swipe` inside the list, `capture.py snap --out $P --before $P/before`.
 2. For each `pages` entry k of the cell: open it by its tab, wait 1.5 s, back by this screen's tab, swipe to the
    end, snap `--out $P/page-<k>/before`, swipe once more, snap `--out $P/page-<k> --before $P/page-<k>/before`.
-3. `coverage.py set ... --evidence $P`. No other folders for this cell, no renaming.
+3. `coverage.py set ... --evidence $P`. No other folders for this cell, no renaming. The swipe moved nothing
+   because the list is too short (one result): `--status na` or `blocked` with note "not enough items".
 
 ## Requests mode (for the verifier)
 
 For each entry in each `requests.json` that has no `done` yet, reach the pack's screen first: `resnap` → new
 `snap` into `<pack>-recheck` (exit 5: another screen is up; reach it and redo, never mark that entry done);
 `repeat-probe` → run the probe
-again into `<pack>-recheck`, adding the entry's `args` (e.g. `--interval-ms 150`) to the probe's command; `crop` → `python3 $S/pixels.py crop <pack>/screen.png <pack>/crops/req-<finding>.png
+again into `<pack>-recheck` with every step of it the original ran (keyboard-open: kb-show, the `--keyboard`
+snap, kb-hide; kill-relaunch: `devices.py app --do relaunch` under `capture.py around`), adding the entry's
+`args` (e.g. `--interval-ms 150`) to the probe's command; `crop` → `python3 $S/pixels.py crop <pack>/screen.png <pack>/crops/req-<finding>.png
 --bbox x,y,w,h --zoom 2`. Add `"done": "<path>"` to each entry you fulfilled and save the file. An entry you cannot fulfil gets
 `"failed": "<why>"` instead. Skip `redo-cell` entries: the orchestrator puts those cells back in the plan.
 An entry with `"times": N`: run it N times, into `<pack>-recheck-1` … `-N`, `done` naming them all. A `why`
 says what to do (which target alone to tap, how long to record): follow it. A tap's recheck: snap
-`<pack>-recheck` before the tap (it checks the screen), `taps.py tap`, then snap `<pack>-recheck/after`.
+`<pack>-recheck` before the tap (it checks the screen), then `taps.py tap --label <target> --after
+<pack>-recheck/after` (or `--id`, or `--som N` from that snap): it snaps the result there itself, with `tap.json`;
+add `--record` when the `why` waits for a toast or a label that changes back (it is gone by the snap).
 Probe `edge`: as probes.md `### edge` says, `taps.py edge` with the entry's `args` under `capture.py around`, then
 the recheck snap with `--before <pack>`.
 

@@ -192,6 +192,40 @@ class SnapTest(unittest.TestCase):
         self.assertFalse(meta["app_running"])
         self.assertIn("java.lang.IllegalStateException: boom", log)
 
+    def test_a_package_other_than_the_runs_app_is_refused_and_the_runs_is_the_default(self):
+        # 0.5.12 feed tap-3: --package com.voiza.app read as app_running false, a false crash and a resnap
+        pids = []
+
+        def adb(dev_id, *args, **kw):
+            pids.append(args[-1])
+            return "4242\n"
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            xml = f.read()
+        with tmpdir() as run, mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml), \
+                mock.patch.object(devices, "_adb", adb):
+            write_json(os.path.join(run, "coverage.json"), {"cells": []})
+            write_json(os.path.join(run, "preflight.json"), {"platforms": {"android": {"app": "com.example.app"}}})
+            pack = os.path.join(run, "android", "settings", "default-none")
+            with self.assertRaises(capture.FEError):
+                capture.snap("android", "emulator-5560", pack, package="com.exampel.app")
+            self.assertEqual(capture.snap("android", "emulator-5560", pack), 0)
+            self.assertEqual(pids, ["com.example.app"])
+            self.assertTrue(read_json(os.path.join(pack, "meta.json"))["app_running"])
+
+    def test_a_theme_pack_notes_the_phones_and_the_apps_theme(self):
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            xml = f.read()
+        with tmpdir() as run, mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml), \
+                mock.patch.object(devices, "night_mode", lambda dev: "Night mode: yes"):
+            screen = os.path.join(run, "android", "trip-map")
+            capture.snap("android", "e", os.path.join(screen, "theme-mismatch-none"), app_theme="Светлая")
+            capture.snap("android", "e", os.path.join(screen, "dark-none"))
+            capture.snap("android", "e", os.path.join(screen, "default-none"))
+            self.assertEqual(read_json(os.path.join(screen, "theme-mismatch-none", "theme-note.json")),
+                             {"ui_night_mode": "Night mode: yes", "app_theme": "Светлая"})
+            self.assertIsNone(read_json(os.path.join(screen, "dark-none", "theme-note.json"))["app_theme"])
+            self.assertFalse(os.path.exists(os.path.join(screen, "default-none", "theme-note.json")))
+
     def test_snap_of_a_running_app_writes_no_log(self):
         meta, log = self._snap_with_app("4242\n")
         self.assertTrue(meta["app_running"])
@@ -330,6 +364,69 @@ class AroundTest(unittest.TestCase):
                 mock.patch.object(capture.time, "sleep", lambda s: None):
             capture.around("android", "emulator-5560", pack, [sys.executable, "-c", "pass"], settle=0, **kw)
         return seen[0]
+
+    def _record(self, pack, follow=None):
+        """capture.around over a 1 s, 30-frame video; follow: what motion.keyboard does."""
+        with tmpdir() as d:
+            src = os.path.join(d, "src.mkv")
+            run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=white:s=90x160:d=1:r=30",
+                 "-vf", "drawbox=x=10:y=10:w=60:h=60:color=black:t=fill:enable='gt(n,15)'", "-c:v", "ffv1", src])
+            rec = mock.Mock(started=time.time())
+
+            def stop(r):
+                shutil.copyfile(src, r.dst)
+            with mock.patch.object(devices, "start_recording", lambda dev, dst, limit_s=60: setattr(rec, "dst", dst)
+                                   or rec), \
+                    mock.patch.object(devices, "stop_recording", stop), \
+                    mock.patch.object(capture, "follow_keyboard", follow or (lambda p: None)), \
+                    mock.patch.object(capture.time, "sleep", lambda s: None):
+                capture.around("android", "e", pack, ["true"], settle=0)
+            return read_json(os.path.join(pack, "around.json"))
+
+    def test_a_recheck_recording_keeps_every_frame(self):
+        # 0.5.12 trip-map: the verifier asked for every frame of 3 s and got 3 + 8 + 4 in sheets
+        with tmpdir() as d:
+            recheck = os.path.join(d, "android", "trip-map", "default-tap-outside", "drag-1-recheck")
+            self.assertEqual(self._record(recheck)["frames_all"], 30)
+            self.assertEqual(len(os.listdir(os.path.join(recheck, "frames_all"))), 30)
+            first = os.path.join(d, "android", "trip-map", "default-tap-outside", "drag-1")
+            self.assertNotIn("frames_all", self._record(first))
+
+    def test_keyboard_json_comes_with_the_snap_and_again_after_kb_hide(self):
+        # 0.5.12: keyboard-open rechecks ran the focus and Back without motion.py --keyboard: no keyboard.json
+        seen = []
+        with tmpdir() as d:
+            pack = os.path.join(d, "android", "thread", "default-keyboard-open-recheck-1")
+            os.makedirs(os.path.join(pack, "kb-show"))
+            open(os.path.join(pack, "kb-show", "video.mp4"), "w").close()
+            with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+                xml = f.read()
+            with mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml), \
+                    mock.patch.object(devices, "screenshot", fake_screenshot), \
+                    mock.patch.object(devices, "px_per_dp", lambda dv: 2.625), \
+                    mock.patch.object(devices, "keyboard_top", lambda dv, n=(): 1500), \
+                    mock.patch.object(capture, "follow_keyboard", seen.append):
+                capture.snap("android", "e", pack, keyboard=True)
+            self.assertEqual(read_json(os.path.join(pack, "meta.json"))["keyboard_json"], "written")
+
+            def no_field(p):
+                raise capture.FEError("no focused field in %s" % p)
+            self.assertEqual(self._record(os.path.join(pack, "kb-hide"), follow=seen.append)["keyboard_json"],
+                             "written")
+            self.assertIn("no focused field", self._record(os.path.join(pack, "kb-hide"), no_field)["keyboard_json"])
+        self.assertEqual(seen, [pack, pack])
+
+    def test_a_failing_call_still_stops_the_recorder(self):
+        stopped = []
+
+        def boom():
+            raise capture.FEError("adb gone")
+        with tmpdir() as d, mock.patch.object(devices, "start_recording", lambda dev, dst, limit_s=60: "rec"), \
+                mock.patch.object(devices, "stop_recording", stopped.append), \
+                mock.patch.object(capture.time, "sleep", lambda s: None):
+            with self.assertRaises(capture.FEError):
+                capture.around("android", "e", os.path.join(d, "p"), ["taps.py", "slow"], call=boom)
+        self.assertEqual(stopped, ["rec"])
 
     def test_ceiling_comes_from_the_runs_coverage(self):
         with tmpdir() as d:

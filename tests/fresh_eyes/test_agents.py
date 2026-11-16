@@ -82,6 +82,14 @@ class AgentsTest(unittest.TestCase):
             with open(os.path.join(skill_dir, rel), encoding="utf-8") as f:
                 self.assertIn("`consents`", f.read(), rel)
 
+    def test_signed_out_screens_get_the_apps_system_theme_before_sign_out(self):
+        # 0.5.12 welcome/consent-doc dark: the app's own «Light» survived sign-out, both cells blocked
+        nav = " ".join(frontmatter("navigator")[1].split())
+        self.assertIn("Before you sign out, pick the app's system option", nav)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "references", "config-format.md"),
+                  encoding="utf-8") as f:
+            self.assertIn("picks the system one before signing out", " ".join(f.read().split()))
+
     def test_navigator_never_builds_a_pack_and_rechecks_on_the_packs_screen(self):
         # 0.5.11: hand-made packs with an old frame, copied steps, a recheck snapped on another screen
         nav = " ".join(frontmatter("navigator")[1].split())

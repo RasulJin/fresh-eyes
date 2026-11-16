@@ -7,17 +7,15 @@ preflight allowed mutation.
 
 Fast probes go straight to the device (`taps.py`, both platforms): a model round-trip or a Maestro flow (which
 waits for the screen to settle) is too slow to reproduce races. Navigation to the state goes through `nav.py`.
-iOS input goes through the Maestro XCTest driver, which serializes touches: rapid taps land ~225 ms apart there
-(enough for double-submit windows, not for a sub-100 ms race), and Back is a left-edge swipe.
+iOS input goes through the Maestro XCTest driver: rapid taps land ~225 ms apart there, Back is a left-edge swipe.
 
 ### none
-Just look. `capture.py snap`, on Android always with `--package <app.android_id>`: `"app_running": false` in its
-output and meta.json is a crash, its log goes to the pack's `logcat.txt`. With `--keyboard` when an input is
-focused. On the `default` state add `--pages`: the snap then scrolls the screen's list half a screen at a time
-into `scroll-<k>/` and back, so the checks see the whole screen, not its first viewport. `scroll_stop` says why
-the pages ended: `end`, `limit`, `keyboard covers list` (drags stay above an open keyboard), or the page snap
-that failed. `"scroll_restored": false` in its output: swipe the list back to the top with `nav.py swipe` (slow,
-short drags) before the next cell.
+Just look. `capture.py snap` (Android: `"app_running": false` in its output and meta.json is a crash, its log
+goes to the pack's `logcat.txt`), with `--keyboard` when an input is focused. On the `default` state add
+`--pages`: the snap then scrolls the screen's list half a screen at a time into `scroll-<k>/` and back, so the
+checks see the whole screen. `scroll_stop` says why the pages ended: `end`, `limit`, `keyboard covers list`
+(drags stay above an open keyboard), or the page snap that failed. `"scroll_restored": false` in its output:
+swipe the list back to the top with `nav.py swipe` (slow, short drags) before the next cell.
 
 ### rapid-tap
 - Reveals: double sheets/dialogs, double send, double navigation (stacked screens).
@@ -28,8 +26,7 @@ short drags) before the next cell.
   before; rows move after state changes, never reuse them). `--interval-ms 30` only when a request asks for it.
 - Oracle: one Back/dismiss later nothing of it is left on screen: `taps.py back` once, then
   `capture.py snap --out <pack>/afterback` (`coverage.py set` refuses the cell without it).
-- Control, same pack: the same with `--count 1` into `<pack>/single` and `<pack>/single/afterback`.
-- Mutating: no (but if the button sends something, the probe belongs to a mutating cell).
+- Control: `--count 1` into `<pack>/single` and `<pack>/single/afterback`. Mutating only if the button sends.
 
 ### tap-outside
 - Reveals: cards/sheets/menus that do not dismiss, scrims that pass taps through, sheets sliding under cards.
@@ -43,9 +40,8 @@ short drags) before the next cell.
 ### back-during-animation
 - Reveals: half-open states, invisible windows that eat taps, jumps.
 - `taps.py tap-back --x X --y Y --delay-ms 100` (x, y: the control that opens the sheet/menu/screen, from a
-  fresh `nav.py screen`): the tap and Back go out in one command, Back lands mid-transition (iOS: the
-  edge swipe, no sooner than ~225 ms). Repeat with `--delay-ms 50` and `150`. Then tap the content behind to
-  check it responds.
+  fresh `nav.py screen`): the tap and Back go out in one command, Back lands mid-transition (iOS: the edge
+  swipe, no sooner than ~225 ms). Repeat with `--delay-ms 50` and `150`. Then tap the content behind.
 - Evidence: `capture.py around` around each `tap-back`, `--out <pack>/d100`, `<pack>/d50`, `<pack>/d150` (the
   delay in the name; `coverage.py set` reads these sub-folders). It refuses the cell when no recorded frame
   moved (Back landed before the transition began): repeat with a longer `--delay-ms`, or on Android widen the
@@ -70,14 +66,15 @@ short drags) before the next cell.
 
 ### kill-relaunch
 - Reveals: state that should persist (session, drafts, theme, onboarding done) but does not; welcome flashes.
-- Android: `am force-stop`, then launch under `capture.py around`. iOS: `simctl terminate` + `launch`.
+- `capture.py around --out <pack> -- python3 $S/devices.py app --platform P --device ID --app <app id> --do
+  relaunch`: it stops the app, starts it and returns 4 s after its first frame, so the video holds the splash.
 
 ### keyboard-open
 - Reveals: what the keyboard or a footer on it hides; focus without keyboard; a field that jumps twice or lags.
 - Steps: focus the main input under `capture.py around --out <pack>/kb-show -- python3 $S/nav.py tap ...`, then
   `capture.py snap --keyboard --before <pack before focus>`; Android: Back only hides it, recorded with
-  `capture.py around --out <pack>/kb-hide -- python3 $S/taps.py back ...`; `motion.py --keyboard <pack>`. Then
-  the other inputs; type with real key taps when the IME matters.
+  `capture.py around --out <pack>/kb-hide -- python3 $S/taps.py back ...`; `keyboard.json` comes by itself
+  (after the snap, again after kb-hide). Then the other inputs; type with real key taps when the IME matters.
 - Focus it again, leave (a link, avatar or tab, not Back; a modal: close and reopen) and return; keyboard up
   again: one `taps.py back`, wait 1.5 s; `capture.py snap --out <pack>/return` (a stale inset). `coverage.py set`
   needs `keyboard.json` and that snap with the keyboard closed. Open/close 3–4 times: does the form creep?
@@ -100,7 +97,8 @@ short drags) before the next cell.
 - Before: `capture.py logs --platform android --device ID --out PACK --package PKG --clear` (PKG =
   `app.android_id`).
 - Steps: snap after each into `<pack>/step-<n>/` and write `<pack>/steps.json`:
-  `[{"n": 1, "kind": "task", "did": "...", "expect": "..."}]`, with `expect` written before you look.
+  `[{"n": 1, "kind": "task", "did": "...", "expect": "..."}]`, with `expect` written before you look; a step
+  whose action left the screen as it was (an invalid input refused in place) also gets `"unchanged": true`.
   1. `task`: do what the screen is for (the screen's `task` in config) end to end with realistic input, and use
      each primary action the screen offers on the way (the buttons on a result or card), not one path only;
      wait for each result. Go through every form the screen opens itself (config `forms`: a header button's
@@ -131,8 +129,8 @@ short drags) before the next cell.
 - Steps: snap into `<pack>/before` → `nav.py swipe` inside the container's bounds → snap the pack itself with
   `--before <pack>/before` (exact paths: navigator.md);
   `geometry.still_clipped` flags rows still cut. `coverage.py set` refuses a pack snapped without `--before`,
-  and one where the swipe moved nothing (it missed the list): swipe inside the list itself. A container that
-  truly does not scroll goes in `--note`.
+  and one where the swipe moved nothing, note or not: swipe inside the list itself; too few items to scroll is
+  `--status na` or `blocked` with note "not enough items", never done.
 - On a page of a pager or tab set, for each config `pages` entry k: open that page by its tab, wait 1.5 s, come
   back by this screen's tab, swipe the content up to its end, snap into `<pack>/page-<k>/before`, swipe once more
   and snap into `<pack>/page-<k>` with `--before` that. A page laid out while a shorter one was open can stay
@@ -150,27 +148,29 @@ short drags) before the next cell.
 ### drag-interrupt
 - Reveals: invisible windows left after a drag closes something (the next tap is eaten), Back mid-drag reopening
   it or leaving the content dead or shifted, pagers and drawers that jump past halfway or snap back.
-- Target: the screen's `draggable` in config (a drawer, a pager, a bottom sheet); x, y from a fresh `nav.py screen`.
-  Each step under `capture.py around`, snapped into its subpack (`coverage.py set` refuses the cell without
-  all three), and `<pack>/steps.json` as in `scenario` (`did`, `expect` written before you look):
-  1. `slow`: relaunch the app (`devices.py app --do terminate`, then `--do launch`), reach the screen and, as the
-     first touch, `nav.py swipe --ms 2000` over 40% of the surface, then again over 60%. Snap into
-     `<pack>/slow`. Oracle: under half it springs back, over half it moves on; it never sticks between.
+- Android only. Target: the screen's `draggable` in config (a drawer, a pager, a bottom sheet), x, y from a fresh
+  `nav.py screen`. Each step is one `taps.py` call with `--pack <pack>`: it snaps `<pack>/<step>/before` (on the
+  screen's marker, else refused: bring the screen to rest, run again), records the gesture into `<pack>/<step>`
+  and snaps where it left 1.5 s later; never snap these yourself. `<pack>/steps.json` as in `scenario`:
+  1. `slow`: relaunch the app (`devices.py app --do terminate`, then `--do launch`), reach the screen; as the
+     first touch `taps.py slow --from X,Y --to X,Y` (`--to`: the far end of a drag across the whole surface; it
+     drags 40 %, then 60 %). Oracle: under half it springs back, over half it moves on; it never sticks between.
   2. `drag-back`: `taps.py drag-back --from X,Y --to X,Y --ms 2000 --back-at-ms 700` (Back while the finger is
-     still down), wait 1.5 s, snap into `<pack>/drag-back`, then tap the content behind and snap again. Oracle:
-     Back closed it (or Back did what it does without the drag), and the content answers the tap.
+     down), then `taps.py tap --label <the content behind> --after <pack>/drag-back/tap`. Oracle: Back closed it
+     (or did what it does without the drag), and the content answers the tap.
   3. `swipe-tap`: with it open, `taps.py swipe-tap --from X,Y --to X,Y --x X --y Y` (the drag that closes it,
-     then, the run's `motion_ceiling_ms` after the finger lifts (`--delay-ms` overrides), a tap on something
-     behind it that visibly reacts: a card that opens), wait 1.5 s, snap into `<pack>/swipe-tap`. Oracle: the
-     tap landed: by then the closing animation is over. A tap that only works a moment later is a BUG.
-- Android only: the iOS driver cannot press Back while a drag is still running.
+     then, the run's `motion_ceiling_ms` after the finger lifts, a tap on something behind it that visibly
+     reacts). Oracle: the tap landed: by then the closing animation is over. A tap that works only later is a BUG.
 
 ### tap-everything
 - Reveals: dead taps, wrong destinations, labels that lie ("Follow" opening the profile), disabled controls
   that look enabled.
 - Steps: for each clickable node in `nodes.json` (skip destructive labels: delete, remove, log out, pay, send),
-  `taps.py tap --x X --y Y` on its center (it returns once two frames 0.4 s apart match and differ from the one
-  before the tap, ≤3 s), snap, go back. `taps.json`: "tapped N → screen/state" and its `changed`.
+  `taps.py tap --pack <pack> --som N` (its mark in the pack's `som.json`, or `--id`/`--label`; `--x --y` only
+  with `--expect-id`): it finds the node in a dump taken just before the tap (refused: gone, off screen, under
+  the keyboard), waits until the screen settles (≤3 s), snaps the result with `tap.json` into `<pack>/tap-<k>`
+  and appends row k of `taps.json` (label, `changed`, `result`) itself. Go back. `--record` on a label that
+  promises a short reply (Copy, Like, Save): a 2 s toast is gone by the snap, the video keeps it.
 - Reply/comment buttons and inputs only focus a field, they change no data: tap them too, and first, so the
   later taps leave and return with the keyboard having been up.
 

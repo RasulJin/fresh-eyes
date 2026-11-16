@@ -9,7 +9,8 @@ Maestro: text/label are full-string, case-insensitive regexes; ids match by suff
 
 CLI (all print the compressed screen after acting; --platform defaults to android):
   nav.py screen --device ID [--platform android|ios]
-  nav.py tap    --device ID (--text RE | --label RE | --id SUFFIX | --point X,Y) [--index N]
+  nav.py tap    --device ID (--text RE | --label RE | --id SUFFIX | --point X,Y) [--index N]   (refused: an empty
+                 one, a target under the open keyboard; a node half under it is tapped on its visible part)
   nav.py type   --device ID (--text "text" | [--env VAR] [--keychain SERVICE])   (Android: ASCII only; secrets:
                  the variable when set, else the macOS keychain item; never printed)
   nav.py swipe  --device ID --from X,Y --to X,Y [--ms 300]
@@ -93,6 +94,8 @@ def _full(pattern, value):
 
 
 def find_node(nodes, text=None, label=None, rid=None, index=0):
+    if not any((text, label, rid)) or "" in (text, label, rid):  # an empty id matches every node (0.5.12)
+        raise FEError("name the element with a non-empty --text, --label or --id")
     matches = [n for n in nodes
                if (text is None or _full(text, n["text"]))
                and (label is None or _full(label, n["label"]))
@@ -109,13 +112,41 @@ def center(node):
     return x + w // 2, y + h // 2
 
 
+def _on_keyboard(node):
+    return node["cls"] in ("Key", "Keyboard") or node["rid"].startswith(devices.GBOARD)
+
+
+def visible_box(node, kb_top=None, screen_wh=None):
+    """The part of the node a finger can reach: inside the screen and above an open keyboard (a tap below its
+    top lands on a key: 0.5.12 opened Gboard's clipboard). FEError when nothing of it is left."""
+    x, y, w, h = node["bounds"]
+    right, bottom = x + w, y + h
+    if screen_wh:
+        x, y, right, bottom = max(x, 0), max(y, 0), min(right, screen_wh[0]), min(bottom, screen_wh[1])
+        if right <= x or bottom <= y:
+            raise FEError("%r is off screen at %s: scroll it into view first" % (_name(node), node["bounds"]))
+    if kb_top is not None and not _on_keyboard(node):
+        bottom = min(bottom, kb_top)
+        if bottom <= y:
+            raise FEError("%r is under the keyboard (its top y=%d): hide the keyboard first (nav.py back)"
+                          % (_name(node), kb_top))
+    return [x, y, right - x, bottom - y]
+
+
+def _name(node):
+    return node.get("text") or node.get("label") or node.get("rid") or node.get("id")
+
+
 def tap(dev, text=None, label=None, rid=None, point=None, index=0):
     if point:
+        node = {"id": None, "cls": "", "text": "", "label": "", "rid": "", "bounds": [point[0], point[1], 1, 1]}
+        visible_box(node, devices.keyboard_top(dev, screen_nodes(dev) if dev.platform == "ios" else ()))
         devices.tap(dev, point[0], point[1])
         time.sleep(SETTLE_S)
-        return {"id": None, "text": "", "bounds": [point[0], point[1], 0, 0]}
-    node = find_node(screen_nodes(dev), text, label, rid, index)
-    devices.tap(dev, *center(node))
+        return dict(node, bounds=[point[0], point[1], 0, 0])
+    nodes = screen_nodes(dev)
+    node = find_node(nodes, text, label, rid, index)
+    devices.tap(dev, *center({"bounds": visible_box(node, devices.keyboard_top(dev, nodes))}))
     time.sleep(SETTLE_S)
     return node
 

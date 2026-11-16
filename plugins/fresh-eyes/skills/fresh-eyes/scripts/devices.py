@@ -8,8 +8,10 @@ CLI:
   devices.py stop --platform android|ios      (shuts down every running fresh-eyes device of that platform)
   devices.py screenshot --platform P --device ID --out PNG
   devices.py set --platform P --device ID [--name NAME] --what dark|light|font-xl|font-default|offline|online|...
-  devices.py app --platform P --device ID [--name NAME] --app BUNDLE --do launch|terminate|clear|background|install|locale
-                 [--artifact APK_OR_APP] [--locale TAG]   (iOS clear uninstalls: install again before launch)
+  devices.py app --platform P --device ID [--name NAME] --app BUNDLE
+                 --do launch|terminate|relaunch|clear|background|install|locale [--artifact APK_OR_APP] [--locale TAG]
+                 (iOS clear uninstalls: install again before launch; relaunch: stop, start, return 4 s after the
+                 app's first frame, for kill-relaunch under capture.py around)
 """
 import argparse
 import glob
@@ -438,12 +440,17 @@ def back(dev, count=1, interval_ms=0):
                                   "appIds": []}, base=base)
 
 
+def _component(dev, app_id):
+    """The app's launcher activity (pkg/.Activity), "" when the package manager names none."""
+    lines = _shell(dev, "cmd package resolve-activity --brief %s" % app_id, check=False).strip().splitlines()
+    return lines[-1].strip() if lines and "/" in lines[-1] else ""
+
+
 def launch(dev, app_id):
     _require_owned(dev, "launch apps")
     _app_id(app_id)
     if dev.platform == "android":
-        lines = _shell(dev, "cmd package resolve-activity --brief %s" % app_id, check=False).strip().splitlines()
-        component = lines[-1].strip() if lines and "/" in lines[-1] else ""
+        component = _component(dev, app_id)
         if component:
             _shell(dev, "am start -n %s" % component)
         else:  # monkey exits non-zero on some images even when it launched the app
@@ -455,6 +462,22 @@ def launch(dev, app_id):
             raise FEError("%s did not start on %s" % (app_id, dev.id))
     else:
         _simctl("launch", dev.id, app_id)
+
+
+RELAUNCH_HOLD_S = 4.0  # a cold start's splash, then the first screen: the recording must outlast both
+
+
+def relaunch(dev, app_id, hold_s=RELAUNCH_HOLD_S):
+    """kill-relaunch in one call: stop the app, start it, return hold_s after its first frame (Android: `am start
+    -W` returns once it is drawn), so a recording around it holds the splash and what follows (0.5.12: a cold
+    start recorded for 1.3 s showed only the launcher)."""
+    terminate(dev, app_id)
+    component = _component(dev, app_id) if dev.platform == "android" else ""
+    if component:
+        _shell(dev, "am start -W -n %s" % component, timeout=120)
+    else:
+        launch(dev, app_id)
+    time.sleep(hold_s)
 
 
 def terminate(dev, app_id):
@@ -569,6 +592,13 @@ def set_dark(dev, on):
         _shell(dev, "cmd uimode night %s" % ("yes" if on else "no"))
     else:
         _simctl("ui", dev.id, "appearance", "dark" if on else "light")
+
+
+def night_mode(dev):
+    """The phone's own theme as the system reports it ("Night mode: yes" / "dark"), for a pack's theme-note."""
+    if dev.platform == "android":
+        return _shell(dev, "cmd uimode night", check=False).strip()
+    return _simctl("ui", dev.id, "appearance", check=False).strip()
 
 
 def set_font_scale(dev, level):
@@ -704,7 +734,7 @@ def apply_setting(dev, what):
 
 
 APP_ACTIONS = {"launch": launch, "terminate": terminate, "clear": clear_app,
-               "background": background_foreground}
+               "background": background_foreground, "relaunch": relaunch}
 
 
 def main():

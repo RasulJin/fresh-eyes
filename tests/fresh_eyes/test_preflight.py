@@ -239,19 +239,69 @@ class PreflightTest(unittest.TestCase):
         self.assertFalse(st["small_device"])
         self.assertIn("another build", " ".join(st["problems"]))
 
+    def install_world(self, builds):
+        """devices whose app build is builds[dev.id] (None: not installed); install puts the file's hash there."""
+        installed = []
+
+        def install(dev, artifact):
+            installed.append((dev.id, os.path.basename(artifact)))
+            builds[dev.id] = preflight.artifact_build(artifact)
+        for name, fn in {"app_installed": lambda dev, app: builds.get(dev.id) is not None,
+                         "app_build": lambda dev, app: builds.get(dev.id), "install": install}.items():
+            p = mock.patch.object(devices, name, fn)
+            p.start()
+            self.addCleanup(p.stop)
+        return installed
+
     def test_fix_installs_the_runs_build_on_a_small_device_with_another(self):
         small = Device("android", "emulator-5562", "fresh-eyes-small")
         self.fake_devices(listed=(PIXEL, small))
-        builds, installed = {small.id: "c" * 64}, []
-
-        def install(dev, artifact):
-            installed.append((dev.id, artifact))
-            builds[dev.id] = "b" * 64
-        with mock.patch.object(devices, "app_build", lambda dev, app: builds.get(dev.id, "b" * 64)), \
-                mock.patch.object(devices, "install", install):
-            st = preflight.check(config(), "full", fix=True, project="/p")["platforms"]["android"]
-        self.assertEqual(installed, [(small.id, "/p/build/app.apk")])
+        with tmpdir() as repo:
+            os.makedirs(os.path.join(repo, "build"))
+            with open(os.path.join(repo, "build", "app.apk"), "w") as f:
+                f.write("apk")
+            installed = self.install_world({PIXEL.id: preflight.artifact_build(os.path.join(repo, "build",
+                                                                                              "app.apk")),
+                                            small.id: "c" * 64})
+            st = preflight.check(config(), "full", fix=True, project=repo)["platforms"]["android"]
+        self.assertEqual(installed, [(small.id, "app.apk")])
         self.assertTrue(st["small_device"])
+
+    def test_fix_installs_the_given_apk_on_both_devices(self):
+        # 0.5.12: the APK went onto both emulators by hand (adb install -r) before preflight
+        small = Device("android", "emulator-5562", "fresh-eyes-small")
+        self.fake_devices(listed=(PIXEL, small))
+        with tmpdir() as d:
+            apk = os.path.join(d, "app-release.apk")
+            with open(apk, "w") as f:
+                f.write("new build")
+            installed = self.install_world({PIXEL.id: None, small.id: "c" * 64})
+            st = preflight.check(config(), "quick", fix=True, apk=apk)["platforms"]["android"]
+            self.assertEqual(installed, [(PIXEL.id, "app-release.apk"), (small.id, "app-release.apk")])
+            self.assertTrue(st["ok"] and st["small_device"])
+            self.assertEqual(st["build"], preflight.artifact_build(apk))
+            self.install_world({PIXEL.id: "c" * 64})  # without --fix the named build must already be there
+            st = preflight.check(config(), "quick", apk=apk)["platforms"]["android"]
+            self.assertFalse(st["ok"])
+            self.assertIn("another build than --apk", " ".join(st["problems"]))
+
+    def test_no_app_and_no_build_to_install_is_not_ready_with_the_reason(self):
+        self.fake_devices(installed=False)
+        res = preflight.check(config(), "quick", fix=True)
+        self.assertFalse(res["ok"])
+        self.assertIn("no build to install: pass preflight --apk <path>", " ".join(res["unchecked"]))
+
+    def test_an_installed_build_named_by_source_is_not_replaced(self):
+        self.fake_devices()
+        with tmpdir() as repo:
+            os.makedirs(os.path.join(repo, "build"))
+            open(os.path.join(repo, "build", "app.apk"), "w").close()
+            installed = self.install_world({PIXEL.id: "c" * 64})
+            with mock.patch.object(preflight, "_source", lambda project, ref, metro: {"ref": ref, "root": repo}):
+                preflight.check(config(), "full", fix=True, project=repo, source="v1.2")
+                self.assertEqual(installed, [])
+                preflight.check(config(), "full", fix=True, project=repo, source="built")
+                self.assertEqual(installed, [(PIXEL.id, "app.apk")])
 
     def test_build_drift_names_the_device_whose_app_changed(self):
         small = Device("android", "emulator-5562", "fresh-eyes-small")
