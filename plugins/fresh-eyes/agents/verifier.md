@@ -27,14 +27,16 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 
 ## First pass
 
-A findings file's `requests` (a reviewer's tap no frame showed the result of): append each to `requests.json`
-once, with `"from": "<findings file>"`.
+A findings file's `requests` (what a reviewer could not see: a tap's result, a crop, a frame): append each to
+`requests.json` once, with `"from": "<findings file>"`.
 
 IMPs are proposals for the owner, not claims: no rechecks or requests for them. Leave each `pending` (final
 for an IMP), except `rejected` with a note when the spec slice or `known.md` contradicts it.
 
 For each BUG with `verdict: "pending"`:
 1. Open its evidence crop(s); open the pack's `som.png` only when the crop lacks context. Read the spec rule.
+   A BUG at confidence ≤ 0.4, or whose `actual` says its evidence is missing ("needs a frame", "not checked",
+   "seems"), is a guess: request the evidence that decides it (step 4), or set `kind` to `IMP` when none can.
 2. Try to disprove it:
    - the "truncated" text is actually complete in the crop; the "clipped" row scrolls fully into view in a
      `swipe-inside` pack; the "overlap" is an intended badge; the "flash" is a deliberate crossfade;
@@ -114,9 +116,10 @@ inputs first. Use the `-recheck` evidence. A finding whose request has neither `
 evidence never came; the verdict then stays INCOMPLETE). Rule on every other pending finding: `confirmed` (reproduced, evidence
 attached), `rejected` (disproved, say how; a repeat that does not reproduce: flaky or intermittent, see first pass), or `unsure` (evidence still ambiguous: say what a human should look
 at). Adjust `severity` if the evidence shows a different impact, and say so in `verify_note`.
-An entry `from` a findings file: judge its `-recheck` pack (the tap's result: its `after/`) as a reviewer would. The tap does what its label and
-`why` say → nothing to write; it does not (no reaction on a settled frame, another screen) → add a BUG to that
-file (`id` `r<k>`, `steps`, the recheck as evidence), `confirmed`.
+An entry `from` a findings file: judge its `-recheck` pack (a tap's result: its `after/`) as a reviewer would.
+It does not show what `why` names as the defect (the tap does what its label says) → nothing to write; it shows
+it (no reaction on a settled frame, another screen, the cut or overlap) → add a BUG to that file (`id` `r<k>`,
+`steps`, the recheck as evidence), `confirmed`.
 
 ## Reply (≤10 lines)
 

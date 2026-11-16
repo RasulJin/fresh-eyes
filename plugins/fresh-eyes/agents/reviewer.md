@@ -80,17 +80,22 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    their on-screen text, the last item saying what to look at. No cell ids, pack names, step numbers, script
    commands or coordinates there: those go to `found_by` (cell id, probe, pack or scenario step). `confidence` reflects how
    sure the evidence makes you; `taste` findings are capped at 0.6.
-7. Things you suspect but cannot see well enough (needs a zoom, another frame, a repeat): still write the
-   finding with low confidence and say in `actual` what evidence is missing. The verifier will chase it.
-   Except a tap whose result no frame shows (no snap after it, one from before the transition, another screen
-   on it): no finding, an entry in the output's `requests`: `{"pack": "<that tap's pack>", "do": "repeat-probe",
-   "probe": "tap-everything", "why": "tap «<label>» alone, snap after: <what it should open>"}`; the verifier rules on it.
+7. A guess is not a BUG. What you suspect but no frame shows well enough (needs a zoom, another frame, the end
+   of a list, a repeat): no finding, an entry in the output's `requests`: `{"pack": "<pack>", "do":
+   "resnap|crop|repeat-probe", "probe": "<probe id>", "bbox": [x, y, w, h] (crop only), "why": "<what the new
+   evidence shows if it is a bug>"}`; the verifier has it fetched and rules on it. So is a tap whose result no
+   frame shows (no snap after it, one from before the transition, another screen on it):
+   `{"pack": "<that tap's pack>", "do": "repeat-probe", "probe": "tap-everything", "why": "tap «<label>» alone,
+   snap after: <what it should open>"}`. A doubt no evidence can settle (a word, a choice): an IMP. So a BUG has
+   confidence above 0.4 and a frame or log line that shows it; its title never starts «Not verified» / «Не
+   проверено», and its `actual` never says the evidence is missing («needs a frame», «not checked», «seems»,
+   «нужен кадр», «не проверено», «похоже»).
 8. "Bug or intended?" doubts go to `questions[]` with short options and `finding` = the id of the finding they
    are about — **in addition to** a finding, never instead of one (only a `spec-text`, `known` or `conflict`
    entry, checklist "Do not flag", stands alone). What a `⚠ conflict` rule itself leaves to the owner (the spec
    already asks): no finding, `{"class": "conflict", "text": "<rule id>: <what the frame shows>"}`. If the spec
    is silent and you are unsure whether something is intended (a reference app does it differently, siblings
-   disagree), still write it as a finding with `rule: taste` and confidence ≤ 0.5, so it reaches "look with
+   disagree), still write it as a finding with `rule: taste` and confidence 0.5, so it reaches "look with
    your own eyes". A doubt that only lives in `questions[]` gets lost.
 
 Consistency inside the app beats reference apps: if one surface breaks the app's own pattern (sharp corners where
@@ -102,8 +107,8 @@ that). The exceptions are single lookups, and only in `source_root` (the checkou
 the build): a hit area (`hitSlop`, padding, a wrapper) or a screen-reader label; and, when the app shows other
 words or lacks an element the spec asks for, the app's words under a string key or a comment beside them saying
 the choice is deliberate (then no BUG: a `spec-text` or `known` entry in `questions[]`, report-format.md). No
-`source_root`: no lookups, and a target drawn under the minimum gets confidence ≤ 0.5 with `actual` saying the
-hit area was not checked.
+`source_root`: no lookups, and a target drawn under the minimum gets confidence 0.5 with its drawn size in
+`actual` (the verifier probes its hit area).
 
 Never report a bug without evidence that shows it: a frame, or for an app error the `logcat.txt` line. Never flag what `known.md` lists or the checklist's
 do-not-flag section covers. Do not describe the screen; report problems.

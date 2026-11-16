@@ -72,6 +72,21 @@ class AgentsTest(unittest.TestCase):
         nav = " ".join(frontmatter("navigator")[1].split())
         self.assertIn('An entry with `"times": N`', nav)
 
+    def test_a_guess_is_a_request_or_an_imp_never_a_bug_0_5_13(self):
+        # 0.5.12 run: 19 of 32 rejects had confidence <= 0.4 ("needs a frame", "not checked"), one titled «Не проверено: …»
+        reviewer = " ".join(frontmatter("reviewer")[1].split())
+        for word in ("A guess is not a BUG", '"do": "resnap|crop|repeat-probe"', "confidence above 0.4",
+                     "«Не проверено»", "«нужен кадр»"):
+            self.assertIn(word, reviewer, word)
+        self.assertNotIn("still write the finding with low confidence", reviewer)
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        self.assertIn("is a guess: request the evidence that decides it", verifier)
+        self.assertIn("what a reviewer could not see", verifier)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "references", "checklist.md"), encoding="utf-8") as f:
+            checklist = " ".join(f.read().split())
+        self.assertIn('no title "Not verified: …"', checklist)
+        self.assertNotIn("still write the finding with low confidence", checklist)
+
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
         nav = " ".join(frontmatter("navigator")[1].split())
