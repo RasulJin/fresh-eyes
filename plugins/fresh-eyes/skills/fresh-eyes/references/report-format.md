@@ -77,6 +77,9 @@ orchestrator handles (the cell back to `todo`, navigated and reviewed again, the
 ## Verdict
 
 Computed only by `coverage.py verdict` (never by a model); the first that applies wins:
+- one defect ruled both ways (a finding confirmed with `same_as` to a rejected one or the reverse, or the same
+  kind, rule and title confirmed once and rejected once) → `CONFLICT` (РЕШЕНИЯ РАСХОДЯТСЯ): no report yet; the
+  verdict's `conflicts` lists the pairs (file#id), each pair goes to one verifier, then the verdict runs again;
 - any confirmed BUG of severity high → `BLOCK` (НЕ ВЫПУСКАТЬ);
 - any confirmed BUG of severity medium → `ISSUES` (ЕСТЬ ПРОБЛЕМЫ), even when something was not checked;
 - any cell not done (`na` too: drop that probe from the config), any done cell whose packs no reviewer listed,

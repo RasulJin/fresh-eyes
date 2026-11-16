@@ -587,6 +587,28 @@ class VerdictTest(unittest.TestCase):
         for group in ([a, b], [a, b, c], [dup]):  # each other, a chain, a target not passed
             self.assertEqual(verdict(self.cov, group, "en", packs)["merged"], [])
 
+    def test_one_defect_ruled_both_ways_stops_at_conflict(self):
+        # 20261116-1107-full: feed-trips#2f1 confirmed with same_as feed#2f1, which the feed verifier rejected
+        packs = done_all(self.cov, self.root)
+        feed = {"id": "f1", "kind": "BUG", "severity": "medium", "verdict": "rejected", "rule": "spec:G-avatar",
+                "title": "Уведомления: у каждой строки нет аватара автора — пустое место слева",
+                "_file": "android/feed/findings-2.json"}
+        trips = {"id": "f1", "kind": "BUG", "severity": "low", "verdict": "confirmed", "rule": "spec:G-avatar",
+                 "title": "В «Уведомлениях» аватары авторов появляются с задержкой",
+                 "same_as": "android/feed/findings-2.json#f1", "_file": "android/feed-trips/findings-2.json"}
+        v = verdict(self.cov, [feed, trips], "ru", packs)
+        self.assertEqual((v["code"], v["label"]), ("CONFLICT", "РЕШЕНИЯ РАСХОДЯТСЯ"))
+        self.assertEqual(v["conflicts"], [["android/feed-trips/findings-2.json#f1", "android/feed/findings-2.json#f1"]])
+        self.assertIn("feed/findings-2.json#f1 (rejected)", v["reasons"][0])
+        self.assertEqual(verdict(self.cov, [dict(feed, verdict="confirmed"), trips], "en", packs)["code"], "ISSUES")
+        self.assertEqual(verdict(self.cov, [dict(feed, verdict="unsure"), trips], "en", packs)["conflicts"], [])
+        # no same_as: one case (kind, rule, title up to digits and punctuation) on two screens, ruled both ways
+        a = dict(feed, verdict="confirmed", title="Аватар: нет заглушки (3 строки)")
+        b = dict(feed, id="f4", _file="android/thread/findings.json", title="аватар — нет заглушки, 5 строки")
+        self.assertEqual(len(verdict(self.cov, [a, b], "en", packs)["conflicts"]), 1)
+        for other in (dict(b, rule="spec:G-other"), dict(b, kind="IMP"), dict(b, title="Аватар обрезан")):
+            self.assertEqual(verdict(self.cov, [a, other], "en", packs)["conflicts"], [])
+
     def test_one_log_error_on_many_screens_counts_once(self):
         packs = done_all(self.cov, self.root)
 

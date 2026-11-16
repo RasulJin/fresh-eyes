@@ -69,8 +69,9 @@ STATE_NEEDS = {"empty": "seed", "long-text": "seed", "long-list": "seed", "loadi
 STATUSES = ("todo", "done", "failed", "blocked", "na")
 LABELS = {
     "ru": {"BLOCK": "НЕ ВЫПУСКАТЬ", "ISSUES": "ЕСТЬ ПРОБЛЕМЫ", "INCOMPLETE": "НЕ ПРОВЕРЕНО ДО КОНЦА",
-           "CLEAN": "ЧИСТО"},
-    "en": {"BLOCK": "DO NOT SHIP", "ISSUES": "HAS ISSUES", "INCOMPLETE": "NOT FULLY CHECKED", "CLEAN": "CLEAN"},
+           "CLEAN": "ЧИСТО", "CONFLICT": "РЕШЕНИЯ РАСХОДЯТСЯ"},
+    "en": {"BLOCK": "DO NOT SHIP", "ISSUES": "HAS ISSUES", "INCOMPLETE": "NOT FULLY CHECKED", "CLEAN": "CLEAN",
+           "CONFLICT": "RULINGS DISAGREE"},
 }
 CODE_EXT = (".ts", ".tsx", ".js", ".jsx")
 DARK_MAX = 120  # mean gray of a dark-theme frame: dark screens measured 56-68, light ones 173-196
@@ -381,8 +382,10 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_st
     """reviewed: pack paths some reviewer listed in reviewed_packs. A done cell none of whose packs was reviewed
     is not checked; a BUG still pending was never verified; build_changed (preflight.build_drift) means the
     run did not test one build. None of them can end in CLEAN. spec_stale (spec-stale.json): a confirmed `spec:`
-    finding on a screen, or citing a section, changed since the spec's Updated turns unsure."""
+    finding on a screen, or citing a section, changed since the spec's Updated turns unsure. One defect ruled
+    both ways (_conflicts) stops at CONFLICT: one verifier rules on each pair, then the verdict runs again."""
     labels = LABELS.get(language, LABELS["en"])
+    conflicts = _conflicts(findings)
     old = set((spec_stale or {}).get("stale_screens", []))
     stale, sections = [], set()
     for f in findings:
@@ -455,7 +458,11 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_st
                        "findings may be about another build: %s" % "; ".join(build_changed))
     complete = (bool(cov["cells"]) and not open_cells and not unreviewed and not pending and not doubtful
                 and not unchecked and not build_changed)
-    if high:
+    if conflicts:
+        code = "CONFLICT"
+        reasons.insert(0, "%d defects ruled both ways, one verifier rules on each pair: %s" % (len(conflicts), "; ".join(
+            "%s (%s) vs %s (%s)" % (_ref(a), a["verdict"], _ref(b), b["verdict"]) for a, b in conflicts[:5])))
+    elif high:
         code = "BLOCK"
     elif medium:  # a confirmed medium is a finding whatever else the run missed
         code = "ISSUES"
@@ -463,13 +470,41 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_st
         code = "INCOMPLETE"
     else:
         code = "CLEAN"
-    return {"code": code, "label": labels[code], "reasons": reasons,
-            "merged": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in merged],
-            "asked": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in asked],
-            "stale": ["%s#%s" % (f.get("_file", ""), f.get("id", "")) for f in stale]}
+    return {"code": code, "label": labels[code], "reasons": reasons, "merged": [_ref(f) for f in merged],
+            "asked": [_ref(f) for f in asked], "stale": [_ref(f) for f in stale],
+            "conflicts": [[_ref(a), _ref(b)] for a, b in conflicts]}
 
 
 _RANK = {"low": 0, "medium": 1, "high": 2}
+
+
+def _ref(f):
+    return "%s#%s" % (f.get("_file", ""), f.get("id", ""))
+
+
+def _conflicts(findings):
+    """Pairs of rulings that cannot both stand: a finding confirmed with same_as to a rejected one (or the
+    reverse), or one case (kind, rule, title without digits and punctuation) confirmed once and rejected once."""
+    ruled = [f for f in findings if f.get("verdict") in ("confirmed", "rejected")]
+    by_ref = {os.path.normpath(_ref(f)): f for f in ruled}
+    pairs, seen = [], set()
+
+    def add(a, b):
+        if a["verdict"] != b["verdict"] and frozenset((id(a), id(b))) not in seen:
+            seen.add(frozenset((id(a), id(b))))
+            pairs.append((a, b))
+    first = defaultdict(list)
+    for f in ruled:
+        t = by_ref.get(os.path.normpath(f["same_as"])) if f.get("same_as") else None
+        if t is not None and t is not f:
+            add(f, t)
+        words = re.findall(r"\w+", re.sub(r"\d+", "#", (f.get("title") or "").casefold()))
+        if words and f.get("rule"):
+            key = (f.get("kind", "BUG"), f["rule"], " ".join(words))
+            for t in first[key]:
+                add(t, f)
+            first[key].append(f)
+    return pairs
 
 
 def _merged(f, findings):
