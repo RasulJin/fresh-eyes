@@ -95,6 +95,19 @@ class ScoreTest(unittest.TestCase):
         self.assertEqual((card["M2"]["value"], card["M2"]["flaky"]), (0.286, 1))  # 2 false of 7 ruled
         self.assertEqual(card["M3"]["value"], 0.286)
 
+    def test_m2_counts_a_ruling_copied_by_same_as_auto_once(self):
+        with tmpdir() as d:
+            run = os.path.join(d, "run")
+            shutil.copytree(os.path.join(FIXTURES, "score-run"), run)
+            path = os.path.join(run, "android", "welcome", "findings.json")
+            data = read_json(path)
+            rejected = next(f for f in data["findings"] if f.get("verdict") == "rejected")
+            data["findings"] += [dict(rejected, id="f8", same_as_auto="android/welcome/findings.json#" + rejected["id"]),
+                                 dict(rejected, id="f9", verdict="confirmed", same_as_auto="android/feed/findings.json#f1")]
+            write_json(path, data)
+            card = read_json(stats.score(run)["out"])
+        self.assertEqual(card["M2"]["value"], 0.333)  # still 2 false of 6 ruled, as without the copies
+
 
 if __name__ == "__main__":
     unittest.main()

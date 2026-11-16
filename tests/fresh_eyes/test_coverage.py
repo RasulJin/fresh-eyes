@@ -1,4 +1,5 @@
 import copy
+import datetime
 import json
 import os
 import shutil
@@ -183,6 +184,20 @@ class PlanTest(unittest.TestCase):
         self.assertEqual({c["screen"] for c in cov["cells"]}, {"recheck-BUG-3"})
         self.assertEqual(plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "quick")["cells"], [])
 
+    def test_plan_warns_of_screens_without_a_marker(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"].append(dict(cfg["screens"][0], id="trips", marker=["Поездки"]))
+        self.assertEqual([w.split(" has no marker")[0] for w in plan(cfg, BOTH_OK_MUT_OFF, "full")["warnings"]],
+                         ["screen profile-trips"])
+        self.assertEqual(plan(cfg, BOTH_OK_MUT_OFF, "quick", ["trips"])["warnings"], [])  # only planned screens
+        with tmpdir() as d:
+            write_json(os.path.join(d, "c.json"), cfg)
+            write_json(os.path.join(d, "p.json"), BOTH_OK_MUT_OFF)
+            out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "coverage.py"), "plan", "--config",
+                                  os.path.join(d, "c.json"), "--preflight", os.path.join(d, "p.json"), "--mode",
+                                  "full", "--out", os.path.join(d, "cov.json")], stdout=subprocess.PIPE, check=True)
+        self.assertIn("profile-trips has no marker", json.loads(out.stdout)["warnings"][0])
+
     def test_unknown_screen_raises(self):
         with self.assertRaises(FEError):
             plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "quick", ["nope"])
@@ -263,7 +278,15 @@ class StatusTest(unittest.TestCase):
         write_json(os.path.join(pack, "meta.json"), {"platform": "android", "before": pack + "-b", "moved": 0})
         with self.assertRaisesRegex(FEError, "moved nothing"):
             set_status(cov, cell["id"], "done", evidence=[pack])
-        set_status(cov, cell["id"], "done", evidence=[pack], note="the grid fits, it does not scroll")
+        # 20261116-1107-full: flight-search swipe-inside on one result went done "with a note"
+        with self.assertRaisesRegex(FEError, "na or blocked"):
+            set_status(cov, cell["id"], "done", evidence=[pack], note="one result, content fits one screen")
+        self.assertEqual(cell["status"], "todo")
+        set_status(cov, cell["id"], "na", evidence=[pack], note="not enough items")
+        set_status(cov, cell["id"], "blocked", evidence=[pack], note="not enough items")
+        self.assertEqual(cell["status"], "blocked")
+        write_json(os.path.join(pack, "meta.json"), {"platform": "android", "before": pack + "-b", "moved": 0.4})
+        set_status(cov, cell["id"], "done", evidence=[pack])
         self.assertEqual(cell["status"], "done")
 
     def test_swipe_inside_comes_back_from_each_listed_page(self):
@@ -444,9 +467,67 @@ class StatusTest(unittest.TestCase):
         step(4, b"post", "2026-11-15T13:50:10")
         with self.assertRaisesRegex(FEError, "step-4 is a copy of step-2"):
             set_status(cov, cell["id"], "done", evidence=[pack])
-        step(4, b"post", "2026-11-15T13:50:31")  # the same screen snapped again: a real step
-        set_status(cov, cell["id"], "done", evidence=[pack])
+        step(2, b"post", "2026-11-15T13:49:10")  # step-2 snapped in its turn
+        step(4, b"post", "2026-11-15T13:50:31")  # the same screen at another time: one screen for two steps
+        with self.assertRaisesRegex(FEError, "step-4 shows the very screen of step-2"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "steps.json"), [{"n": 4, "did": "Back", "unchanged": True}])
+        set_status(cov, cell["id"], "done", evidence=[pack])  # a step that by design changes nothing
         self.assertEqual(cell["status"], "done")
+
+    def test_a_step_snapped_out_of_turn_is_not_done(self):
+        # 20261116-1107-full: profile-trips drag-interrupt sub-snaps retaken after all three gestures; vio-guide
+        # scenario step-21 resnapped after step-22
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(states=[], probes=["drag-interrupt", "scenario"])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        cell = {c["probe"]: c for c in cov["cells"] if c["platform"] == "android"}
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+
+        def at(path, when, video=None):
+            write_json(os.path.join(path, "meta.json"), {"time": "2026-11-16T" + when, "source": "uiautomator"})
+            with open(os.path.join(path, "screen.png"), "w") as f:
+                f.write(path)
+            if video:
+                open(os.path.join(path, "video.mp4"), "w").close()
+                t = datetime.datetime.strptime("2026-11-16T" + video, "%Y-%m-%dT%H:%M:%S").timestamp()
+                os.utime(os.path.join(path, "video.mp4"), (t, t))
+        drag = make_pack(root, cell["drag-interrupt"])
+        for sub, when, video in (("slow", "12:32:49", "12:30:17"), ("drag-back", "12:32:56", "12:30:58"),
+                                 ("swipe-tap", "12:33:02", "12:32:01")):
+            at(os.path.join(drag, sub), when, video)
+        with self.assertRaisesRegex(FEError, r"slow is snapped at 12:32:49, after drag-back's video \(recorded "
+                                             r"until 12:30:58\).*drag-back is snapped at 12:32:56, after swipe-tap"):
+            set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[drag])
+        at(os.path.join(drag, "slow"), "12:30:20")
+        at(os.path.join(drag, "drag-back"), "12:31:00")
+        set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[drag])
+        # taps.py --pack (0.5.13): <step>/before, then the video and the snap after in <step> itself
+        laid = make_pack(root, dict(cell["drag-interrupt"], state="laid"))
+        for sub, before, video, after in (("slow", "13:00:01", "13:00:12", "13:00:14"),
+                                          ("drag-back", "13:00:16", "13:00:22", "13:00:24"),
+                                          ("swipe-tap", "13:00:26", "13:00:31", "13:00:33")):
+            at(os.path.join(laid, sub, "before"), before)
+            at(os.path.join(laid, sub), after, video)
+        set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[laid])
+        self.assertIn(os.path.join(laid, "slow", "before"), sum(pack_groups(os.path.dirname(laid)), []))
+        at(os.path.join(laid, "drag-back", "before"), "13:00:23")  # retaken after its gesture
+        with self.assertRaisesRegex(FEError, r"drag-back/before is snapped at 13:00:23, after drag-back's video "
+                                             r"\(recorded until 13:00:22\)"):
+            set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[laid])
+        at(os.path.join(laid, "drag-back", "before"), "13:00:16")
+        at(os.path.join(laid, "slow"), "13:00:17")  # retaken after drag-back's before
+        with self.assertRaisesRegex(FEError, r"slow is snapped at 13:00:17, after drag-back/before \(13:00:16\)"):
+            set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[laid])
+        scenario = make_pack(root, cell["scenario"])
+        for n, when in ((5, "15:59:00"), (6, "16:05:46"), (7, "16:02:12")):
+            at(os.path.join(scenario, "step-%d" % n), when)
+        with self.assertRaisesRegex(FEError, r"step-6 is snapped at 16:05:46, after step-7 \(16:02:12\)"):
+            set_status(cov, cell["scenario"]["id"], "done", evidence=[scenario])
+        at(os.path.join(scenario, "step-6"), "16:00:31")
+        set_status(cov, cell["scenario"]["id"], "done", evidence=[scenario])
+        self.assertEqual([c["status"] for c in cell.values()], ["done", "done"])
 
     def test_a_pack_put_together_by_hand_is_not_evidence(self):
         cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full")
@@ -467,6 +548,24 @@ class StatusTest(unittest.TestCase):
         with self.assertRaisesRegex(FEError, "app_theme"):
             set_status(cov, dark["id"], "done", evidence=[make_pack(root, dark, brightness=173)])
         set_status(cov, dark["id"], "done", evidence=[make_pack(root, dark, brightness=60)])
+
+    def test_a_theme_mismatch_cell_needs_the_proof_of_both_themes(self):
+        # 20261116-1107-full: trip-map/theme-mismatch-none was done without saying what theme the app was on
+        cfg = dict(copy.deepcopy(ONE_SCREEN), app_theme="Профиль → Тема: Светлая / Тёмная / Как в системе")
+        cfg["screens"][0].update(states=["theme-mismatch"], probes=[])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        cell = next(c for c in cov["cells"] if c["platform"] == "android")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        pack = make_pack(root, cell)
+        for note in (None, {"ui_night_mode": "no", "app_theme": "Светлая"}, {"ui_night_mode": "yes"}):
+            if note:
+                write_json(os.path.join(pack, "theme-note.json"), note)
+            with self.assertRaisesRegex(FEError, "theme-note.json"):
+                set_status(cov, cell["id"], "done", evidence=[pack], note="looks right")
+        write_json(os.path.join(pack, "theme-note.json"), {"ui_night_mode": "yes", "app_theme": "Светлая"})
+        set_status(cov, cell["id"], "done", evidence=[pack])
+        self.assertEqual(cell["status"], "done")
 
     def test_back_during_animation_needs_a_frame_that_moved(self):
         cfg = copy.deepcopy(ONE_SCREEN)
@@ -586,6 +685,48 @@ class VerdictTest(unittest.TestCase):
         c = f("f3", "high", "confirmed", same_as="android/a/findings.json#f1")
         for group in ([a, b], [a, b, c], [dup]):  # each other, a chain, a target not passed
             self.assertEqual(verdict(self.cov, group, "en", packs)["merged"], [])
+
+    def test_one_defect_ruled_both_ways_stops_at_conflict(self):
+        # 20261116-1107-full: feed-trips#2f1 confirmed with same_as feed#2f1, which the feed verifier rejected
+        packs = done_all(self.cov, self.root)
+        feed = {"id": "f1", "kind": "BUG", "severity": "medium", "verdict": "rejected", "rule": "spec:G-avatar",
+                "title": "Уведомления: у каждой строки нет аватара автора — пустое место слева",
+                "_file": "android/feed/findings-2.json"}
+        trips = {"id": "f1", "kind": "BUG", "severity": "low", "verdict": "confirmed", "rule": "spec:G-avatar",
+                 "title": "В «Уведомлениях» аватары авторов появляются с задержкой",
+                 "same_as": "android/feed/findings-2.json#f1", "_file": "android/feed-trips/findings-2.json"}
+        v = verdict(self.cov, [feed, trips], "ru", packs)
+        self.assertEqual((v["code"], v["label"]), ("CONFLICT", "РЕШЕНИЯ РАСХОДЯТСЯ"))
+        self.assertEqual(v["conflicts"], [["android/feed-trips/findings-2.json#f1", "android/feed/findings-2.json#f1"]])
+        self.assertIn("feed/findings-2.json#f1 (rejected)", v["reasons"][0])
+        self.assertEqual(verdict(self.cov, [dict(feed, verdict="confirmed"), trips], "en", packs)["code"], "ISSUES")
+        self.assertEqual(verdict(self.cov, [dict(feed, verdict="unsure"), trips], "en", packs)["conflicts"], [])
+        # no same_as: one case (kind, rule, title up to digits and punctuation) on two screens, ruled both ways
+        a = dict(feed, verdict="confirmed", title="Аватар: нет заглушки (3 строки)")
+        b = dict(feed, id="f4", _file="android/thread/findings.json", title="аватар — нет заглушки, 5 строки")
+        self.assertEqual(len(verdict(self.cov, [a, b], "en", packs)["conflicts"]), 1)
+        for other in (dict(b, rule="spec:G-other"), dict(b, kind="IMP"), dict(b, title="Аватар обрезан")):
+            self.assertEqual(verdict(self.cov, [a, other], "en", packs)["conflicts"], [])
+
+    def test_a_bug_at_low_confidence_without_a_request_is_a_warning(self):
+        packs = done_all(self.cov, self.root)
+        own = os.path.join(self.root, "android", "a", "findings-2.json")
+
+        def bug(fid, conf, verdict_="confirmed"):
+            return dict(finding("low", verdict_), id=fid, confidence=conf)
+        write_json(own, {"findings": [bug("f1", 0.3), bug("f2", 0.4, "rejected"), bug("f3", 0.35), bug("f4", 0.2),
+                                      bug("f5", 0.6), dict(bug("f6", 0.2), kind="IMP")],
+                         "requests": [{"finding": "f3", "do": "resnap"}]})
+        write_json(os.path.join(self.root, "android", "a", "requests.json"),  # the verifier's, f4 from this file
+                   [{"finding": "f4", "from": "findings-2.json", "do": "crop"},
+                    {"finding": "f1", "from": "findings-1.json", "do": "repeat-probe"}])
+        findings, _ = _load_findings([own], self.root)
+        v = verdict(self.cov, findings, "en", packs)
+        self.assertEqual(len(v["warnings"]), 1)
+        self.assertIn("2 BUGs at confidence <= 0.4", v["warnings"][0])
+        self.assertTrue(v["warnings"][0].endswith("android/a/findings-2.json#f1, android/a/findings-2.json#f2"))
+        self.assertEqual(v["code"], "CLEAN")  # a warning, never a verdict
+        self.assertEqual(verdict(self.cov, [bug("f5", 0.6)], "en", packs)["warnings"], [])
 
     def test_one_log_error_on_many_screens_counts_once(self):
         packs = done_all(self.cov, self.root)
@@ -805,6 +946,36 @@ class PackGroupsTest(unittest.TestCase):
         self.assertEqual(groups, [["default-tap-everything"]])
         self.assertEqual(len(dropped), 1)
         self.assertIn("askvio-nohierarchy has nodes.json but no source", dropped[0])
+
+
+    def test_recordings_are_snaps_and_a_folder_no_cell_owns_goes_to_no_reviewer(self):
+        # 20261116-1107-full: trip-map d50/d100/d150 (around only) were not listed, post-detail/kb-before was
+        with tmpdir() as d:
+            screen = os.path.join(d, "android", "trip-map")
+            for rel in ("default-back-during-animation", "kb-before", "default-none-recheck-1", "dark-none-p2",
+                        "default-scratch"):
+                os.makedirs(os.path.join(screen, rel))
+                open(os.path.join(screen, rel, "screen.png"), "w").close()
+            for k in (50, 100, 150):
+                write_json(os.path.join(screen, "default-back-during-animation", "d%d" % k, "around.json"), {})
+                os.makedirs(os.path.join(screen, "default-back-during-animation", "d%d" % k, "frames_0"))
+            open(os.path.join(screen, "findings.json"), "w").close()
+            cov = plan({"screens": [{"id": "trip-map", "route": "x", "states": ["default", "dark"],
+                                     "probes": ["back-during-animation"]}], "platforms": ["android"]},
+                       {"platforms": {"android": {"ok": True}}}, "full", passes=2)
+            cov["cells"][0]["evidence"] = ["/elsewhere/run/android/trip-map/default-scratch"]  # as it was done
+            dropped = []
+            groups = [[os.path.relpath(p, screen) for p in g] for g in pack_groups(screen, dropped=dropped, cov=cov)]
+            self.assertEqual(groups, [["default-back-during-animation"] + ["default-back-during-animation/d%d" % k
+                                                                           for k in (100, 150, 50)]
+                                      + ["default-scratch"], ["dark-none-p2"]])
+            self.assertEqual(sorted(dropped), ["default-none-recheck-1: no cell of android/trip-map has this pack",
+                                               "kb-before: no cell of android/trip-map has this pack"])
+            write_json(os.path.join(d, "coverage.json"), cov)
+            out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "coverage.py"), "packs", "--dir", screen],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            self.assertNotIn("kb-before", out.stdout.decode())
+            self.assertIn("dropped: kb-before", out.stderr.decode())
 
 
 class DiffScreensTest(unittest.TestCase):

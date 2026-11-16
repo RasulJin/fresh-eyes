@@ -52,7 +52,11 @@ then returns it in `merged`, and the report lists it under that finding.
   its pairs (`<rule> «<spec>» → «<app>» (<key>)`; is the spec out of date?); `known`, a comment in `source_root`
   calls the choice deliberate (`<screen>: <what> — <file>: «<comment>»`; add it to `known.md`?); `conflict`, what
   a `⚠ conflict` rule leaves to the owner (`<rule id>: <what the frame shows>`; the spec already asks it).
-- `requests` (optional, reviewer): a tap no frame showed the result of; the verifier has it redone (verifier.md).
+- `requests` (optional, reviewer): what a frame could not settle, for the verifier to have redone
+  (verifier.md): `repeat-probe` (a tap or gesture no frame showed the result of), `resnap` (a frame to take
+  again: caught mid-load, mid-animation or on the wrong screen), `crop` (a region to look at closer); `finding`
+  names the finding it would settle. A BUG at confidence ≤ 0.4 without such a request is a guess: the verdict
+  lists it in `warnings` (it stays a request or an IMP).
 - `reviewed_packs`: every pack whose evidence the reviewer actually opened (its `som.png`, or its crops plus
   `candidates.json`), and only those. A done cell whose packs no reviewer listed keeps the verdict INCOMPLETE.
 - `invariants` (when the slice has a `### Invariants`): `[{"id", "pack", "result": "ok|broken|not shown"}]`, each
@@ -77,6 +81,10 @@ orchestrator handles (the cell back to `todo`, navigated and reviewed again, the
 ## Verdict
 
 Computed only by `coverage.py verdict` (never by a model); the first that applies wins:
+- one defect ruled both ways (a finding confirmed with `same_as` to a rejected one or the reverse, or the same
+  kind, rule and title confirmed once and rejected once) → `CONFLICT` (РЕШЕНИЯ РАСХОДЯТСЯ): no report yet; the
+  verdict's `conflicts` lists the pairs (file#id), each pair goes to one verifier, then the verdict runs again;
+  its `reasons` still say what the code would be without the conflict;
 - any confirmed BUG of severity high → `BLOCK` (НЕ ВЫПУСКАТЬ);
 - any confirmed BUG of severity medium → `ISSUES` (ЕСТЬ ПРОБЛЕМЫ), even when something was not checked;
 - any cell not done (`na` too: drop that probe from the config), any done cell whose packs no reviewer listed,
@@ -163,6 +171,9 @@ Also: <title of a finding merged into it> (<file>#<id>)
 - <maestro_dir>/fresh-eyes-<id>.yaml
 ```
 
+- Not checked in this run: the plan's `unchecked` items without `gap`, then each cell not done (`na`, `blocked`,
+  `failed`) with its note, e.g. `android/flight-search/default/swipe-inside — not enough items` (a swipe that
+  moved nothing is never done).
 - A bug is at most 10 lines: at most 5 steps (join the way there into one, "Open Trips → Paris → Schedule"),
   expected and actual one sentence each; the backlog entry gets the full finding.
 - Unsure, by class, never one block per finding, in this order and only classes that have findings: `stale`

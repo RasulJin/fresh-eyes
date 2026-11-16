@@ -20,7 +20,8 @@ IDLE_S = 600
 JUDGE = ("M4", "M7", "M11")
 LIMITS = {  # what each number is and when it passes
     "M1": ("manual orchestrator moves: numbered items of run-log.md (or the report's run log)", lambda v: v <= 1),
-    "M2": ("false BUGs (a 'spec text:' or 'known candidate:' reject too, a 'flaky:' one not): rejected / ruled",
+    "M2": ("false BUGs (a 'spec text:' or 'known candidate:' reject too, a 'flaky:' one and a same_as_auto copy "
+           "not): rejected / ruled",
            lambda v: v <= 0.10),
     "M3": ("BUGs left unsure / ruled", lambda v: v <= 0.15),
     "M4": ("judge: owner-facing BUGs ruled intended or duplicate / owner-facing BUGs", lambda v: v <= 0.05),
@@ -132,9 +133,10 @@ def score(run, sid=None, out=None):
          "M8": len(text.splitlines()) if text is not None else None}
     paths = sorted(glob.glob(os.path.join(run, "*", "*", "findings*.json")))
     findings, _ = coverage._load_findings(paths, run)  # a confirmed finding an open question asks about: unsure
-    n = Counter(f.get("verdict", "pending") for f in findings if f.get("kind", "BUG") == "BUG")
-    flaky = sum(1 for f in findings if f.get("kind", "BUG") == "BUG" and f.get("verdict") == "rejected"
-                and FLAKY.match(f.get("verify_note") or ""))
+    # a same_as_auto copy (findings.py same) repeats another screen's ruling: one decision counts once
+    bugs = [f for f in findings if f.get("kind", "BUG") == "BUG" and not f.get("same_as_auto")]
+    n = Counter(f.get("verdict", "pending") for f in bugs)
+    flaky = sum(1 for f in bugs if f.get("verdict") == "rejected" and FLAKY.match(f.get("verify_note") or ""))
     ruled = n["confirmed"] + n["unsure"] + n["rejected"]
     m["M2"] = round((n["rejected"] - flaky) / ruled, 3) if ruled else 0.0
     m["M3"] = round(n["unsure"] / ruled, 3) if ruled else 0.0
