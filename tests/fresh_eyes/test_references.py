@@ -50,6 +50,13 @@ class ReferencesTest(unittest.TestCase):
         self.assertIn('"class": "spec-text | known | conflict (optional)"', schema)
         self.assertIn("## Known candidates", schema)
 
+    def test_do_not_flag_the_classes_the_verifier_kept_rejecting_0_5_13(self):
+        # 0.5.11 and 0.5.12 runs: a W/ okhttp leak, a chip cut at a row's edge, a demo trip in English, Maps labels
+        section = " ".join(read("checklist.md").split("## Do not flag", 1)[1].split())
+        for word in ("edge of a scrollable list or row", "`W/` lines in `logcat.txt` with no `E/` or `F/` line",
+                     "Data in the language it was made in", "Words and layout of another app a tap opened"):
+            self.assertIn(word, section, word)
+
     def test_no_bug_and_no_question_for_what_the_owner_already_has(self):
         # 0.5.11: 8 of 21 false BUGs were taps with no after-frame; feed#f2 asked about a conflict the spec asks
         section = " ".join(read("checklist.md").split("## Do not flag", 1)[1].split())

@@ -60,7 +60,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    before the step? Results must belong to the latest input (nothing stale), what was saved must show where the
    step says and nothing unasked-for may appear, invalid input must be refused, a stopped or failed action must
    say so, a retry must not duplicate. `logcat.txt`: an error or a crash during the scenario is a BUG even when
-   the screen looks fine; a flood of one warning is one finding, with its line in `log` (report-format.md). A `drag-interrupt` pack is judged the same
+   the screen looks fine; `W/` lines alone are not, unless one warning floods (hundreds of lines): one finding,
+   with its line in `log` (report-format.md). A `drag-interrupt` pack is judged the same
    way, against the oracle of each step in probes.md (a tap behind that did not land is a BUG).
    Crash: a pack whose `meta.json` has `app_running: false` (in any probe) is a BUG high, with the crash line
    from that pack's `logcat.txt` in `log` (the exception or fatal signal naming the app) and `steps` up to the

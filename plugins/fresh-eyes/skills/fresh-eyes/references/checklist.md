@@ -157,7 +157,14 @@ raised again, so a proposal left out costs more than one written.
 - Anything listed in `known.md` (intentional behaviour confirmed by the user).
 - Content that is clearly test data, unless the screen shows it wrongly. A crash (`app_running: false` in the
   pack's `meta.json`) is never test data: it is a BUG high.
-- Partially visible items at the edge of a scrollable list when a swipe brings them fully into view.
+- Partially visible items at the edge of a scrollable list or row: a chip «+ Add d…» cut by the screen's side
+  in a row of chips, the next card of a carousel. The cut is how the row shows that it scrolls.
+- `W/` lines in `logcat.txt` with no `E/` or `F/` line of the app: no BUG, unless one warning floods (hundreds
+  of lines).
+- Data in the language it was made in: a trip, plan or answer created while the app or the AI ran in another
+  language (its title, day names, stops) next to the UI's words. Only the app's own labels follow the UI.
+- Words and layout of another app a tap opened (a map app's labels for a place or coordinates, a browser page,
+  the OS share sheet): not the app's copy. Which app opened, and with what, is the app's.
 - Bounds alone (Android): uiautomator cuts a node's bounds at its parent's edge, down to zero or negative height.
   An element the frame shows whole is not clipped or hidden from a screen reader because its bounds are; a hit
   target cut so is judged by its box in `source_root` (a 48 dp box from padding with a negative margin, or a
