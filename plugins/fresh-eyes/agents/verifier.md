@@ -19,7 +19,7 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 ## Input (from the orchestrator)
 
 - One screen folder `<run>/<platform>/<screen>/` (its `findings*.json`), the screen's spec slice
-  `<run>/spec/<screen>.md`, `known.md`, `<run>/backlog-index.md` (open backlog entries as of the build's commit,
+  `<run>/spec/<screen>.md`, `known.md`, `known-proposed.md`, `<run>/backlog-index.md` (open backlog entries as of the build's commit,
   one line each: the only backlog you read; never open or grep the backlog file itself, e.g.
   `docs/qa-backlog.md`: the working folder may hold another branch's), the
   project `language`, `source_root` (the code this build was made from, or `none`); for the journey folder
@@ -35,6 +35,10 @@ A findings file's `requests` (what a reviewer could not see: a tap's result, a c
 IMPs are proposals for the owner, not claims: no rechecks or requests for them. Leave each `pending` (final
 for an IMP), except `rejected` with a note when the spec slice or `known.md` contradicts it.
 
+A pending BUG with `same_as_auto` (set by `findings.py same`: its `same_as` on another screen is the same case,
+verified there): open its crop beside that one's. The same defect → no rechecks, no requests, leave it pending:
+the script copies that ruling. Another defect → delete `same_as` and `same_as_auto` and judge it as usual.
+
 For each BUG with `verdict: "pending"`:
 1. Open its evidence crop(s); open the pack's `som.png` only when the crop lacks context. Read the spec rule.
    A BUG at confidence ≤ 0.4, or whose `actual` says its evidence is missing ("needs a frame", "not checked",
@@ -42,8 +46,10 @@ For each BUG with `verdict: "pending"`:
 2. Try to disprove it:
    - the "truncated" text is actually complete in the crop; the "clipped" row scrolls fully into view in a
      `swipe-inside` pack; the "overlap" is an intended badge; the "flash" is a deliberate crossfade;
-   - it is listed in `known.md`, is OS chrome, a dev overlay or test data shown correctly, or the checklist's
+   - it is listed in `known.md` or `known-proposed.md`, is OS chrome or a dev overlay, or the checklist's
      "Do not flag" covers it (name the item in `verify_note`);
+   - it is test data shown correctly: `verify_note` "test data: <what data, why it is not the app's>" (the
+     words `test data:` as is in any language: the next run's reviewers get it in `known-proposed.md`);
    - the spec rule does not say what the finding claims.
    An icon's glyph (which symbol stands for something) is a proposal: set `kind` to `IMP` and leave it pending.
    What a `⚠ conflict` / `⚠ конфликт` rule itself leaves to the owner is no bug yet and no new question (the

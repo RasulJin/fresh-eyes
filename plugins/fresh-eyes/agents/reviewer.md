@@ -26,7 +26,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
   another reviewer.
 - The screen id and its spec slice `<run>/spec/<screen>.md`: the global rules and the sections of this screen
   and its neighbors. A `⚠ stale since <date>` line under a section: its code changed later; judge by it as
-  written, the verdict asks the owner. Also `known.md`.
+  written, the verdict asks the owner. Also `known.md` and `known-proposed.md` (test data and deliberate
+  choices that verifiers of earlier runs found, not yet ruled by the owner): read both before you write any
+  finding, and write none for a case either lists, on whatever screen it lists it.
 - `examples/` (real past bugs of this project with images) and the reference apps from `config.json`.
 - `source_root`: the code this build was made from (`source.root` in preflight.json), or `none`.
 - The project `language`: write `title`, `expected`, `actual`, `steps` and `questions` in it (keep ids, paths,
@@ -111,8 +113,9 @@ the choice is deliberate (then no BUG: a `spec-text` or `known` entry in `questi
 `source_root`: no lookups, and a target drawn under the minimum gets confidence 0.5 with its drawn size in
 `actual` (the verifier probes its hit area).
 
-Never report a bug without evidence that shows it: a frame, or for an app error the `logcat.txt` line. Never flag what `known.md` lists or the checklist's
-do-not-flag section covers. Do not describe the screen; report problems.
+Never report a bug without evidence that shows it: a frame, or for an app error the `logcat.txt` line. Never flag
+what `known.md` or `known-proposed.md` lists or the checklist's do-not-flag section covers. Do not describe the
+screen; report problems.
 
 ## Output
 

@@ -57,7 +57,7 @@ class SkillMdTest(unittest.TestCase):
         # 0.5.11 run: the orchestrator piped reviews by hand and watched the heartbeat with its own script (M1, M10)
         body = " ".join(text().split())
         for word in ("Pipeline: as soon as a screen's cells", "nav.py idle --run $RUN --platform <p> --until 540",
-                     "never by polling", "pending BUG findings", "--keychain fresh-eyes-<role>-email"):
+                     "never by polling", "IMPs and linked copies alone need none", "--keychain fresh-eyes-<role>-email"):
             self.assertIn(word, body, word)
         self.assertNotIn("Check every 1–2 minutes", body)
 

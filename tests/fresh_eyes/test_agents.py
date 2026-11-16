@@ -114,6 +114,22 @@ class AgentsTest(unittest.TestCase):
                      "rule on the second pass by that recheck's `tap.json`", "a tap's result by its `tap.json`"):
             self.assertIn(word, verifier, word)
 
+    def test_one_case_is_checked_once_and_known_candidates_reach_the_next_run_0_5_13(self):
+        # 0.5.12 run: an English demo trip rejected on 4 screens, «Almaty, Казахстан» 3 times, QA141 tiles 3 rulings
+        reviewer = " ".join(frontmatter("reviewer")[1].split())
+        self.assertIn("read both before you write any finding", reviewer)
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ("`same_as_auto` (set by `findings.py same`", "delete `same_as` and `same_as_auto`",
+                     '"test data: <what data', "`known-proposed.md`"):
+            self.assertIn(word, verifier, word)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "SKILL.md"), encoding="utf-8") as f:
+            skill = " ".join(f.read().split())
+        for word in ("findings.py same --run $RUN --findings <the same files>", "with a file in its `verify` list",
+                     "findings.py same --run $RUN --findings <all findings*.json>",
+                     "findings.py known --run $RUN --out .fresh-eyes/known-proposed.md"):
+            self.assertIn(word, skill, word)
+        self.assertEqual(skill.count(".fresh-eyes/known-proposed.md`,"), 2)  # reviewer and verifier prompts
+
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
         nav = " ".join(frontmatter("navigator")[1].split())
