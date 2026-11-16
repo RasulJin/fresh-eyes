@@ -13,13 +13,19 @@ fresh-eyes-<role>-email|password), or, in full mode, an Android app that dies wi
 With --fix an empty gallery gets the photos of references/fixtures/; with --source, --fix boots no device of a
 platform without a build artifact on disk (it would test no build or an old one).
 
+With --fix the run's build (--apk, else config builds.<mode>.<platform>.artifact) is installed on the main and the
+small device wherever another build or none is (over another build not with `--source <ref>` alone: that one is
+what the user asked to test); no build on disk and no app: not ready, saying so.
+
 CLI: preflight.py --project DIR --mode quick|full [--fix] [--brief] [--platforms android,ios] [--source built|REF]
-     --out preflight.json
+     [--apk PATH] --out preflight.json
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
+import plistlib
 import re
 import shutil
 import subprocess
@@ -127,14 +133,43 @@ def _metro_bundle(platform, port):
         raise FEError("no Metro bundle on port %d: %s" % (port, e))
 
 
-def _prepare(dev, platform, app_id, fix):
+def artifact_build(path):
+    """sha256 of a build on disk as devices.app_build hashes it on a device: the APK itself (adb install copies it
+    byte for byte to base.apk), an .app's executable. None when it is not there."""
+    try:
+        if os.path.isdir(path):
+            with open(os.path.join(path, "Info.plist"), "rb") as f:
+                path = os.path.join(path, plistlib.load(f)["CFBundleExecutable"])
+        digest = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except (OSError, KeyError, ValueError):
+        return None
+
+
+def _install(dev, app_id, artifact, want, replace):
+    """--fix: the run's build onto `dev` unless it is there already; over another installed build only when
+    `replace`. None, or why it could not."""
+    have = devices.app_build(dev, app_id) if devices.app_installed(dev, app_id) else None
+    if have == want or (have and not replace):
+        return None
+    try:
+        devices.install(dev, artifact)
+    except FEError as e:
+        return "installing %s on %s: %s" % (artifact, dev.name, e)
+    return None
+
+
+def _prepare(dev, platform, app_id, fix, no_app="install the build first"):
     """One device ready to test: the app installed, nothing that hides bugs (keyboard, animations, stylus),
     and on iOS the Maestro driver up."""
     st = {"app_installed": bool(app_id) and devices.app_installed(dev, app_id), "soft_keyboard": True,
           "animations": True, "problems": []}
     st["build"] = devices.app_build(dev, app_id) if st["app_installed"] else None
     if not st["app_installed"]:
-        st["problems"].append("app %s is not installed on %s; install the build first" % (app_id, dev.name))
+        st["problems"].append("app %s is not installed on %s; %s" % (app_id, dev.name, no_app))
     if platform == "android":
         if not devices.soft_keyboard_on(dev) and fix:
             devices.set_soft_keyboard(dev)
@@ -174,8 +209,14 @@ def _prepare(dev, platform, app_id, fix):
     return st
 
 
-def _platform_state(config, platform, kind_needed_small, fix, artifact=None, wake=True):
+def _platform_state(config, platform, kind_needed_small, fix, artifact=None, wake=True, replace=True, apk=False):
+    """artifact: the run's build on disk (--apk, else config builds.<mode>.<p>.artifact); with --fix it goes onto
+    both devices (0.5.12: installed by hand before preflight), over another build only when `replace`."""
     app_id = (config.get("app") or {}).get("%s_id" % platform)
+    want = artifact_build(artifact) if artifact else None
+    no_app = ("run preflight with --fix: it installs %s" % artifact) if want else \
+        ("there is no build to install: pass preflight --apk <path>, or build it (%s)"
+         % ("%s is not on disk" % artifact if artifact else "config builds has no artifact"))
     owned = [d for d in devices.list_devices() if d.platform == platform and devices.is_owned(d)]
     state = {"ok": False, "device": None, "name": None, "owned": False, "small_device": False,
              "app_installed": False, "soft_keyboard": True, "animations": True, "problems": []}
@@ -199,17 +240,18 @@ def _platform_state(config, platform, kind_needed_small, fix, artifact=None, wak
     state["small_device"] = small is not None
     if small is not None:
         state["small_device_id"] = small.id
-    earlier = state["problems"]
-    state.update(_prepare(main, platform, app_id, fix))
+    err = fix and want and _install(main, app_id, artifact, want, replace)
+    earlier = state["problems"] + ([err] if err else [])
+    state.update(_prepare(main, platform, app_id, fix, no_app))
     state["problems"] = earlier + state["problems"]
-    if small is not None:
-        small_state = _prepare(small, platform, app_id, fix)
-        if fix and artifact and state["build"] and small_state["build"] != state["build"]:
-            try:  # the small device lags a build behind: give it the run's build (~20 s), then check again
-                devices.install(small, artifact)
-                small_state = _prepare(small, platform, app_id, fix)
-            except FEError as e:
-                small_state["problems"].append(str(e))
+    if apk and (want is None or state["build"] != want):  # the user named the build: no other one is tested
+        state["ok"] = False
+        state["problems"].append("--apk %s is not on disk" % apk if want is None else
+                                 "%s has another build than --apk %s: run preflight with --fix" % (main.name, apk))
+    if small is not None:  # the small device may lag a build behind: the run's build too, if main has it
+        err = fix and want and _install(small, app_id, artifact, want, replace or state["build"] == want)
+        small_state = _prepare(small, platform, app_id, fix, no_app)
+        small_state["problems"] += [err] if err else []
         if small_state["ok"] and small_state["build"] != state["build"]:
             small_state["ok"] = False
             small_state["problems"].append("another build than on %s is installed" % main.name)
@@ -353,7 +395,7 @@ def _source(project, ref, metro):
     return {"ref": sha, "root": root}
 
 
-def check(config, mode, fix=False, project=".", only=None, source=None):
+def check(config, mode, fix=False, project=".", only=None, source=None, apk=None):
     wants_small = any("small-screen" in s.get("states", []) for s in config.get("screens", []))
     platforms = {}
     for p in config.get("platforms", ["android", "ios"]):
@@ -363,9 +405,10 @@ def check(config, mode, fix=False, project=".", only=None, source=None):
                             "problems": ["not requested in this run (--platforms)"]}
             continue
         art = (((config.get("builds") or {}).get(mode) or {}).get(p) or {}).get("artifact")
-        art = art and os.path.join(project, art)
+        art = apk if apk and p == "android" else art and os.path.join(project, art)
         platforms[p] = _platform_state(config, p, wants_small, fix, art,
-                                       wake=not source or bool(art and os.path.exists(art)))
+                                       wake=not source or bool(art and os.path.exists(art)),
+                                       replace=bool(apk) or source in (None, "built"), apk=p == "android" and apk)
         if mode == "full" and p == "android" and platforms[p]["ok"]:
             st = platforms[p]
             problem = _smoke(devices.Device(p, st["device"], st["name"]), st["app"])
@@ -431,10 +474,12 @@ def cli_main():
     ap.add_argument("--platforms", help="comma list to check now, e.g. android")
     ap.add_argument("--source", help="`built` (built from this checkout in this run) or the git ref the installed "
                                      "build was made from")
+    ap.add_argument("--apk", help="the Android build under test; with --fix installed on both devices (default: "
+                                  "config builds.<mode>.android.artifact)")
     a = ap.parse_args()
     try:
         res = check(read_json(os.path.join(a.project, ".fresh-eyes", "config.json")), a.mode, a.fix, a.project,
-                    a.platforms.split(",") if a.platforms else None, a.source)
+                    a.platforms.split(",") if a.platforms else None, a.source, a.apk)
     except (FEError, OSError, ValueError) as e:
         res = {"ok": False, "mode": a.mode, "platforms": {}, "env": {"name": None, "verified": False,
                                                                      "api_host": None},
