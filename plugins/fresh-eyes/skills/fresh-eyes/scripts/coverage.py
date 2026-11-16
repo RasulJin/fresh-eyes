@@ -336,9 +336,10 @@ def _probe_problems(c, packs, note):
     if swiped is not None and "before" not in swiped:
         problems.append("a swipe-inside pack is snapped after the swipe with capture.py snap --before <the pack "
                         "snapped before it>, so the scripts can tell what moved")
-    elif swiped is not None and swiped.get("moved") == 0 and not note:
+    elif swiped is not None and swiped.get("moved") == 0:  # nothing scrolled is nothing checked, note or not
         problems.append("the swipe moved nothing on screen: swipe inside the list or grid itself, not on a "
-                        "header, and longer; if it really does not scroll, pass --note saying so")
+                        "header, and longer; if it really does not scroll (too few items), mark the cell na or "
+                        "blocked with --note \"not enough items\"")
     # A page laid out while a shorter one was open can stay cut to its height (a grid with blank under it).
     for k, page in enumerate(c.get("pages", []), 1):
         meta = os.path.join(packs[0], "page-%d" % k, "meta.json") if packs else ""

@@ -264,7 +264,15 @@ class StatusTest(unittest.TestCase):
         write_json(os.path.join(pack, "meta.json"), {"platform": "android", "before": pack + "-b", "moved": 0})
         with self.assertRaisesRegex(FEError, "moved nothing"):
             set_status(cov, cell["id"], "done", evidence=[pack])
-        set_status(cov, cell["id"], "done", evidence=[pack], note="the grid fits, it does not scroll")
+        # 20261116-1107-full: flight-search swipe-inside on one result went done "with a note"
+        with self.assertRaisesRegex(FEError, "na or blocked"):
+            set_status(cov, cell["id"], "done", evidence=[pack], note="one result, content fits one screen")
+        self.assertEqual(cell["status"], "todo")
+        set_status(cov, cell["id"], "na", evidence=[pack], note="not enough items")
+        set_status(cov, cell["id"], "blocked", evidence=[pack], note="not enough items")
+        self.assertEqual(cell["status"], "blocked")
+        write_json(os.path.join(pack, "meta.json"), {"platform": "android", "before": pack + "-b", "moved": 0.4})
+        set_status(cov, cell["id"], "done", evidence=[pack])
         self.assertEqual(cell["status"], "done")
 
     def test_swipe_inside_comes_back_from_each_listed_page(self):

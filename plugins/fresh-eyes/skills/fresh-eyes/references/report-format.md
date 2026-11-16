@@ -166,6 +166,9 @@ Also: <title of a finding merged into it> (<file>#<id>)
 - <maestro_dir>/fresh-eyes-<id>.yaml
 ```
 
+- Not checked in this run: the plan's `unchecked` items without `gap`, then each cell not done (`na`, `blocked`,
+  `failed`) with its note, e.g. `android/flight-search/default/swipe-inside — not enough items` (a swipe that
+  moved nothing is never done).
 - A bug is at most 10 lines: at most 5 steps (join the way there into one, "Open Trips → Paris → Schedule"),
   expected and actual one sentence each; the backlog entry gets the full finding.
 - Unsure, by class, never one block per finding, in this order and only classes that have findings: `stale`
