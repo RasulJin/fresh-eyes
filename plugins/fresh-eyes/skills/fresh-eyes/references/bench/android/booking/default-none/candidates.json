@@ -1,0 +1,105 @@
+[
+  {
+    "check": "overlap",
+    "node_ids": [
+      "n38",
+      "n41"
+    ],
+    "bbox": [
+      42,
+      1071,
+      162,
+      27
+    ],
+    "detail": "'Thu 15 May, 15:30' overlaps 'Total'",
+    "hint": "medium"
+  },
+  {
+    "check": "overlap",
+    "node_ids": [
+      "n38",
+      "n43"
+    ],
+    "bbox": [
+      225,
+      1071,
+      147,
+      27
+    ],
+    "detail": "'Thu 15 May, 15:30' overlaps 'Continue to payment'",
+    "hint": "medium"
+  },
+  {
+    "check": "overlap",
+    "node_ids": [
+      "n38",
+      "n44"
+    ],
+    "bbox": [
+      225,
+      1071,
+      147,
+      27
+    ],
+    "detail": "'Thu 15 May, 15:30' overlaps 'Continue to payment'",
+    "hint": "medium"
+  },
+  {
+    "check": "overlap",
+    "node_ids": [
+      "n39",
+      "n43"
+    ],
+    "bbox": [
+      390,
+      1071,
+      108,
+      15
+    ],
+    "detail": "'€38' overlaps 'Continue to payment'",
+    "hint": "medium"
+  },
+  {
+    "check": "overlap",
+    "node_ids": [
+      "n39",
+      "n44"
+    ],
+    "bbox": [
+      390,
+      1071,
+      108,
+      15
+    ],
+    "detail": "'€38' overlaps 'Continue to payment'",
+    "hint": "medium"
+  },
+  {
+    "check": "truncation",
+    "node_ids": [
+      "n2"
+    ],
+    "bbox": [
+      24,
+      105,
+      492,
+      30
+    ],
+    "detail": "'Lisbon · 12–15 May · 2 travellers': 19.0 px/char vs ~27.0 for same-height text",
+    "hint": "medium"
+  },
+  {
+    "check": "truncation",
+    "node_ids": [
+      "n13"
+    ],
+    "bbox": [
+      42,
+      387,
+      330,
+      33
+    ],
+    "detail": "'Hotel Alfama, 3 nights': 19.2 px/char vs ~27.0 for same-height text",
+    "hint": "medium"
+  }
+]

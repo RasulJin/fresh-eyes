@@ -1,0 +1,20 @@
+{
+  "time": "2026-11-16T12:00:00",
+  "platform": "android",
+  "device": "seeded-bench",
+  "screen_wh": [
+    540,
+    1200
+  ],
+  "brightness": 241,
+  "source": "uiautomator",
+  "nodes": 45,
+  "candidates": 7,
+  "keyboard_up": false,
+  "px_per_dp": 1.5,
+  "keyboard_top": null,
+  "app_running": true,
+  "scroll_pages": 0,
+  "scroll_stop": "end",
+  "scroll_restored": true
+}

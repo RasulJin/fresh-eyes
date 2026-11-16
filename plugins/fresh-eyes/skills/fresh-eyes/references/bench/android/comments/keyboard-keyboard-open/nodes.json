@@ -1,0 +1,272 @@
+[
+  {
+    "id": "n0",
+    "parent": null,
+    "depth": 0,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      0,
+      0,
+      540,
+      1200
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n1",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Comments",
+    "label": "",
+    "rid": "screen-title",
+    "bounds": [
+      24,
+      54,
+      492,
+      48
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n2",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Porto in spring",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      105,
+      492,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n3",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      156,
+      492,
+      93
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n4",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Ines",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      168,
+      450,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n5",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "The tram at 8 is empty, take it!",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      201,
+      450,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n6",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      261,
+      492,
+      93
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n7",
+    "parent": "n6",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Tom",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      273,
+      450,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n8",
+    "parent": "n6",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Saved this for October.",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      306,
+      450,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n9",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      366,
+      492,
+      93
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n10",
+    "parent": "n9",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Mara",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      378,
+      450,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n11",
+    "parent": "n9",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Ribeira at sunset, not at noon.",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      411,
+      450,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n12",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.EditText",
+    "text": "",
+    "label": "",
+    "rid": "comment-input",
+    "bounds": [
+      18,
+      732,
+      420,
+      72
+    ],
+    "clickable": true,
+    "focused": true,
+    "enabled": true
+  },
+  {
+    "id": "n13",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Send",
+    "rid": "send",
+    "bounds": [
+      450,
+      732,
+      72,
+      72
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n14",
+    "parent": "n13",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "➤",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      450,
+      732,
+      72,
+      72
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  }
+]

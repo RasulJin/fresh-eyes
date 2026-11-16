@@ -1,0 +1,236 @@
+[
+  {
+    "id": "n0",
+    "parent": null,
+    "depth": 0,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      0,
+      0,
+      540,
+      1200
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n1",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Lisbon long weekend",
+    "label": "",
+    "rid": "screen-title",
+    "bounds": [
+      24,
+      54,
+      492,
+      48
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n2",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.ImageView",
+    "text": "",
+    "label": "",
+    "rid": "post-photo",
+    "bounds": [
+      0,
+      156,
+      540,
+      450
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n3",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Like",
+    "rid": "like",
+    "bounds": [
+      24,
+      624,
+      60,
+      60
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n4",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "♡",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      624,
+      60,
+      60
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n5",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Comment",
+    "rid": "comment",
+    "bounds": [
+      96,
+      624,
+      60,
+      60
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n6",
+    "parent": "n5",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "✎",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      96,
+      624,
+      60,
+      60
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n7",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Plan this trip",
+    "rid": "plan-trip",
+    "bounds": [
+      444,
+      624,
+      72,
+      72
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n8",
+    "parent": "n7",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "✈",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      444,
+      624,
+      72,
+      72
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n9",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "place-chip",
+    "bounds": [
+      24,
+      708,
+      492,
+      54
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n10",
+    "parent": "n9",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Lisbon, Portugal",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      708,
+      492,
+      54
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n11",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Three days of trams, tiles and fado.",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      780,
+      492,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n12",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.EditText",
+    "text": "",
+    "label": "",
+    "rid": "comment-input",
+    "bounds": [
+      18,
+      1110,
+      504,
+      72
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  }
+]

@@ -1,0 +1,15 @@
+n1 [24,54,492,48] TextView "Berlin → Rome" #screen-title
+n2 [24,105,492,30] TextView "Mon 12 May · Direct · Economy"
+n3 [24,156,492,225] ViewGroup #flight-card
+n4 [48,183,165,54] TextView "10:40" #depart-time
+n5 [48,243,210,27] TextView "BER · Berlin"
+n6 [195,198,150,27] TextView "2 h 05 min" #duration
+n8 [327,183,165,54] TextView "13:45" #arrive-time
+n9 [282,243,210,27] TextView "FCO · Rome"
+n10 [48,321,444,27] TextView "Times are local"
+n11 [24,405,492,156] ViewGroup #price-card
+n12 [48,429,300,30] TextView "2 adults × €129"
+n13 [48,489,180,42] TextView "Total"
+n14 [342,489,150,42] TextView "€258" #price-total
+n15 [24,1080,492,78] ViewGroup #select-flight ⚑
+n16 [24,1080,492,78] TextView "Select flight"

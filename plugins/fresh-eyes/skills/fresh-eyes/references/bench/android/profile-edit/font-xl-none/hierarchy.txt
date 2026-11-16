@@ -1,0 +1,13 @@
+n1 [24,51,492,60] TextView "Edit profile" #screen-title
+n2 [24,144,492,39] TextView "Name"
+n3 [24,189,492,84] EditText "Mara Lind" ⚑
+n4 [24,291,492,39] TextView "Home city"
+n5 [24,336,492,84] EditText "Lisbon" ⚑
+n6 [24,438,492,39] TextView "About"
+n7 [24,483,492,84] EditText "Slow trains" ⚑
+n8 [24,1062,150,90] ViewGroup (Cancel) #cancel ⚑
+n9 [24,1062,150,90] TextView "Cancel"
+n10 [186,1062,168,90] ViewGroup (Save changes) #save ⚑
+n11 [186,1062,168,90] TextView "Save changes"
+n12 [366,1062,150,90] ViewGroup (Preview) #preview ⚑
+n13 [366,1062,150,90] TextView "Preview"

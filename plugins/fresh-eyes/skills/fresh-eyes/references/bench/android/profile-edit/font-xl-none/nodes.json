@@ -1,0 +1,254 @@
+[
+  {
+    "id": "n0",
+    "parent": null,
+    "depth": 0,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      0,
+      0,
+      540,
+      1200
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n1",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Edit profile",
+    "label": "",
+    "rid": "screen-title",
+    "bounds": [
+      24,
+      51,
+      492,
+      60
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n2",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Name",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      144,
+      492,
+      39
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n3",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.EditText",
+    "text": "Mara Lind",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      189,
+      492,
+      84
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n4",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Home city",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      291,
+      492,
+      39
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n5",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.EditText",
+    "text": "Lisbon",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      336,
+      492,
+      84
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n6",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "About",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      438,
+      492,
+      39
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n7",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.EditText",
+    "text": "Slow trains",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      483,
+      492,
+      84
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n8",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Cancel",
+    "rid": "cancel",
+    "bounds": [
+      24,
+      1062,
+      150,
+      90
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n9",
+    "parent": "n8",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Cancel",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      1062,
+      150,
+      90
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n10",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Save changes",
+    "rid": "save",
+    "bounds": [
+      186,
+      1062,
+      168,
+      90
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n11",
+    "parent": "n10",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Save changes",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      186,
+      1062,
+      168,
+      90
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n12",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Preview",
+    "rid": "preview",
+    "bounds": [
+      366,
+      1062,
+      150,
+      90
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n13",
+    "parent": "n12",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Preview",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      366,
+      1062,
+      150,
+      90
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  }
+]

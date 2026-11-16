@@ -19,7 +19,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 ## Input (from the orchestrator)
 
 - One screen folder `<run>/<platform>/<screen>/` (its `findings*.json`), the screen's spec slice
-  `<run>/spec/<screen>.md`, `known.md`, `<run>/backlog-index.md` (open backlog entries, one line each), the
+  `<run>/spec/<screen>.md`, `known.md`, `known-proposed.md`, `<run>/backlog-index.md` (open backlog entries as of the build's commit,
+  one line each: the only backlog you read; never open or grep the backlog file itself, e.g.
+  `docs/qa-backlog.md`: the working folder may hold another branch's), the
   project `language`, `source_root` (the code this build was made from, or `none`); for the journey folder
   also the findings files of the screens its findings concern.
 - The prompt says `first pass` or `second pass`. On the second pass the folder's `requests.json` entries are
@@ -27,19 +29,27 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 
 ## First pass
 
-A findings file's `requests` (a reviewer's tap no frame showed the result of): append each to `requests.json`
-once, with `"from": "<findings file>"`.
+A findings file's `requests` (what a reviewer could not see: a tap's result, a crop, a frame): append each to
+`requests.json` once, with `"from": "<findings file>"`.
 
 IMPs are proposals for the owner, not claims: no rechecks or requests for them. Leave each `pending` (final
 for an IMP), except `rejected` with a note when the spec slice or `known.md` contradicts it.
 
+A pending BUG with `same_as_auto` (set by `findings.py same`: its `same_as` on another screen is the same case,
+verified there): open its crop beside that one's. The same defect → no rechecks, no requests, leave it pending:
+the script copies that ruling. Another defect → delete `same_as` and `same_as_auto` and judge it as usual.
+
 For each BUG with `verdict: "pending"`:
 1. Open its evidence crop(s); open the pack's `som.png` only when the crop lacks context. Read the spec rule.
+   A BUG at confidence ≤ 0.4, or whose `actual` says its evidence is missing ("needs a frame", "not checked",
+   "seems"), is a guess: request the evidence that decides it (step 4), or set `kind` to `IMP` when none can.
 2. Try to disprove it:
    - the "truncated" text is actually complete in the crop; the "clipped" row scrolls fully into view in a
      `swipe-inside` pack; the "overlap" is an intended badge; the "flash" is a deliberate crossfade;
-   - it is listed in `known.md`, is OS chrome, a dev overlay or test data shown correctly, or the checklist's
+   - it is listed in `known.md` or `known-proposed.md`, is OS chrome or a dev overlay, or the checklist's
      "Do not flag" covers it (name the item in `verify_note`);
+   - it is test data shown correctly: `verify_note` "test data: <what data, why it is not the app's>" (the
+     words `test data:` as is in any language: the next run's reviewers get it in `known-proposed.md`);
    - the spec rule does not say what the finding claims.
    An icon's glyph (which symbol stands for something) is a proposal: set `kind` to `IMP` and leave it pending.
    What a `⚠ conflict` / `⚠ конфликт` rule itself leaves to the owner is no bug yet and no new question (the
@@ -53,14 +63,27 @@ For each BUG with `verdict: "pending"`:
    Then delete the question. Otherwise never `confirmed`: `unsure`, `verify_note` "owner decides: <question>".
    A frame that clearly shows the defect stays evidence when a repeat does not show it again: the bug may be
    intermittent (timing, state left by an earlier step). A low one needs one repeat, a medium two (ask with
-   `"times": 2`): missed by them → `rejected`, `verify_note` "flaky: seen in <pack>, not reproduced in <recheck
-   packs>" (the word `flaky:` as is in any language). A high one, or a medium with one repeat back: `unsure`,
-   "intermittent: …". Reject outright only when the original frame itself is wrong: captured mid-animation or
+   `"times": 2`, always): missed by them → `rejected`, `verify_note` "flaky: seen in <pack>, not reproduced in
+   <recheck packs>" (the word `flaky:` as is in any language). A high one missed by its repeats: `unsure`,
+   "intermittent: …". A medium with one repeat back rules neither way, not `confirmed`, not `unsure`: ask again
+   with `"times": 2` and leave it pending. Reject outright only when the original frame itself is wrong: captured mid-animation or
    mid-transition (motion evidence, a half-faded layer), stale, or showing test data rather than the app.
+   A repeat disproves only under the original's conditions. What the original shows in the first seconds (right
+   after opening, a cold cache, images or avatars still loading) is not disproved by a frame taken seconds later
+   or on a warm screen: that is no repeat and no `flaky:`. Ask for one that reopens the screen and snaps at once
+   (`why` says so), or judge the original: a settled frame that shows it confirms it.
    An app error from the log needs no frame: when the finding's evidence is a `logcat.txt` line (that file holds
    only the app's own process and crashes that name the app), confirm it if the line is there and is an error
    (`E/`, `F/`) or a crash; a warning only when it floods (hundreds of lines). Do not request a frame for it.
    A pack with `app_running: false` in `meta.json` is a crash: a launcher on its frame is not "another app".
+   What a tap did (opened another screen or app, did nothing, fired twice) is confirmed only by the `tap.json` in
+   the tap's after pack (`<pack>/tap-<k>`, or a recheck's `--after` folder; `taps.py` writes it): its `node`
+   (text, label, rid) is the element the finding names, its `point` lies inside `bounds` (that node at the tap)
+   and above `keyboard_top` when that is set; `changed` (the app's nodes before vs after) and `result` say what
+   the tap did. No `tap.json`: request `"do": "repeat-probe"`, `"probe": "tap-everything"`, `"why": "tap
+   «<label>» by its node, tap.json in the pack"` and rule on the second pass by that recheck's `tap.json`.
+   Another `node`, or the point outside its `bounds` or under the keyboard: that element was never tapped →
+   `rejected`, "tap hit «<that node>» (tap.json)", plus the same request with `"from": "<this findings file>"`.
 3. If the evidence decides it → set `verdict` to `confirmed` or `rejected` with a one-line `verify_note`.
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
@@ -69,6 +92,9 @@ For each BUG with `verdict: "pending"`:
 5. A cell whose probe never tested its oracle (snapped on another screen, the gesture never reached what it
    should interrupt): `{"do": "redo-cell", "cell": "<cell id>", "why": "<one line>"}`; the orchestrator runs it
    again, and on the second pass you rule on its findings from the new pack (the entry's `done`).
+   A scenario or journey step whose frame equals the one before is marked `"unchanged": true` in `steps.json`
+   (the navigator writes it: the action changed nothing; judge that against the step's `expect`). Two equal step
+   frames without that mark are a copy, not evidence: no ruling on them, a `redo-cell`.
 
 Duplicates: when two findings (in this folder's files, or one here and one in a file you were given) report
 the same defect, set `same_as` on the one with weaker evidence, pointing at the other with its file relative
@@ -114,9 +140,17 @@ inputs first. Use the `-recheck` evidence. A finding whose request has neither `
 evidence never came; the verdict then stays INCOMPLETE). Rule on every other pending finding: `confirmed` (reproduced, evidence
 attached), `rejected` (disproved, say how; a repeat that does not reproduce: flaky or intermittent, see first pass), or `unsure` (evidence still ambiguous: say what a human should look
 at). Adjust `severity` if the evidence shows a different impact, and say so in `verify_note`.
-An entry `from` a findings file: judge its `-recheck` pack (the tap's result: its `after/`) as a reviewer would. The tap does what its label and
-`why` say → nothing to write; it does not (no reaction on a settled frame, another screen) → add a BUG to that
-file (`id` `r<k>`, `steps`, the recheck as evidence), `confirmed`.
+An entry `from` a findings file: judge its `-recheck` pack (a tap's result: its `after/`) as a reviewer would.
+It does not show what `why` names as the defect (the tap does what its label says) → nothing to write; it shows
+it (no reaction on a settled frame, another screen, the cut or overlap) → add a BUG to that file (`id` `r<k>`,
+`steps`, the recheck as evidence), ruled by the same rules as any BUG (a tap's result by its `tap.json`): a cut
+or overlap a settled frame shows is `confirmed`; a behaviour (a tap, a gesture) needs as many rechecks showing
+it as a repeat of its severity (a low one 1, a medium or high one 2): fewer → a request for the rest
+(`"times"`), pending till they are back.
+A conflict pair (the orchestrator sends two findings, maybe of two folders, that `coverage.py verdict` saw ruled
+both ways): both are yours to write. One defect → one ruling for both, on the stronger evidence of the two, the
+other's `same_as` to it. Two defects → remove the `same_as` between them, make each title name what differs, and
+rule each on its own; say which in both `verify_note`s.
 
 ## Reply (≤10 lines)
 

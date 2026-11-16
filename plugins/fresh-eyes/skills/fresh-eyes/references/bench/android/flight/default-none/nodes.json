@@ -1,0 +1,308 @@
+[
+  {
+    "id": "n0",
+    "parent": null,
+    "depth": 0,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      0,
+      0,
+      540,
+      1200
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n1",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Berlin → Rome",
+    "label": "",
+    "rid": "screen-title",
+    "bounds": [
+      24,
+      54,
+      492,
+      48
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n2",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Mon 12 May · Direct · Economy",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      105,
+      492,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n3",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "flight-card",
+    "bounds": [
+      24,
+      156,
+      492,
+      225
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n4",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "10:40",
+    "label": "",
+    "rid": "depart-time",
+    "bounds": [
+      48,
+      183,
+      165,
+      54
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n5",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "BER · Berlin",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      48,
+      243,
+      210,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n6",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "2 h 05 min",
+    "label": "",
+    "rid": "duration",
+    "bounds": [
+      195,
+      198,
+      150,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n7",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      210,
+      231,
+      120,
+      3
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n8",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "13:45",
+    "label": "",
+    "rid": "arrive-time",
+    "bounds": [
+      327,
+      183,
+      165,
+      54
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n9",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "FCO · Rome",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      282,
+      243,
+      210,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n10",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Times are local",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      48,
+      321,
+      444,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n11",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "price-card",
+    "bounds": [
+      24,
+      405,
+      492,
+      156
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n12",
+    "parent": "n11",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "2 adults × €129",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      48,
+      429,
+      300,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n13",
+    "parent": "n11",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Total",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      48,
+      489,
+      180,
+      42
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n14",
+    "parent": "n11",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "€258",
+    "label": "",
+    "rid": "price-total",
+    "bounds": [
+      342,
+      489,
+      150,
+      42
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n15",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "select-flight",
+    "bounds": [
+      24,
+      1080,
+      492,
+      78
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n16",
+    "parent": "n15",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Select flight",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      1080,
+      492,
+      78
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "n": 1,
+    "label": "Like",
+    "by": "som",
+    "pack": "tap-1",
+    "changed": false,
+    "result": "no change"
+  },
+  {
+    "n": 2,
+    "label": "Plan this trip",
+    "by": "som",
+    "pack": "tap-2",
+    "changed": true,
+    "result": "new: Lisbon, Portugal; gone: Like, Comment, Plan this trip, Three days of trams, tiles and fado."
+  }
+]

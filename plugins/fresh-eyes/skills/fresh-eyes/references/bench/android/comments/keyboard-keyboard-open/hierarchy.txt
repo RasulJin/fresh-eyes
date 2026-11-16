@@ -1,0 +1,11 @@
+n1 [24,54,492,48] TextView "Comments" #screen-title
+n2 [24,105,492,30] TextView "Porto in spring"
+n4 [42,168,450,30] TextView "Ines"
+n5 [42,201,450,30] TextView "The tram at 8 is empty, take it!"
+n7 [42,273,450,30] TextView "Tom"
+n8 [42,306,450,30] TextView "Saved this for October."
+n10 [42,378,450,30] TextView "Mara"
+n11 [42,411,450,30] TextView "Ribeira at sunset, not at noon."
+n12 [18,732,420,72] EditText #comment-input ⚑ ●
+n13 [450,732,72,72] ViewGroup (Send) #send ⚑
+n14 [450,732,72,72] TextView "➤"

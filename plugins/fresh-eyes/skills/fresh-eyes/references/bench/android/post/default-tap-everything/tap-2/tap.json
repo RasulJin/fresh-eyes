@@ -1,0 +1,31 @@
+{
+  "time": "2026-11-16T12:00:00",
+  "point": [
+    480,
+    660
+  ],
+  "by": "som",
+  "node": {
+    "cls": "android.view.ViewGroup",
+    "rid": "place-chip",
+    "text": "",
+    "label": ""
+  },
+  "bounds": [
+    24,
+    633,
+    492,
+    54
+  ],
+  "keyboard_top": null,
+  "screen_wh": [
+    540,
+    1200
+  ],
+  "source": "uiautomator",
+  "snap_exit": 0,
+  "settled": true,
+  "pixels_changed": true,
+  "changed": true,
+  "result": "new: Lisbon, Portugal; gone: Like, Comment, Plan this trip, Three days of trams, tiles and fado."
+}

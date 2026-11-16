@@ -11,10 +11,11 @@ How a picky QA engineer + product designer looks at one screen. Used by the revi
 3. Then look beyond the candidates, section by section below. Most real bugs are not in `candidates.json`.
 4. Point at elements by Set-of-Mark number and crop path, never by coordinates you estimated.
 5. Small details (corner radius, 1–2 px misalignment, truncation "…", icon glyph) are judged on crops, not on
-   the 1000 px overview. If no crop covers it, still write the finding with low confidence and say in
-   `actual` which crop is missing; the verifier requests it.
-6. A finding needs a frame. Never report a bug from code, a guess or a single hierarchy line.
-7. "Could not see it" is not "it is fine": say what evidence is missing.
+   the 1000 px overview. If no crop covers it, ask for one in `requests` (`"do": "crop"` with its `bbox`).
+6. A finding needs a frame. Never report a bug from code, a guess or a single hierarchy line. A guess
+   (confidence ≤ 0.4, "needs a frame", "not checked", "seems") is a `requests` entry when new evidence can
+   settle it, else an IMP; never a BUG, and no title "Not verified: …".
+7. "Could not see it" is not "it is fine": ask for the missing evidence in `requests`.
 
 ## Display defects (one frame shows it)
 
@@ -156,7 +157,14 @@ raised again, so a proposal left out costs more than one written.
 - Anything listed in `known.md` (intentional behaviour confirmed by the user).
 - Content that is clearly test data, unless the screen shows it wrongly. A crash (`app_running: false` in the
   pack's `meta.json`) is never test data: it is a BUG high.
-- Partially visible items at the edge of a scrollable list when a swipe brings them fully into view.
+- Partially visible items at the edge of a scrollable list or row: a chip «+ Add d…» cut by the screen's side
+  in a row of chips, the next card of a carousel. The cut is how the row shows that it scrolls.
+- `W/` lines in `logcat.txt` with no `E/` or `F/` line of the app: no BUG, unless one warning floods (hundreds
+  of lines).
+- Data in the language it was made in: a trip, plan or answer created while the app or the AI ran in another
+  language (its title, day names, stops) next to the UI's words. Only the app's own labels follow the UI.
+- Words and layout of another app a tap opened (a map app's labels for a place or coordinates, a browser page,
+  the OS share sheet): not the app's copy. Which app opened, and with what, is the app's.
 - Bounds alone (Android): uiautomator cuts a node's bounds at its parent's edge, down to zero or negative height.
   An element the frame shows whole is not clipped or hidden from a screen reader because its bounds are; a hit
   target cut so is judged by its box in `source_root` (a 48 dp box from padding with a negative margin, or a
@@ -171,6 +179,6 @@ raised again, so a proposal left out costs more than one written.
   placeholder glyph) is a BUG.
 - A tap whose result no frame shows (no snap after it, one from before the transition, another screen on it):
   no dead tap, a `requests` entry (reviewer.md). A dead tap is a settled snap like the one before it
-  (`taps.json` `"changed": false`; a like or a switch moves under 1 % of the screen and reads false too: look
-  at the control).
+  (`taps.json` `"changed": false`: no node of the app appeared, went, moved or took focus; a toggled like
+  reads true, and `result` names what changed).
 - What a ⚠ conflict rule itself leaves to the owner: no BUG, a `conflict` entry in `questions[]`.

@@ -1,0 +1,200 @@
+[
+  {
+    "id": "n0",
+    "parent": null,
+    "depth": 0,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      0,
+      0,
+      540,
+      1200
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n1",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Mara Lind",
+    "label": "",
+    "rid": "screen-title",
+    "bounds": [
+      24,
+      54,
+      492,
+      48
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n2",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Lisbon · 14 trips",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      105,
+      492,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n3",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "avatar",
+    "bounds": [
+      24,
+      156,
+      96,
+      96
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n4",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "128",
+    "label": "",
+    "rid": "followers-count",
+    "bounds": [
+      144,
+      165,
+      180,
+      33
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n5",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "followers",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      144,
+      201,
+      180,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n6",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Follow",
+    "rid": "follow-button",
+    "bounds": [
+      348,
+      168,
+      168,
+      66
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n7",
+    "parent": "n6",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Follow",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      348,
+      168,
+      168,
+      66
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n8",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Trips",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      279,
+      492,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n9",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Porto in spring",
+    "rid": "",
+    "bounds": [
+      24,
+      321,
+      240,
+      180
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n10",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Seville by train",
+    "rid": "",
+    "bounds": [
+      276,
+      321,
+      240,
+      180
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  }
+]

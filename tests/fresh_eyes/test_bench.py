@@ -2,8 +2,8 @@ import os
 import unittest
 
 from tests.fresh_eyes.helpers import tmpdir
-from bench import candidates, false_clean, load_run_findings, score, sheet, summary
-from fe_common import FEError, write_json
+from bench import SEEDED, candidates, false_clean, load_run_findings, score, seed, sheet, summary
+from fe_common import FEError, read_json, write_json
 
 CASE = {"id": "BUG-357", "screen": "side-menu", "platform": "android", "kind": "bug", "group": "live",
         "expect": {"description": "the «Import from text or a link» item is cut with an ellipsis", "bbox": None}}
@@ -126,6 +126,58 @@ class FalseCleanTest(unittest.TestCase):
             other = dict(CASE, id="BUG-9", screen="feed")
             roles["e1"]["case"], judged["entries"][0]["match"] = "BUG-9", False
             self.assertEqual(false_clean(judged, roles, [other]), [])  # feed was not in this run: not a miss
+
+
+class SeededTest(unittest.TestCase):
+    """The human classes on fixtures (P-14): each case's defect must really be in its pack, or the bench lies."""
+    def pack(self, *parts):
+        return os.path.join(SEEDED, "android", *parts)
+
+    def nodes(self, *parts):
+        return read_json(os.path.join(self.pack(*parts), "nodes.json"))
+
+    def test_seed_makes_a_run_of_done_cells_with_a_slice_per_screen(self):
+        cases = read_json(os.path.join(SEEDED, "cases.json"))
+        with tmpdir() as d:
+            run = os.path.join(d, "seeded-1")
+            out = seed(run)
+            cov = read_json(os.path.join(run, "coverage.json"))
+            self.assertEqual(sorted(out["screens"]), sorted(c["screen"] for c in cases))
+            self.assertTrue(all(c["status"] == "done" and os.path.isdir(c["evidence"][0]) for c in cov["cells"]))
+            self.assertIn("android/profile-edit/font-xl/none", [c["id"] for c in cov["cells"]])
+            with open(os.path.join(run, "spec", "flight.md"), encoding="utf-8") as f:
+                self.assertIn("inv flight#2", f.read())
+            with self.assertRaises(FEError):
+                seed(run)  # never over a run that may hold findings
+        self.assertEqual([c["kind"] for c in cases].count("bug"), 5)
+
+    def test_the_seeded_defects_are_in_their_packs(self):
+        def text(nodes):
+            return {n["text"] for n in nodes}
+
+        def by_rid(nodes, rid):
+            return next(n for n in nodes if n["rid"] == rid)
+        booking = self.nodes("booking", "default-none")  # the last row under the pinned bar, the list at its end
+        bar, last = by_rid(booking, "pay-bar"), [n for n in booking if n["text"] == "Airport transfer"][0]
+        self.assertGreater(last["bounds"][1] + last["bounds"][3], bar["bounds"][1])
+        self.assertEqual(read_json(os.path.join(self.pack("booking", "default-none"), "meta.json"))["scroll_stop"], "end")
+        self.assertTrue({"10:40", "2 h 05 min", "13:45"} <= text(self.nodes("flight", "default-none")))
+        save = by_rid(self.nodes("profile-edit", "font-xl-none"), "save")
+        self.assertLess(save["bounds"][2], 12 * 0.55 * 21 * 1.5)  # «Save changes» at 21 dp needs more than its box
+        after = by_rid(self.nodes("traveller", "default-tap-everything", "tap-1"), "follow-button")
+        self.assertEqual(after["label"], "Follow")
+        self.assertIn("Following", text(self.nodes("traveller", "default-tap-everything", "tap-1")))
+        kb = read_json(os.path.join(self.pack("comments", "keyboard-keyboard-open"), "keyboard.json"))
+        self.assertEqual(kb["flags"], ["kb-show: double_jump"])
+
+    def test_the_control_tap_landed_on_the_neighbour(self):
+        tap = read_json(os.path.join(self.pack("post", "default-tap-everything", "tap-2"), "tap.json"))
+        plan = next(n for n in self.nodes("post", "default-tap-everything") if n["rid"] == "plan-trip")
+        (x, y), (bx, by, bw, bh) = tap["point"], tap["bounds"]
+        self.assertTrue(bx <= x < bx + bw and by <= y < by + bh)
+        self.assertEqual(tap["node"]["rid"], "place-chip")
+        px_, py_, pw, ph = plan["bounds"]
+        self.assertTrue(px_ <= x < px_ + pw and py_ <= y < py_ + ph)  # inside the plan button as the som showed it
 
 
 if __name__ == "__main__":

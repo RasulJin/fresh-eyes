@@ -72,6 +72,92 @@ class AgentsTest(unittest.TestCase):
         nav = " ".join(frontmatter("navigator")[1].split())
         self.assertIn('An entry with `"times": N`', nav)
 
+    def test_a_guess_is_a_request_or_an_imp_never_a_bug_0_5_13(self):
+        # 0.5.12 run: 19 of 32 rejects had confidence <= 0.4 ("needs a frame", "not checked"), one titled «Не проверено: …»
+        reviewer = " ".join(frontmatter("reviewer")[1].split())
+        for word in ("A guess is not a BUG", '"do": "resnap|crop|repeat-probe"', "confidence above 0.4",
+                     "«Не проверено»", "«нужен кадр»"):
+            self.assertIn(word, reviewer, word)
+        self.assertNotIn("still write the finding with low confidence", reviewer)
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        self.assertIn("is a guess: request the evidence that decides it", verifier)
+        self.assertIn("what a reviewer could not see", verifier)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "references", "checklist.md"), encoding="utf-8") as f:
+            checklist = " ".join(f.read().split())
+        self.assertIn('no title "Not verified: …"', checklist)
+        self.assertNotIn("still write the finding with low confidence", checklist)
+
+    def test_the_verifier_reads_only_the_backlog_index_0_5_13(self):
+        # 0.5.12 run: verifiers opened docs/qa-backlog.md of the working folder, another branch's backlog (M4)
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        self.assertIn("never open or grep the backlog file itself", verifier)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "SKILL.md"), encoding="utf-8") as f:
+            self.assertIn("never the backlog file's path", " ".join(f.read().split()))
+
+    def test_an_r_finding_follows_the_repeat_rules_0_5_13(self):
+        # 0.5.12 run: profile-trips#1r1 (medium) confirmed on one adb recheck
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ("ruled by the same rules as any BUG", "(a low one 1, a medium or high one 2): fewer → a request"):
+            self.assertIn(word, verifier, word)
+
+    def test_a_repeat_disproves_only_under_the_same_conditions_0_5_13(self):
+        # 0.5.12 run: feed#2f1 (no avatar right after opening) rejected as flaky by a snap 5 s later
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ("A repeat disproves only under the original's conditions", "a cold cache",
+                     "that is no repeat and no `flaky:`"):
+            self.assertIn(word, verifier, word)
+
+    def test_a_tap_result_needs_tap_json_on_its_target_0_5_13(self):
+        # 0.5.12 run: the only high (robot opens Google Maps) was a tap at old coordinates that hit the place chip
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ("What a tap did", "`tap.json`", "its `point` lies inside `bounds`",
+                     "the tap's after pack (`<pack>/tap-<k>`", "that element was never tapped → `rejected`",
+                     "above `keyboard_top` when that is set", "rule on the second pass by that recheck's `tap.json`",
+                     "a tap's result by its `tap.json`"):
+            self.assertIn(word, verifier, word)
+
+    def test_one_case_is_checked_once_and_known_candidates_reach_the_next_run_0_5_13(self):
+        # 0.5.12 run: an English demo trip rejected on 4 screens, «Almaty, Казахстан» 3 times, QA141 tiles 3 rulings
+        reviewer = " ".join(frontmatter("reviewer")[1].split())
+        self.assertIn("read both before you write any finding", reviewer)
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ("`same_as_auto` (set by `findings.py same`", "delete `same_as` and `same_as_auto`",
+                     '"test data: <what data', "`known-proposed.md`"):
+            self.assertIn(word, verifier, word)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "SKILL.md"), encoding="utf-8") as f:
+            skill = " ".join(f.read().split())
+        for word in ("findings.py same --run $RUN --findings <the same files>", "with a file in its `verify` list",
+                     "findings.py same --run $RUN --findings <all findings*.json>",
+                     "findings.py known --run $RUN --out .fresh-eyes/known-proposed.md"):
+            self.assertIn(word, skill, word)
+        self.assertEqual(skill.count(".fresh-eyes/known-proposed.md`,"), 2)  # reviewer and verifier prompts
+
+    def test_a_conflict_pair_goes_to_one_verifier_0_5_13(self):
+        # 0.5.12 run: feed#2f1 rejected as flaky, feed-trips#2f1 confirmed with same_as to it
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ("A conflict pair", "both are yours to write", "remove the `same_as` between them"):
+            self.assertIn(word, verifier, word)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "SKILL.md"), encoding="utf-8") as f:
+            skill = " ".join(f.read().split())
+        self.assertIn("Code `CONFLICT` (one defect ruled both ways): each pair of its `conflicts` goes to one verifier",
+                      skill)
+
+    def test_an_unchanged_step_is_marked_and_a_copy_is_redone_0_5_13(self):
+        # 0.5.12 run: vio-guide step-21 retaken after step-22, byte for byte step-27
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        self.assertIn('marked `"unchanged": true` in `steps.json`', verifier)
+        self.assertIn("are a copy, not evidence: no ruling on them, a `redo-cell`", verifier)
+
+    def test_a_medium_needs_two_repeats_and_one_rules_neither_way_0_5_13(self):
+        # P-29: 0.5.12 run confirmed or left unsure a medium on one repeat
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ('`"times": 2`, always', "A medium with one repeat back rules neither way",
+                     "A high one missed by its repeats: `unsure`"):
+            self.assertIn(word, verifier, word)
+        self.assertNotIn("or a medium with one repeat back: `unsure`", verifier)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "SKILL.md"), encoding="utf-8") as f:
+            self.assertIn("gets one more requests round", " ".join(f.read().split()))
+
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
         nav = " ".join(frontmatter("navigator")[1].split())

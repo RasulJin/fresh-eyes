@@ -1,0 +1,44 @@
+[
+  {
+    "check": "truncation",
+    "node_ids": [
+      "n5"
+    ],
+    "bbox": [
+      42,
+      201,
+      450,
+      30
+    ],
+    "detail": "'The tram at 8 is empty, take it!': 19.1 px/char vs ~43.5 for same-height text",
+    "hint": "medium"
+  },
+  {
+    "check": "truncation",
+    "node_ids": [
+      "n8"
+    ],
+    "bbox": [
+      42,
+      306,
+      450,
+      30
+    ],
+    "detail": "'Saved this for October.': 25.3 px/char vs ~43.5 for same-height text",
+    "hint": "medium"
+  },
+  {
+    "check": "truncation",
+    "node_ids": [
+      "n11"
+    ],
+    "bbox": [
+      42,
+      411,
+      450,
+      30
+    ],
+    "detail": "'Ribeira at sunset, not at noon.': 19.2 px/char vs ~43.5 for same-height text",
+    "hint": "medium"
+  }
+]

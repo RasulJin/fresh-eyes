@@ -57,9 +57,22 @@ class SkillMdTest(unittest.TestCase):
         # 0.5.11 run: the orchestrator piped reviews by hand and watched the heartbeat with its own script (M1, M10)
         body = " ".join(text().split())
         for word in ("Pipeline: as soon as a screen's cells", "nav.py idle --run $RUN --platform <p> --until 540",
-                     "never by polling", "pending BUG findings", "--keychain fresh-eyes-<role>-email"):
+                     "never by polling", "IMPs and linked copies alone need none", "--keychain fresh-eyes-<role>-email"):
             self.assertIn(word, body, word)
         self.assertNotIn("Check every 1–2 minutes", body)
+
+    def test_seeded_bench_0_5_13(self):
+        # P-14: the human classes (pinned overlap, arithmetic, ...) on fixtures, since the app has them fixed
+        body = " ".join(text().split())
+        for word in ("`bench seeded`", "bench.py seed --out .fresh-eyes/bench/runs/seeded-<k>",
+                     '"failed": "seeded bench, no device"', "--cases $R/bench/cases.json", "4 of 5 caught"):
+            self.assertIn(word, body, word)
+
+    def test_the_build_under_test_goes_through_preflight_0_5_13(self):
+        # P-32: 0.5.12 run installed the APK with adb by hand (M1)
+        body = " ".join(text().split())
+        self.assertIn("Add `--apk <path>` when the build to test is not at `builds.<mode>.android.artifact`", body)
+        self.assertIn("never `adb install` by hand", body)
 
     def test_credentials_and_photos_reach_the_navigator(self):
         plugin = os.path.dirname(os.path.dirname(SKILL_DIR))
