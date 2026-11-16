@@ -179,6 +179,6 @@ raised again, so a proposal left out costs more than one written.
   placeholder glyph) is a BUG.
 - A tap whose result no frame shows (no snap after it, one from before the transition, another screen on it):
   no dead tap, a `requests` entry (reviewer.md). A dead tap is a settled snap like the one before it
-  (`taps.json` `"changed": false`; a like or a switch moves under 1 % of the screen and reads false too: look
-  at the control).
+  (`taps.json` `"changed": false`: no node of the app appeared, went, moved or took focus; a toggled like
+  reads true, and `result` names what changed).
 - What a ⚠ conflict rule itself leaves to the owner: no BUG, a `conflict` entry in `questions[]`.
