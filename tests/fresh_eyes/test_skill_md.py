@@ -74,6 +74,14 @@ class SkillMdTest(unittest.TestCase):
         self.assertIn("Add `--apk <path>` when the build to test is not at `builds.<mode>.android.artifact`", body)
         self.assertIn("never `adb install` by hand", body)
 
+    def test_one_conflict_round_then_unsure(self):
+        # 0.5.13 acceptance: "verdict again" had no way out, a night run could loop on CONFLICT (M1, M10)
+        body = " ".join(text().split())
+        self.assertIn("One round only: a pair still in `conflicts`", body)
+        self.assertIn('"rulings disagree: owner decides', body)
+        with open(os.path.join(SKILL_DIR, "references", "report-format.md"), encoding="utf-8") as f:
+            self.assertIn("one round only: a pair still ruled both ways turns `unsure`", " ".join(f.read().split()))
+
     def test_credentials_and_photos_reach_the_navigator(self):
         plugin = os.path.dirname(os.path.dirname(SKILL_DIR))
         with open(os.path.join(plugin, "agents", "navigator.md"), encoding="utf-8") as f:

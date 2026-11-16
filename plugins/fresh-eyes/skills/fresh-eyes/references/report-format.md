@@ -84,6 +84,8 @@ Computed only by `coverage.py verdict` (never by a model); the first that applie
 - one defect ruled both ways (a finding confirmed with `same_as` to a rejected one or the reverse, or the same
   kind, rule and title confirmed once and rejected once) → `CONFLICT` (РЕШЕНИЯ РАСХОДЯТСЯ): no report yet; the
   verdict's `conflicts` lists the pairs (file#id), each pair goes to one verifier, then the verdict runs again;
+  one round only: a pair still ruled both ways turns `unsure` on both sides ("rulings disagree: owner decides"),
+  the verdict runs once more and the report is written, the pair under "Look with your own eyes";
   its `reasons` still say what the code would be without the conflict;
 - any confirmed BUG of severity high → `BLOCK` (НЕ ВЫПУСКАТЬ);
 - any confirmed BUG of severity medium → `ISSUES` (ЕСТЬ ПРОБЛЕМЫ), even when something was not checked;

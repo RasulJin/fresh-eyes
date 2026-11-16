@@ -180,7 +180,9 @@ words / nothing (= the current diff).
     cells no reviewer looked at, send those packs to a reviewer (`findings-<k>.json`), verify, and rerun it.
     Code `CONFLICT` (one defect ruled both ways): each pair of its `conflicts` goes to one verifier, `second pass`
     with both findings files and the pair (the first file's verifier by SendMessage, else a fresh one); when all
-    are back, run `findings.py same` and the verdict again.
+    are back, run `findings.py same` and the verdict again. One round only: a pair still in `conflicts` → in both
+    findings files set both `"verdict": "unsure"`, `verify_note` "rulings disagree: owner decides (<other
+    file#id>)", then `findings.py same` and the verdict once more, and write the report (the pair is unsure).
     Then `python3 $S/backlog.py match --index $RUN/backlog-index.md --findings <all findings*.json> --out
     $RUN/imp.md --language <config>`: an IMP an open backlog entry already proposes gets its `backlog_id`, and
     imp.md holds every IMP in full (the new ones numbered, the known ones a line each). Then `python3
