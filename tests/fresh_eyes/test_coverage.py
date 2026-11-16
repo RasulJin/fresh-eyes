@@ -530,6 +530,24 @@ class StatusTest(unittest.TestCase):
             set_status(cov, dark["id"], "done", evidence=[make_pack(root, dark, brightness=173)])
         set_status(cov, dark["id"], "done", evidence=[make_pack(root, dark, brightness=60)])
 
+    def test_a_theme_mismatch_cell_needs_the_proof_of_both_themes(self):
+        # 20261116-1107-full: trip-map/theme-mismatch-none was done without saying what theme the app was on
+        cfg = dict(copy.deepcopy(ONE_SCREEN), app_theme="Профиль → Тема: Светлая / Тёмная / Как в системе")
+        cfg["screens"][0].update(states=["theme-mismatch"], probes=[])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        cell = next(c for c in cov["cells"] if c["platform"] == "android")
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        pack = make_pack(root, cell)
+        for note in (None, {"ui_night_mode": "no", "app_theme": "Светлая"}, {"ui_night_mode": "yes"}):
+            if note:
+                write_json(os.path.join(pack, "theme-note.json"), note)
+            with self.assertRaisesRegex(FEError, "theme-note.json"):
+                set_status(cov, cell["id"], "done", evidence=[pack], note="looks right")
+        write_json(os.path.join(pack, "theme-note.json"), {"ui_night_mode": "yes", "app_theme": "Светлая"})
+        set_status(cov, cell["id"], "done", evidence=[pack])
+        self.assertEqual(cell["status"], "done")
+
     def test_back_during_animation_needs_a_frame_that_moved(self):
         cfg = copy.deepcopy(ONE_SCREEN)
         cfg["screens"][0]["probes"] = ["back-during-animation"]

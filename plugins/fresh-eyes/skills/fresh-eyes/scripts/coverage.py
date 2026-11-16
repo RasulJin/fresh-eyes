@@ -363,6 +363,14 @@ def _probe_problems(c, packs, note):
         problems.append("the dark frame is light (brightness %d > %d): the app's own theme is pinned, pick its Dark "
                         "the way config app_theme says and snap again; dark but lit by a photo or map: pass --note "
                         "saying so" % (lit, DARK_MAX))
+    theme = read_json(os.path.join(packs[0], "theme-note.json")) \
+        if c["state"] == "theme-mismatch" and packs and os.path.isfile(os.path.join(packs[0], "theme-note.json")) \
+        else {}
+    if c["state"] == "theme-mismatch" and packs and not (
+            str(theme.get("ui_night_mode")).casefold().endswith(("yes", "true", "dark")) and theme.get("app_theme")):
+        problems.append("no proof of the mismatch: <pack>/theme-note.json from capture.py must show the phone dark "
+                        "(ui_night_mode yes) and the app's own theme option picked (app_theme, its Light): pick it "
+                        "the way config app_theme says and snap again")
     if c["probe"] == "scenario" and packs:
         problems += ["a scenario cell needs: %s (see probes.md)" % p for p in _scenario_problems(packs[0], c)]
     problems += ["a drag of «%s» with the overlay open, snapped into <pack>/drag-%d (config drag)" % (d, k)
