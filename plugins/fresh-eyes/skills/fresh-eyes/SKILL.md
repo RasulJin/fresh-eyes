@@ -170,7 +170,8 @@ words / nothing (= the current diff).
    pack reviewed (step 8, a new `findings-<k>.json`), then the entry gets `"done": "<pack>"`; then one navigator per platform in requests mode with their `requests.json` paths;
    when every entry has `done` or `failed`, send `second pass` with SendMessage to that folder's first-pass
    verifier (it keeps what it already read). A fresh verifier with `second pass` and the same inputs only when
-   that agent is gone.
+   that agent is gone. A second pass that answers `needs: requests` again (a medium with one repeat back) gets
+   one more requests round and `second pass`; what is still pending after it stays pending.
 10. `python3 $S/findings.py same --run $RUN --findings <all findings*.json>` (the linked copies take their case's
     ruling), then
     `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`

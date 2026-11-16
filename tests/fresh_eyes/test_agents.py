@@ -97,7 +97,7 @@ class AgentsTest(unittest.TestCase):
     def test_an_r_finding_follows_the_repeat_rules_0_5_13(self):
         # 0.5.12 run: profile-trips#1r1 (medium) confirmed on one adb recheck
         verifier = " ".join(frontmatter("verifier")[1].split())
-        for word in ("ruled by the same rules as any BUG", "(a low one 1, a medium 2), else `unsure`, \"seen once"):
+        for word in ("ruled by the same rules as any BUG", "(a low one 1, a medium or high one 2): fewer → a request"):
             self.assertIn(word, verifier, word)
 
     def test_a_repeat_disproves_only_under_the_same_conditions_0_5_13(self):
@@ -147,6 +147,16 @@ class AgentsTest(unittest.TestCase):
         verifier = " ".join(frontmatter("verifier")[1].split())
         self.assertIn('marked `"unchanged": true` in `steps.json`', verifier)
         self.assertIn("are a copy, not evidence: no ruling on them, a `redo-cell`", verifier)
+
+    def test_a_medium_needs_two_repeats_and_one_rules_neither_way_0_5_13(self):
+        # P-29: 0.5.12 run confirmed or left unsure a medium on one repeat
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ('`"times": 2`, always', "A medium with one repeat back rules neither way",
+                     "A high one missed by its repeats: `unsure`"):
+            self.assertIn(word, verifier, word)
+        self.assertNotIn("or a medium with one repeat back: `unsure`", verifier)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "SKILL.md"), encoding="utf-8") as f:
+            self.assertIn("gets one more requests round", " ".join(f.read().split()))
 
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config

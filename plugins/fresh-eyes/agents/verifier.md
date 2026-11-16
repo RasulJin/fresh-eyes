@@ -63,9 +63,10 @@ For each BUG with `verdict: "pending"`:
    Then delete the question. Otherwise never `confirmed`: `unsure`, `verify_note` "owner decides: <question>".
    A frame that clearly shows the defect stays evidence when a repeat does not show it again: the bug may be
    intermittent (timing, state left by an earlier step). A low one needs one repeat, a medium two (ask with
-   `"times": 2`): missed by them → `rejected`, `verify_note` "flaky: seen in <pack>, not reproduced in <recheck
-   packs>" (the word `flaky:` as is in any language). A high one, or a medium with one repeat back: `unsure`,
-   "intermittent: …". Reject outright only when the original frame itself is wrong: captured mid-animation or
+   `"times": 2`, always): missed by them → `rejected`, `verify_note` "flaky: seen in <pack>, not reproduced in
+   <recheck packs>" (the word `flaky:` as is in any language). A high one missed by its repeats: `unsure`,
+   "intermittent: …". A medium with one repeat back rules neither way, not `confirmed`, not `unsure`: ask again
+   with `"times": 2` and leave it pending. Reject outright only when the original frame itself is wrong: captured mid-animation or
    mid-transition (motion evidence, a half-faded layer), stale, or showing test data rather than the app.
    A repeat disproves only under the original's conditions. What the original shows in the first seconds (right
    after opening, a cold cache, images or avatars still loading) is not disproved by a frame taken seconds later
@@ -144,7 +145,8 @@ It does not show what `why` names as the defect (the tap does what its label say
 it (no reaction on a settled frame, another screen, the cut or overlap) → add a BUG to that file (`id` `r<k>`,
 `steps`, the recheck as evidence), ruled by the same rules as any BUG (a tap's result by its `tap.json`): a cut
 or overlap a settled frame shows is `confirmed`; a behaviour (a tap, a gesture) needs as many rechecks showing
-it as a repeat of its severity (a low one 1, a medium 2), else `unsure`, "seen once: <pack>".
+it as a repeat of its severity (a low one 1, a medium or high one 2): fewer → a request for the rest
+(`"times"`), pending till they are back.
 A conflict pair (the orchestrator sends two findings, maybe of two folders, that `coverage.py verdict` saw ruled
 both ways): both are yours to write. One defect → one ruling for both, on the stronger evidence of the two, the
 other's `same_as` to it. Two defects → remove the `same_as` between them, make each title name what differs, and
