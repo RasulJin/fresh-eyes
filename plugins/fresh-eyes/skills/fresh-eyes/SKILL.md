@@ -1,7 +1,7 @@
 ---
 name: fresh-eyes
 description: Tests a running iOS/Android app like a picky QA engineer and designer (visual, motion, interaction, UX bugs) and writes them to the backlog. Run only when the user asks: quick ~$10–15, full: hours.
-argument-hint: "init | quick [BUG-N | screens | what changed] [twice] | full [twice] [--resume] | bench"
+argument-hint: "init | quick [BUG-N | screens | what changed] [twice] | full [twice] [--resume] | bench [seeded]"
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
 ---
 
@@ -230,6 +230,14 @@ the candidates, a model judges them; keywords never decide.
    positive; a CLEAN run that missed a planned case is a false CLEAN. Report these against the spec's targets.
    Cases with `"kind": "control"` are intended behaviour on the same screens (`control` in the score): any
    match on them is a false positive too.
+
+`bench seeded`: the human classes on fixtures, no device (an overlap by a pinned bar, arithmetic, a label cut at
+the largest font, a stale screen-reader name after a tap, a field jumping twice with the keyboard, and a control:
+a tap that landed on its neighbour). Three times `python3 $S/bench.py seed --out .fresh-eyes/bench/runs/seeded-<k>`
+and in each run steps 8 and 9 with the slices already in `$RUN/spec/` (no `spec.py slice`), no `known.md`,
+`known-proposed.md` or backlog index, `source_root: none`, `language: en`; a request there cannot be fetched:
+mark it `"failed": "seeded bench, no device"`, then the second pass.
+Then steps 2-4 with `--cases $R/bench/cases.json`, the three runs and no fix runs; 4 of 5 caught is the bar.
 
 ## Report
 

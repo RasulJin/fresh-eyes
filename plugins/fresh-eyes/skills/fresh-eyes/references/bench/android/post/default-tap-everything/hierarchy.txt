@@ -1,0 +1,12 @@
+n1 [24,54,492,48] TextView "Lisbon long weekend" #screen-title
+n2 [0,156,540,450] ImageView #post-photo
+n3 [24,624,60,60] ViewGroup (Like) #like ⚑
+n4 [24,624,60,60] TextView "♡"
+n5 [96,624,60,60] ViewGroup (Comment) #comment ⚑
+n6 [96,624,60,60] TextView "✎"
+n7 [444,624,72,72] ViewGroup (Plan this trip) #plan-trip ⚑
+n8 [444,624,72,72] TextView "✈"
+n9 [24,708,492,54] ViewGroup #place-chip ⚑
+n10 [24,708,492,54] TextView "Lisbon, Portugal"
+n11 [24,780,492,30] TextView "Three days of trams, tiles and fado."
+n12 [18,1110,504,72] EditText #comment-input ⚑

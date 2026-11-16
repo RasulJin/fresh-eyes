@@ -1,0 +1,2 @@
+n1 [18,48,504,72] ViewGroup #search_box
+n2 [18,48,504,72] TextView "Lisbon, Portugal" #search_text

@@ -1,0 +1,812 @@
+[
+  {
+    "id": "n0",
+    "parent": null,
+    "depth": 0,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      0,
+      0,
+      540,
+      1200
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n1",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Booking summary",
+    "label": "",
+    "rid": "screen-title",
+    "bounds": [
+      24,
+      54,
+      492,
+      48
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n2",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.TextView",
+    "text": "Lisbon · 12–15 May · 2 travellers",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      105,
+      492,
+      30
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n3",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.widget.ScrollView",
+    "text": "",
+    "label": "",
+    "rid": "booking-list",
+    "bounds": [
+      0,
+      144,
+      540,
+      1056
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n4",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "booking-row",
+    "bounds": [
+      24,
+      156,
+      492,
+      96
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n5",
+    "parent": "n4",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Flight BER → LIS",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      171,
+      330,
+      33
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n6",
+    "parent": "n4",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Mon 12 May, 10:40",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      207,
+      330,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n7",
+    "parent": "n4",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "€186",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      390,
+      186,
+      108,
+      36
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n8",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "booking-row",
+    "bounds": [
+      24,
+      264,
+      492,
+      96
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n9",
+    "parent": "n8",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Flight LIS → BER",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      279,
+      330,
+      33
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n10",
+    "parent": "n8",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Thu 15 May, 18:05",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      315,
+      330,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n11",
+    "parent": "n8",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "€172",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      390,
+      294,
+      108,
+      36
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n12",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "booking-row",
+    "bounds": [
+      24,
+      372,
+      492,
+      96
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n13",
+    "parent": "n12",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Hotel Alfama, 3 nights",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      387,
+      330,
+      33
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n14",
+    "parent": "n12",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "12–15 May",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      423,
+      330,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n15",
+    "parent": "n12",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "€264",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      390,
+      402,
+      108,
+      36
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n16",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "booking-row",
+    "bounds": [
+      24,
+      480,
+      492,
+      96
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n17",
+    "parent": "n16",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Lisbon city pass",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      495,
+      330,
+      33
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n18",
+    "parent": "n16",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "72 h, 2 people",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      531,
+      330,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n19",
+    "parent": "n16",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "€42",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      390,
+      510,
+      108,
+      36
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n20",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "booking-row",
+    "bounds": [
+      24,
+      588,
+      492,
+      96
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n21",
+    "parent": "n20",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Tram card",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      603,
+      330,
+      33
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n22",
+    "parent": "n20",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "3 days, 2 people",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      639,
+      330,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n23",
+    "parent": "n20",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "€13",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      390,
+      618,
+      108,
+      36
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n24",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "booking-row",
+    "bounds": [
+      24,
+      696,
+      492,
+      96
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n25",
+    "parent": "n24",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Tile museum",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      711,
+      330,
+      33
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n26",
+    "parent": "n24",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "2 tickets",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      747,
+      330,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n27",
+    "parent": "n24",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "€36",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      390,
+      726,
+      108,
+      36
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n28",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "booking-row",
+    "bounds": [
+      24,
+      804,
+      492,
+      96
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n29",
+    "parent": "n28",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Fado dinner",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      819,
+      330,
+      33
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n30",
+    "parent": "n28",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Tue 13 May, 20:30",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      855,
+      330,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n31",
+    "parent": "n28",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "€90",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      390,
+      834,
+      108,
+      36
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n32",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "booking-row",
+    "bounds": [
+      24,
+      912,
+      492,
+      96
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n33",
+    "parent": "n32",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Day trip to Sintra",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      927,
+      330,
+      33
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n34",
+    "parent": "n32",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Wed 14 May",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      963,
+      330,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n35",
+    "parent": "n32",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "€78",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      390,
+      942,
+      108,
+      36
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n36",
+    "parent": "n3",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "booking-row",
+    "bounds": [
+      24,
+      1020,
+      492,
+      96
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n37",
+    "parent": "n36",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Airport transfer",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      1035,
+      330,
+      33
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n38",
+    "parent": "n36",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Thu 15 May, 15:30",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      42,
+      1071,
+      330,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n39",
+    "parent": "n36",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "€38",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      390,
+      1050,
+      108,
+      36
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n40",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "pay-bar",
+    "bounds": [
+      0,
+      1053,
+      540,
+      147
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n41",
+    "parent": "n40",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Total",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      1071,
+      180,
+      27
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n42",
+    "parent": "n40",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "€919",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      24,
+      1101,
+      180,
+      42
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n43",
+    "parent": "n40",
+    "depth": 2,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "Continue to payment",
+    "rid": "pay-button",
+    "bounds": [
+      225,
+      1071,
+      291,
+      78
+    ],
+    "clickable": true,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n44",
+    "parent": "n43",
+    "depth": 3,
+    "cls": "android.widget.TextView",
+    "text": "Continue to payment",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      225,
+      1071,
+      291,
+      78
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  }
+]

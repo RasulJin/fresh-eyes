@@ -1,0 +1,10 @@
+n1 [24,54,492,48] TextView "Mara Lind" #screen-title
+n2 [24,105,492,30] TextView "Lisbon · 14 trips"
+n3 [24,156,96,96] ViewGroup #avatar
+n4 [144,165,180,33] TextView "129" #followers-count
+n5 [144,201,180,27] TextView "followers"
+n6 [348,168,168,66] ViewGroup (Follow) #follow-button ⚑
+n7 [348,168,168,66] TextView "Following"
+n8 [24,279,492,30] TextView "Trips"
+n9 [24,321,240,180] ViewGroup (Porto in spring) ⚑
+n10 [276,321,240,180] ViewGroup (Seville by train) ⚑

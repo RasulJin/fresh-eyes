@@ -1,0 +1,8 @@
+[
+  {
+    "som": 1,
+    "label": "Follow",
+    "result": "button reads Following, followers 128 → 129",
+    "changed": true
+  }
+]

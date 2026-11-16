@@ -1,0 +1,16 @@
+[
+  {
+    "check": "small_target",
+    "node_ids": [
+      "n6"
+    ],
+    "bbox": [
+      348,
+      168,
+      168,
+      66
+    ],
+    "detail": "168x66 px < 48dp (72 px)",
+    "hint": "low"
+  }
+]

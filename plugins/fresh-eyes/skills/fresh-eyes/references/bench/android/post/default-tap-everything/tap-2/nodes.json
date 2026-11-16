@@ -1,0 +1,56 @@
+[
+  {
+    "id": "n0",
+    "parent": null,
+    "depth": 0,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "",
+    "bounds": [
+      0,
+      0,
+      540,
+      1200
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n1",
+    "parent": "n0",
+    "depth": 1,
+    "cls": "android.view.ViewGroup",
+    "text": "",
+    "label": "",
+    "rid": "com.example.maps:id/search_box",
+    "bounds": [
+      18,
+      48,
+      504,
+      72
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  },
+  {
+    "id": "n2",
+    "parent": "n1",
+    "depth": 2,
+    "cls": "android.widget.TextView",
+    "text": "Lisbon, Portugal",
+    "label": "",
+    "rid": "com.example.maps:id/search_text",
+    "bounds": [
+      18,
+      48,
+      504,
+      72
+    ],
+    "clickable": false,
+    "focused": false,
+    "enabled": true
+  }
+]

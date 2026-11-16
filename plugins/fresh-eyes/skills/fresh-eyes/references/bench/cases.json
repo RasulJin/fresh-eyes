@@ -1,0 +1,68 @@
+[
+  {
+    "id": "SEED-overlap",
+    "group": "seeded",
+    "kind": "bug",
+    "screen": "booking",
+    "platform": "android",
+    "expect": {
+      "description": "Booking summary: the last row «Airport transfer €38» lies under the pinned pay bar and the list cannot scroll further, so that row can never be read.",
+      "bbox": null
+    }
+  },
+  {
+    "id": "SEED-arithmetic",
+    "group": "seeded",
+    "kind": "bug",
+    "screen": "flight",
+    "platform": "android",
+    "expect": {
+      "description": "Flight details: 10:40 from Berlin plus 2 h 05 min shows arrival 13:45 in Rome, same time zone: it should be 12:45, the arrival is an hour off.",
+      "bbox": null
+    }
+  },
+  {
+    "id": "SEED-cut-font-xl",
+    "group": "seeded",
+    "kind": "bug",
+    "screen": "profile-edit",
+    "platform": "android",
+    "expect": {
+      "description": "Edit profile at the largest font: the middle button «Save changes» is cut mid-word at its edges, the label does not fit the button.",
+      "bbox": null
+    }
+  },
+  {
+    "id": "SEED-state-after-tap",
+    "group": "seeded",
+    "kind": "bug",
+    "screen": "traveller",
+    "platform": "android",
+    "expect": {
+      "description": "Traveller profile: after tapping «Follow» the button reads «Following», but its screen-reader name (content-desc) still says «Follow».",
+      "bbox": null
+    }
+  },
+  {
+    "id": "SEED-keyboard",
+    "group": "seeded",
+    "kind": "bug",
+    "screen": "comments",
+    "platform": "android",
+    "expect": {
+      "description": "Comments: when the keyboard opens, the comment field moves up, stops halfway for about 200 ms, then jumps again: two moves instead of one.",
+      "bbox": null
+    }
+  },
+  {
+    "id": "SEED-tap-shift",
+    "group": "seeded",
+    "kind": "control",
+    "screen": "post",
+    "platform": "android",
+    "expect": {
+      "description": "«Plan this trip» opens the trip planner. In this pack the tap landed on the «Lisbon, Portugal» place chip next to it (tap.json: the point lies in the chip), which opens the map app as designed; a finding that «Plan this trip» opens a map app is a false positive.",
+      "bbox": null
+    }
+  }
+]

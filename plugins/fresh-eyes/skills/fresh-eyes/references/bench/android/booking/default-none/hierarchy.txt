@@ -1,0 +1,44 @@
+n1 [24,54,492,48] TextView "Booking summary" #screen-title
+n2 [24,105,492,30] TextView "Lisbon · 12–15 May · 2 travellers"
+n3 [0,144,540,1056] ScrollView #booking-list
+n4 [24,156,492,96] ViewGroup #booking-row
+n5 [42,171,330,33] TextView "Flight BER → LIS"
+n6 [42,207,330,27] TextView "Mon 12 May, 10:40"
+n7 [390,186,108,36] TextView "€186"
+n8 [24,264,492,96] ViewGroup #booking-row
+n9 [42,279,330,33] TextView "Flight LIS → BER"
+n10 [42,315,330,27] TextView "Thu 15 May, 18:05"
+n11 [390,294,108,36] TextView "€172"
+n12 [24,372,492,96] ViewGroup #booking-row
+n13 [42,387,330,33] TextView "Hotel Alfama, 3 nights"
+n14 [42,423,330,27] TextView "12–15 May"
+n15 [390,402,108,36] TextView "€264"
+n16 [24,480,492,96] ViewGroup #booking-row
+n17 [42,495,330,33] TextView "Lisbon city pass"
+n18 [42,531,330,27] TextView "72 h, 2 people"
+n19 [390,510,108,36] TextView "€42"
+n20 [24,588,492,96] ViewGroup #booking-row
+n21 [42,603,330,33] TextView "Tram card"
+n22 [42,639,330,27] TextView "3 days, 2 people"
+n23 [390,618,108,36] TextView "€13"
+n24 [24,696,492,96] ViewGroup #booking-row
+n25 [42,711,330,33] TextView "Tile museum"
+n26 [42,747,330,27] TextView "2 tickets"
+n27 [390,726,108,36] TextView "€36"
+n28 [24,804,492,96] ViewGroup #booking-row
+n29 [42,819,330,33] TextView "Fado dinner"
+n30 [42,855,330,27] TextView "Tue 13 May, 20:30"
+n31 [390,834,108,36] TextView "€90"
+n32 [24,912,492,96] ViewGroup #booking-row
+n33 [42,927,330,33] TextView "Day trip to Sintra"
+n34 [42,963,330,27] TextView "Wed 14 May"
+n35 [390,942,108,36] TextView "€78"
+n36 [24,1020,492,96] ViewGroup #booking-row
+n37 [42,1035,330,33] TextView "Airport transfer"
+n38 [42,1071,330,27] TextView "Thu 15 May, 15:30"
+n39 [390,1050,108,36] TextView "€38"
+n40 [0,1053,540,147] ViewGroup #pay-bar
+n41 [24,1071,180,27] TextView "Total"
+n42 [24,1101,180,42] TextView "€919"
+n43 [225,1071,291,78] ViewGroup (Continue to payment) #pay-button ⚑
+n44 [225,1071,291,78] TextView "Continue to payment"

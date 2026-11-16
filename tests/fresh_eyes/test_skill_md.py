@@ -61,6 +61,13 @@ class SkillMdTest(unittest.TestCase):
             self.assertIn(word, body, word)
         self.assertNotIn("Check every 1–2 minutes", body)
 
+    def test_seeded_bench_0_5_13(self):
+        # P-14: the human classes (pinned overlap, arithmetic, ...) on fixtures, since the app has them fixed
+        body = " ".join(text().split())
+        for word in ("`bench seeded`", "bench.py seed --out .fresh-eyes/bench/runs/seeded-<k>",
+                     '"failed": "seeded bench, no device"', "--cases $R/bench/cases.json", "4 of 5 caught"):
+            self.assertIn(word, body, word)
+
     def test_credentials_and_photos_reach_the_navigator(self):
         plugin = os.path.dirname(os.path.dirname(SKILL_DIR))
         with open(os.path.join(plugin, "agents", "navigator.md"), encoding="utf-8") as f:

@@ -1,0 +1,56 @@
+[
+  {
+    "check": "small_target",
+    "node_ids": [
+      "n3"
+    ],
+    "bbox": [
+      24,
+      624,
+      60,
+      60
+    ],
+    "detail": "60x60 px < 48dp (72 px)",
+    "hint": "low"
+  },
+  {
+    "check": "small_target",
+    "node_ids": [
+      "n5"
+    ],
+    "bbox": [
+      96,
+      624,
+      60,
+      60
+    ],
+    "detail": "60x60 px < 48dp (72 px)",
+    "hint": "low"
+  },
+  {
+    "check": "small_target",
+    "node_ids": [
+      "n9"
+    ],
+    "bbox": [
+      24,
+      708,
+      492,
+      54
+    ],
+    "detail": "492x54 px < 48dp (72 px)",
+    "hint": "low"
+  },
+  {
+    "check": "blank_gap",
+    "node_ids": [],
+    "bbox": [
+      0,
+      93,
+      540,
+      555
+    ],
+    "detail": "370 dp blank between content",
+    "hint": "medium"
+  }
+]

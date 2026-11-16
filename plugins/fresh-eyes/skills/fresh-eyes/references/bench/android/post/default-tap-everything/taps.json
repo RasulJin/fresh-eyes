@@ -1,0 +1,14 @@
+[
+  {
+    "som": 1,
+    "label": "Like",
+    "result": "same screen",
+    "changed": false
+  },
+  {
+    "som": 8,
+    "label": "Plan this trip",
+    "result": "a map app opens at «Lisbon, Portugal»",
+    "changed": true
+  }
+]

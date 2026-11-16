@@ -13,18 +13,27 @@ score: caught = matched in at least 2/3 of the attempts; a match on the fix buil
        positive; a run whose
        code verdict was CLEAN while it missed a case it planned is a false CLEAN (the number that must stay 0).
 
+seed:  a run folder from the seeded fixtures (references/bench: one human-class defect per screen, and a control),
+       with a spec slice per screen and every cell done, for reviewer, verifier and judge without a device.
+
 CLI: bench.py sheet --cases cases.json --runs RUN [RUN ...] [--fix-runs ID=RUN ...] --out sheet.json
      bench.py score --cases cases.json --sheet sheet.json [--out bench.json]
+     bench.py seed --out RUN
 """
 import argparse
 import glob
 import json
 import os
+import shutil
 
+from coverage import STATES
 from fe_common import FEError, cli, read_json, write_json
 from geometry import _area, _intersect
+from motion import DEFAULT_CEILING_MS
+from spec import slice_spec
 
 COUNTED = ("confirmed", "unsure")
+SEEDED = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "references", "bench")
 
 
 def _iou(a, b):
@@ -160,6 +169,33 @@ def false_clean(judged, roles, cases):
     return bad
 
 
+def seed(out, src=SEEDED):
+    """Copy the seeded packs into a new run folder; each top pack `<state>-<probe>` becomes a done cell."""
+    if os.path.exists(out):
+        raise FEError("%s exists: seed into a new run folder" % out)
+    shutil.copytree(os.path.join(src, "android"), os.path.join(out, "android"))
+    with open(os.path.join(src, "spec.md"), encoding="utf-8") as f:
+        text = f.read()
+    cells, screens = [], []
+    for meta in sorted(glob.glob(os.path.join(out, "android", "*", "*", "meta.json"))):
+        pack = os.path.dirname(meta)
+        screen, name = pack.split(os.sep)[-2:]
+        state = next(s for s in sorted(STATES, key=len, reverse=True) if name.startswith(s + "-"))
+        probe = name[len(state) + 1:]
+        cells.append({"id": "android/%s/%s/%s" % (screen, state, probe), "platform": "android", "screen": screen,
+                      "state": state, "probe": probe, "mutating": False, "status": "done",
+                      "evidence": [os.path.abspath(pack)], "note": "seeded bench", "marker": []})
+        if screen not in screens:
+            screens.append(screen)
+            os.makedirs(os.path.join(out, "spec"), exist_ok=True)
+            with open(os.path.join(out, "spec", screen + ".md"), "w", encoding="utf-8") as f:
+                f.write(slice_spec(text, [screen]))
+    write_json(os.path.join(out, "coverage.json"), {"run_id": os.path.basename(os.path.abspath(out)), "mode": "bench",
+                                                    "cells": cells, "unchecked": [],
+                                                    "motion_ceiling_ms": DEFAULT_CEILING_MS})
+    return {"out": out, "screens": screens, "cases": os.path.join(src, "cases.json")}
+
+
 def _roles_path(sheet_path):
     return os.path.splitext(sheet_path)[0] + ".roles.json"
 
@@ -176,7 +212,12 @@ def main():
     p.add_argument("--cases", required=True)
     p.add_argument("--sheet", required=True)
     p.add_argument("--out")
+    p = sub.add_parser("seed", help="a run folder from the seeded fixtures, every cell done")
+    p.add_argument("--out", required=True)
     a = ap.parse_args()
+    if a.cmd == "seed":
+        print(json.dumps(seed(a.out)))
+        return 0
     cases = read_json(a.cases)
     if a.cmd == "sheet":
         fix = dict(item.split("=", 1) for item in a.fix_runs)

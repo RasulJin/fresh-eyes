@@ -1,0 +1,16 @@
+[
+  {
+    "check": "truncation",
+    "node_ids": [
+      "n11"
+    ],
+    "bbox": [
+      186,
+      1062,
+      168,
+      90
+    ],
+    "detail": "'Save changes': 14.5 px/char vs ~55.9 for same-height text",
+    "hint": "medium"
+  }
+]

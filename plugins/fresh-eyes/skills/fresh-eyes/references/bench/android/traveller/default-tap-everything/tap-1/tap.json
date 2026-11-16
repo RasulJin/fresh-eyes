@@ -1,0 +1,17 @@
+{
+  "point": [
+    432,
+    201
+  ],
+  "bounds": [
+    348,
+    168,
+    168,
+    66
+  ],
+  "node": {
+    "text": "",
+    "label": "Follow",
+    "rid": "follow-button"
+  }
+}
