@@ -159,7 +159,7 @@ words / nothing (= the current diff).
    `fresh-eyes:verifier` per screen folder that has pending BUG findings or `requests` in a findings file (up to 4
    in parallel; IMPs alone need none); the prompt is
    `first pass`, that folder, its spec slice, `.fresh-eyes/known.md`, `$RUN/backlog-index.md`, `language`,
-   `source_root`. Keep each verifier's agent id. The journey
+   `source_root`, and never the backlog file's path. Keep each verifier's agent id. The journey
    folder's verifier also gets the findings files of the screens its findings concern (to mark duplicates). Folders whose verifier
    answered `needs: requests`: first, each `"do": "redo-cell"` entry → `python3 $S/coverage.py set --cov
    $RUN/coverage.json --cell <cell> --status todo --note "<why>"`, that cell navigated again (step 7) and its new

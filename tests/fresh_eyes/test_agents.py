@@ -87,6 +87,13 @@ class AgentsTest(unittest.TestCase):
         self.assertIn('no title "Not verified: …"', checklist)
         self.assertNotIn("still write the finding with low confidence", checklist)
 
+    def test_the_verifier_reads_only_the_backlog_index_0_5_13(self):
+        # 0.5.12 run: verifiers opened docs/qa-backlog.md of the working folder, another branch's backlog (M4)
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        self.assertIn("never open or grep the backlog file itself", verifier)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "SKILL.md"), encoding="utf-8") as f:
+            self.assertIn("never the backlog file's path", " ".join(f.read().split()))
+
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
         nav = " ".join(frontmatter("navigator")[1].split())

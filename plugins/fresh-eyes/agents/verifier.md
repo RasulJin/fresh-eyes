@@ -19,7 +19,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
 ## Input (from the orchestrator)
 
 - One screen folder `<run>/<platform>/<screen>/` (its `findings*.json`), the screen's spec slice
-  `<run>/spec/<screen>.md`, `known.md`, `<run>/backlog-index.md` (open backlog entries, one line each), the
+  `<run>/spec/<screen>.md`, `known.md`, `<run>/backlog-index.md` (open backlog entries as of the build's commit,
+  one line each: the only backlog you read; never open or grep the backlog file itself, e.g.
+  `docs/qa-backlog.md`: the working folder may hold another branch's), the
   project `language`, `source_root` (the code this build was made from, or `none`); for the journey folder
   also the findings files of the screens its findings concern.
 - The prompt says `first pass` or `second pass`. On the second pass the folder's `requests.json` entries are
