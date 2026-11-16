@@ -100,6 +100,13 @@ class AgentsTest(unittest.TestCase):
         for word in ("ruled by the same rules as any BUG", "(a low one 1, a medium 2), else `unsure`, \"seen once"):
             self.assertIn(word, verifier, word)
 
+    def test_a_repeat_disproves_only_under_the_same_conditions_0_5_13(self):
+        # 0.5.12 run: feed#2f1 (no avatar right after opening) rejected as flaky by a snap 5 s later
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ("A repeat disproves only under the original's conditions", "a cold cache",
+                     "that is no repeat and no `flaky:`"):
+            self.assertIn(word, verifier, word)
+
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
         nav = " ".join(frontmatter("navigator")[1].split())

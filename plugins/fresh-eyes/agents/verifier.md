@@ -61,6 +61,10 @@ For each BUG with `verdict: "pending"`:
    packs>" (the word `flaky:` as is in any language). A high one, or a medium with one repeat back: `unsure`,
    "intermittent: …". Reject outright only when the original frame itself is wrong: captured mid-animation or
    mid-transition (motion evidence, a half-faded layer), stale, or showing test data rather than the app.
+   A repeat disproves only under the original's conditions. What the original shows in the first seconds (right
+   after opening, a cold cache, images or avatars still loading) is not disproved by a frame taken seconds later
+   or on a warm screen: that is no repeat and no `flaky:`. Ask for one that reopens the screen and snaps at once
+   (`why` says so), or judge the original: a settled frame that shows it confirms it.
    An app error from the log needs no frame: when the finding's evidence is a `logcat.txt` line (that file holds
    only the app's own process and crashes that name the app), confirm it if the line is there and is an error
    (`E/`, `F/`) or a crash; a warning only when it floods (hundreds of lines). Do not request a frame for it.
