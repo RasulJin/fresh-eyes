@@ -68,6 +68,12 @@ class SkillMdTest(unittest.TestCase):
                      '"failed": "seeded bench, no device"', "--cases $R/bench/cases.json", "4 of 5 caught"):
             self.assertIn(word, body, word)
 
+    def test_the_build_under_test_goes_through_preflight_0_5_13(self):
+        # P-32: 0.5.12 run installed the APK with adb by hand (M1)
+        body = " ".join(text().split())
+        self.assertIn("Add `--apk <path>` when the build to test is not at `builds.<mode>.android.artifact`", body)
+        self.assertIn("never `adb install` by hand", body)
+
     def test_credentials_and_photos_reach_the_navigator(self):
         plugin = os.path.dirname(os.path.dirname(SKILL_DIR))
         with open(os.path.join(plugin, "agents", "navigator.md"), encoding="utf-8") as f:

@@ -90,7 +90,9 @@ words / nothing (= the current diff).
    (background; minutes).
 3. `python3 $S/preflight.py --project . --mode quick --fix --brief [--source built|<ref>] --out $RUN/preflight.json`
    (`built` when step 2 built the app here; the commit the user names for an installed build made elsewhere;
-   nothing when Metro serves it). Reviewers read code only from its `source.root`. If iOS reports
+   nothing when Metro serves it). Add `--apk <path>` when the build to test is not at
+   `builds.<mode>.android.artifact` (made elsewhere, downloaded): `--fix` installs it on both owned devices;
+   never `adb install` by hand. Reviewers read code only from its `source.root`. If iOS reports
    "no Maestro iOS driver", call the Maestro MCP `inspect_screen` on that simulator once and run preflight
    again. If no platform is ready, or the computer's disk is nearly full (`disk_free_gb` under 15), stop: tell
    the user what is missing or how much is free; the verdict is INCOMPLETE.
