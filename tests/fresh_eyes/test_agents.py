@@ -94,6 +94,12 @@ class AgentsTest(unittest.TestCase):
         with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "SKILL.md"), encoding="utf-8") as f:
             self.assertIn("never the backlog file's path", " ".join(f.read().split()))
 
+    def test_an_r_finding_follows_the_repeat_rules_0_5_13(self):
+        # 0.5.12 run: profile-trips#1r1 (medium) confirmed on one adb recheck
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ("ruled by the same rules as any BUG", "(a low one 1, a medium 2), else `unsure`, \"seen once"):
+            self.assertIn(word, verifier, word)
+
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
         nav = " ".join(frontmatter("navigator")[1].split())

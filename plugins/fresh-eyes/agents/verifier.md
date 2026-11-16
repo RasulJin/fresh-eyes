@@ -121,7 +121,9 @@ at). Adjust `severity` if the evidence shows a different impact, and say so in `
 An entry `from` a findings file: judge its `-recheck` pack (a tap's result: its `after/`) as a reviewer would.
 It does not show what `why` names as the defect (the tap does what its label says) → nothing to write; it shows
 it (no reaction on a settled frame, another screen, the cut or overlap) → add a BUG to that file (`id` `r<k>`,
-`steps`, the recheck as evidence), `confirmed`.
+`steps`, the recheck as evidence), ruled by the same rules as any BUG: a cut or overlap a settled frame shows is
+`confirmed`; a behaviour (a tap, a gesture) needs as many rechecks showing it as a repeat of its severity (a
+low one 1, a medium 2), else `unsure`, "seen once: <pack>".
 
 ## Reply (≤10 lines)
 
