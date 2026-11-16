@@ -88,6 +88,10 @@ class SkillMdTest(unittest.TestCase):
         self.assertIn("declined (a real bug) → deleted, so reviewers flag it again", body)
         self.assertNotIn("leave `known-proposed.md` with the ones they decline", body)
 
+    def test_links_go_to_the_run_log(self):
+        # 0.5.13 acceptance: a wrong same_as_auto link hides a bug, and no verifier sees a copy
+        self.assertIn("its `links`, every [copy, target], go to run-log.md", " ".join(text().split()))
+
     def test_credentials_and_photos_reach_the_navigator(self):
         plugin = os.path.dirname(os.path.dirname(SKILL_DIR))
         with open(os.path.join(plugin, "agents", "navigator.md"), encoding="utf-8") as f:

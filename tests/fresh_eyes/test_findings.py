@@ -54,6 +54,8 @@ class SameTest(unittest.TestCase):
         self.assertNotIn("same_as", fb[1])  # another case
         self.assertEqual(fc["same_as"], ref)
         self.assertEqual((out["linked"], out["verify"]), (2, [a, b]))  # trips holds only a linked copy
+        rel = os.path.join("android", "%s", "findings.json") + "#%s"
+        self.assertEqual(out["links"], [[rel % ("trip-map", "f2"), ref], [rel % ("trips", "f1"), ref]])
 
     def test_a_held_or_ruled_finding_stays_the_one_checked_and_its_ruling_is_copied(self):
         with tmpdir() as run:

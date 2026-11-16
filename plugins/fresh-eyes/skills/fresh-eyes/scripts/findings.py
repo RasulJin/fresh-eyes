@@ -7,7 +7,8 @@ same:  before each verifier's first pass, and once more before the verdict. A pe
        and half of the shorter title's; when both titles quote on-screen text, a quote in common) gets `same_as` to
        it and `same_as_auto`: only that one is verified. A linked finding whose target is ruled (or became an IMP)
        takes its kind, verdict and severity, again whenever the target's ruling changes. Only --findings files are written: never a file a verifier holds.
-       Prints `verify`: the --findings files that still need a verifier (a pending BUG not linked, or requests).
+       Prints `verify`: the --findings files that still need a verifier (a pending BUG not linked, or requests),
+       and `links`: every [copy, target] of those files, for run-log.md (a wrong link hides a bug: a human checks).
 known: appends to OUT the run's `known` questions and the BUGs rejected as `test data:`, each text once.
 
 CLI: findings.py same --run RUN --findings F [F ...]
@@ -73,12 +74,13 @@ def same(run, paths):
             linked += 1
         else:
             anchors.append((folder, ref, f))
-    changed = set()
+    changed, links = set(), []
     for p, data, writable in files:
         for f in data.get("findings", []):
             if not writable or not f.get("same_as_auto"):
                 continue
             changed.add(p)  # a link made above or earlier
+            links.append(["%s#%s" % (os.path.relpath(p, run), f.get("id")), f["same_as"]])
             t = refs.get(f["same_as"])
             if t is None or (t.get("kind", "BUG") == "BUG" and t.get("verdict", "pending") == "pending"):
                 continue
@@ -93,7 +95,7 @@ def same(run, paths):
     verify = [writable for p, data, writable in files if writable and (data.get("requests") or any(
         f.get("kind", "BUG") == "BUG" and f.get("verdict", "pending") == "pending" and not f.get("same_as_auto")
         for f in data.get("findings", [])))]
-    return {"linked": linked, "settled": settled, "verify": verify}
+    return {"linked": linked, "settled": settled, "verify": verify, "links": links}
 
 
 def known(run, out):

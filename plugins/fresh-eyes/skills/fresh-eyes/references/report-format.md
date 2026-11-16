@@ -116,7 +116,8 @@ crop, then the ones an open entry already proposes a line each with its IMP-N; t
 numbers, and match sets that `backlog_id` on the IMPs the verifier left without one), `rejected.md` (one line per rejected finding:
 title, screen, kind and severity, file#id, the first sentence of `verify_note`; a `flaky:` one was seen once and
 missed by the repeats, M2 does not count it false) and `run-log.md` (each step the
-orchestrator took by hand, numbered, what and why; then the test data the run left on the backend).
+orchestrator took by hand, numbered, what and why; then the test data the run left on the backend; then
+`Links (same case)`: each pair of step 10's `findings.py same` `links`, `<copy> → <target> (<target's verdict>)`).
 
 ```markdown
 # fresh-eyes — <mode> — <date>

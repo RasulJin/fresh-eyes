@@ -174,7 +174,7 @@ words / nothing (= the current diff).
    that agent is gone. A second pass that answers `needs: requests` again (a medium with one repeat back) gets
    one more requests round and `second pass`; what is still pending after it stays pending.
 10. `python3 $S/findings.py same --run $RUN --findings <all findings*.json>` (the linked copies take their case's
-    ruling), then
+    ruling; its `links`, every [copy, target], go to run-log.md: no verifier sees a copy), then
     `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`
     and `python3 $S/coverage.py map --cov $RUN/coverage.json --language <config>`. If the verdict names done
     cells no reviewer looked at, send those packs to a reviewer (`findings-<k>.json`), verify, and rerun it.
