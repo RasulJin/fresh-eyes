@@ -199,12 +199,19 @@ def profile():
     pack = os.path.join(OUT, "android", "traveller", "default-tap-everything")
     snap(pack, traveller(False))
     snap(os.path.join(pack, "tap-1"), traveller(True))
-    som = read_json(os.path.join(pack, "som.json"))
-    n = next((m["n"] for m in som if m["bbox"] == [px(232), px(112), px(112), px(44)]), None)
-    write_json(os.path.join(pack, "taps.json"), [{"som": n, "label": "Follow", "result": "button reads Following, "
-                                                  "followers 128 → 129", "changed": True}])
-    write_json(os.path.join(pack, "tap-1", "tap.json"), {"point": [px(288), px(134)], "bounds": [px(232), px(112),
-               px(112), px(44)], "node": {"text": "", "label": "Follow", "rid": "follow-button"}})
+    result = "new: 129, Following; gone: 128, Follow"
+    write_json(os.path.join(pack, "taps.json"), [{"n": 1, "label": "Follow", "by": "label", "pack": "tap-1",
+                                                  "changed": True, "result": result}])
+    tap_json(os.path.join(pack, "tap-1"), [288, 134], [232, 112, 112, 44], "follow-button", "Follow", result)
+
+
+def tap_json(after, point, bounds, rid, label, result, changed=True, by="label"):
+    """tap.json as taps.py tap writes it: the point, the node it hit and that node's bounds at the tap."""
+    write_json(os.path.join(after, "tap.json"), {
+        "time": "2026-11-16T12:00:00", "point": [px(v) for v in point], "by": by,
+        "node": {"cls": CLS["View"], "rid": rid, "text": "", "label": label}, "bounds": [px(v) for v in bounds],
+        "keyboard_top": None, "screen_wh": [W, H], "source": "uiautomator", "snap_exit": 0, "settled": True,
+        "pixels_changed": changed, "changed": changed, "result": result})
 
 
 def comments(field_y, kb=False):
@@ -305,18 +312,15 @@ def tapped_neighbour():
     nodes, paint = map_app()
     snap(os.path.join(pack, "tap-2"), nodes, under=paint, pkg="com.example.maps")
     snap(os.path.join(pack, "tap-1"), post(False))  # like: the heart turns
-    som = read_json(os.path.join(pack, "som.json"))
-
-    def mark(b):
-        return next((m["n"] for m in som if m["bbox"] == [px(v) for v in b]), None)
-    write_json(os.path.join(pack, "taps.json"), [
-        {"som": mark([16, 416, 40, 40]), "label": "Like", "result": "same screen", "changed": False},
-        {"som": mark([296, 416, 48, 48]), "label": "Plan this trip", "result": "a map app opens at «Lisbon, Portugal»",
-         "changed": True}])
-    write_json(os.path.join(pack, "tap-1", "tap.json"), {"point": [px(36), px(436)], "bounds": [px(16), px(416),
-               px(40), px(40)], "node": {"text": "", "label": "Like", "rid": "like"}})
-    write_json(os.path.join(pack, "tap-2", "tap.json"), {"point": [px(320), px(440)], "bounds": [px(16), px(422),
-               px(328), px(36)], "node": {"text": "", "label": "", "rid": "place-chip"}})
+    # an old-style tap at the som's coordinates: the list had moved 50 dp, the point was on the place chip by then
+    rows = [("Like", "like", "tap-1", [36, 436], [16, 416, 40, 40], False, "no change"),
+            ("Plan this trip", "place-chip", "tap-2", [320, 440], [16, 422, 328, 36], True,
+             "new: Lisbon, Portugal; gone: Like, Comment, Plan this trip, Three days of trams, tiles and fado.")]
+    write_json(os.path.join(pack, "taps.json"), [{"n": k, "label": label, "by": "som", "pack": sub, "changed": ch,
+                                                  "result": res} for k, (label, _, sub, _, _, ch, res) in
+                                                 enumerate(rows, 1)])
+    for label, rid, sub, point, bounds, ch, res in rows:
+        tap_json(os.path.join(pack, sub), point, bounds, rid, "Like" if rid == "like" else "", res, ch, "som")
 
 
 SPEC = """# Spec — Wayfarer (seeded bench)

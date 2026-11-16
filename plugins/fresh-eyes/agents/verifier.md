@@ -75,12 +75,14 @@ For each BUG with `verdict: "pending"`:
    only the app's own process and crashes that name the app), confirm it if the line is there and is an error
    (`E/`, `F/`) or a crash; a warning only when it floods (hundreds of lines). Do not request a frame for it.
    A pack with `app_running: false` in `meta.json` is a crash: a launcher on its frame is not "another app".
-   What a tap did (opened another screen or app, did nothing, fired twice) is confirmed only on a pack whose
-   `tap.json` (`taps.py` writes it with the tap: `point`, `node`, `bounds`) has the `point` inside the `bounds`
-   of the element the finding names. No `tap.json`: request `"do": "repeat-probe"`, `"probe": "tap-everything"`,
-   `"why": "tap «<label>» by its node, tap.json in the pack"` and rule on the second pass by that recheck's
-   `tap.json`. Its point outside those bounds, on another node: that element was never tapped → `rejected`,
-   "tap hit «<that node>» (tap.json)", plus the same request with `"from": "<this findings file>"`.
+   What a tap did (opened another screen or app, did nothing, fired twice) is confirmed only by the `tap.json` in
+   the tap's after pack (`<pack>/tap-<k>`, or a recheck's `--after` folder; `taps.py` writes it): its `node`
+   (text, label, rid) is the element the finding names, its `point` lies inside `bounds` (that node at the tap)
+   and above `keyboard_top` when that is set; `changed` (the app's nodes before vs after) and `result` say what
+   the tap did. No `tap.json`: request `"do": "repeat-probe"`, `"probe": "tap-everything"`, `"why": "tap
+   «<label>» by its node, tap.json in the pack"` and rule on the second pass by that recheck's `tap.json`.
+   Another `node`, or the point outside its `bounds` or under the keyboard: that element was never tapped →
+   `rejected`, "tap hit «<that node>» (tap.json)", plus the same request with `"from": "<this findings file>"`.
 3. If the evidence decides it → set `verdict` to `confirmed` or `rejected` with a one-line `verify_note`.
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",

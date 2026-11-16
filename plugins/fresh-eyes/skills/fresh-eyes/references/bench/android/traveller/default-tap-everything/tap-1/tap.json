@@ -1,17 +1,31 @@
 {
+  "time": "2026-11-16T12:00:00",
   "point": [
     432,
     201
   ],
+  "by": "label",
+  "node": {
+    "cls": "android.view.ViewGroup",
+    "rid": "follow-button",
+    "text": "",
+    "label": "Follow"
+  },
   "bounds": [
     348,
     168,
     168,
     66
   ],
-  "node": {
-    "text": "",
-    "label": "Follow",
-    "rid": "follow-button"
-  }
+  "keyboard_top": null,
+  "screen_wh": [
+    540,
+    1200
+  ],
+  "source": "uiautomator",
+  "snap_exit": 0,
+  "settled": true,
+  "pixels_changed": true,
+  "changed": true,
+  "result": "new: 129, Following; gone: 128, Follow"
 }

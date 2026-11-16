@@ -110,8 +110,10 @@ class AgentsTest(unittest.TestCase):
     def test_a_tap_result_needs_tap_json_on_its_target_0_5_13(self):
         # 0.5.12 run: the only high (robot opens Google Maps) was a tap at old coordinates that hit the place chip
         verifier = " ".join(frontmatter("verifier")[1].split())
-        for word in ("What a tap did", "`tap.json`", "has the `point` inside the `bounds`", "that element was never tapped → `rejected`",
-                     "rule on the second pass by that recheck's `tap.json`", "a tap's result by its `tap.json`"):
+        for word in ("What a tap did", "`tap.json`", "its `point` lies inside `bounds`",
+                     "the tap's after pack (`<pack>/tap-<k>`", "that element was never tapped → `rejected`",
+                     "above `keyboard_top` when that is set", "rule on the second pass by that recheck's `tap.json`",
+                     "a tap's result by its `tap.json`"):
             self.assertIn(word, verifier, word)
 
     def test_one_case_is_checked_once_and_known_candidates_reach_the_next_run_0_5_13(self):

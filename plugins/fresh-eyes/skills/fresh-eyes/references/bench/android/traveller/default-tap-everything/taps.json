@@ -1,8 +1,10 @@
 [
   {
-    "som": 1,
+    "n": 1,
     "label": "Follow",
-    "result": "button reads Following, followers 128 → 129",
-    "changed": true
+    "by": "label",
+    "pack": "tap-1",
+    "changed": true,
+    "result": "new: 129, Following; gone: 128, Follow"
   }
 ]

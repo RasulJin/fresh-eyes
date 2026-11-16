@@ -1,14 +1,18 @@
 [
   {
-    "som": 1,
+    "n": 1,
     "label": "Like",
-    "result": "same screen",
-    "changed": false
+    "by": "som",
+    "pack": "tap-1",
+    "changed": false,
+    "result": "no change"
   },
   {
-    "som": 8,
+    "n": 2,
     "label": "Plan this trip",
-    "result": "a map app opens at «Lisbon, Portugal»",
-    "changed": true
+    "by": "som",
+    "pack": "tap-2",
+    "changed": true,
+    "result": "new: Lisbon, Portugal; gone: Like, Comment, Plan this trip, Three days of trams, tiles and fado."
   }
 ]
