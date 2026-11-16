@@ -25,6 +25,7 @@ import re
 import sys
 import time
 from collections import Counter, defaultdict, deque
+from datetime import datetime
 
 from fe_common import FEError, cli, locked, read_json, run, write_json
 
@@ -227,11 +228,17 @@ def _natural(path):
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", path)]
 
 
+STEP = re.compile(r"step-(\d+)")
+
+
 def _copies(packs):
     """'step-9 is a copy of step-8': two snaps of a cell with the same screen.png bytes and the same meta.json
-    time are one snap saved twice, so a step was never snapped."""
+    time are one snap saved twice, so a step was never snapped. Two step-N snaps of a pack with the same bytes at
+    any time show one screen for two steps, unless steps.json marks the later one "unchanged": true."""
     seen, found = {}, []
     for top in packs:
+        path = os.path.join(top, "steps.json")
+        same = {str(s.get("n")) for s in (read_json(path) if os.path.isfile(path) else []) if s.get("unchanged")}
         snaps = sorted((r for r, _, files in os.walk(top) if "screen.png" in files and "meta.json" in files),
                        key=_natural)
         for snap in snaps:
@@ -239,14 +246,45 @@ def _copies(packs):
             if not time_:
                 continue
             with open(os.path.join(snap, "screen.png"), "rb") as f:
-                key = (hashlib.md5(f.read()).hexdigest(), time_)
+                md5 = hashlib.md5(f.read()).hexdigest()
             rel = os.path.relpath(snap, top)
+            step = STEP.fullmatch(rel)
             rel = os.path.basename(top) if rel == "." else rel
-            if key in seen:
-                found.append("%s is a copy of %s" % (rel, seen[key]))
-            else:
-                seen[key] = rel
+            if (md5, time_) in seen:
+                found.append("%s is a copy of %s: snap each step on its own, never copy a pack"
+                             % (rel, seen[md5, time_]))
+            elif step and step.group(1) not in same and (md5, top) in seen:
+                found.append("%s shows the very screen of %s (same screen.png): snap a step after its action; one "
+                             "that really changes nothing gets \"unchanged\": true in steps.json" % (rel, seen[md5, top]))
+            seen.setdefault((md5, time_), rel)
+            if step:
+                seen.setdefault((md5, top), rel)
     return found
+
+
+def _when(snap):
+    """When capture.py snapped the folder (meta.json time), or None."""
+    meta = os.path.join(snap, "meta.json")
+    try:
+        return datetime.strptime(read_json(meta).get("time") or "", "%Y-%m-%dT%H:%M:%S")
+    except (OSError, ValueError):
+        return None
+
+
+def _order(pack, names):
+    """A step snapped after the next one began: later than the next step's snap, or than the end of its video
+    (the file's time: the pull right after the recording)."""
+    found = []
+    for a, b in zip(names, names[1:]):
+        ta, tb = _when(os.path.join(pack, a)), _when(os.path.join(pack, b))
+        video = os.path.join(pack, b, "video.mp4")
+        tv = datetime.fromtimestamp(os.path.getmtime(video)) if os.path.isfile(video) else None
+        if ta and tb and ta > tb:
+            found.append("%s is snapped at %s, after %s (%s)" % (a, ta.time(), b, tb.time()))
+        elif ta and tv and ta > tv:
+            found.append("%s is snapped at %s, after %s's video (recorded until %s)"
+                         % (a, ta.time(), b, tv.strftime("%H:%M:%S")))
+    return ["%s: snap each step right after its action, never again later" % p for p in found]
 
 
 def shows_marker(pack, markers):
@@ -345,7 +383,10 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         problems = [pr for pr in (_evidence_problem(e) for e in packs) if pr] or \
             ([] if packs else ["no evidence pack given"])
         problems += ["%s is not under <run>/<platform>/<screen>/" % e for e in packs if pack_key(e) is None]
-        problems += ["%s: snap each step on its own, never copy a pack" % c for c in _copies(packs)]
+        problems += _copies(packs)
+        for e in [e for e in packs if os.path.isdir(e)]:
+            steps = sorted((d for d in os.listdir(e) if STEP.fullmatch(d)), key=_natural)
+            problems += _order(e, steps) + _order(e, REQUIRED_SUBPACKS.get(c["probe"], ()))
         # a dead app cannot do the probe's later steps: its pack and the note are the cell (reviewed as a crash)
         meta0 = os.path.join(packs[0], "meta.json") if packs else ""
         crashed = bool(note) and os.path.isfile(meta0) and read_json(meta0).get("app_running") is False

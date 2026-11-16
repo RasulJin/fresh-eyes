@@ -1,4 +1,5 @@
 import copy
+import datetime
 import json
 import os
 import shutil
@@ -444,9 +445,48 @@ class StatusTest(unittest.TestCase):
         step(4, b"post", "2026-11-15T13:50:10")
         with self.assertRaisesRegex(FEError, "step-4 is a copy of step-2"):
             set_status(cov, cell["id"], "done", evidence=[pack])
-        step(4, b"post", "2026-11-15T13:50:31")  # the same screen snapped again: a real step
-        set_status(cov, cell["id"], "done", evidence=[pack])
+        step(2, b"post", "2026-11-15T13:49:10")  # step-2 snapped in its turn
+        step(4, b"post", "2026-11-15T13:50:31")  # the same screen at another time: one screen for two steps
+        with self.assertRaisesRegex(FEError, "step-4 shows the very screen of step-2"):
+            set_status(cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "steps.json"), [{"n": 4, "did": "Back", "unchanged": True}])
+        set_status(cov, cell["id"], "done", evidence=[pack])  # a step that by design changes nothing
         self.assertEqual(cell["status"], "done")
+
+    def test_a_step_snapped_out_of_turn_is_not_done(self):
+        # 20261116-1107-full: profile-trips drag-interrupt sub-snaps retaken after all three gestures; vio-guide
+        # scenario step-21 resnapped after step-22
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(states=[], probes=["drag-interrupt", "scenario"])
+        cov = plan(cfg, BOTH_OK_MUT_OFF, "full")
+        cell = {c["probe"]: c for c in cov["cells"] if c["platform"] == "android"}
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+
+        def at(path, when, video=None):
+            write_json(os.path.join(path, "meta.json"), {"time": "2026-11-16T" + when, "source": "uiautomator"})
+            if video:
+                open(os.path.join(path, "video.mp4"), "w").close()
+                t = datetime.datetime.strptime("2026-11-16T" + video, "%Y-%m-%dT%H:%M:%S").timestamp()
+                os.utime(os.path.join(path, "video.mp4"), (t, t))
+        drag = make_pack(root, cell["drag-interrupt"])
+        for sub, when, video in (("slow", "12:32:49", "12:30:17"), ("drag-back", "12:32:56", "12:30:58"),
+                                 ("swipe-tap", "12:33:02", "12:32:01")):
+            at(os.path.join(drag, sub), when, video)
+        with self.assertRaisesRegex(FEError, r"slow is snapped at 12:32:49, after drag-back's video \(recorded "
+                                             r"until 12:30:58\).*drag-back is snapped at 12:32:56, after swipe-tap"):
+            set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[drag])
+        at(os.path.join(drag, "slow"), "12:30:20")
+        at(os.path.join(drag, "drag-back"), "12:31:00")
+        set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[drag])
+        scenario = make_pack(root, cell["scenario"])
+        for n, when in ((5, "15:59:00"), (6, "16:05:46"), (7, "16:02:12")):
+            at(os.path.join(scenario, "step-%d" % n), when)
+        with self.assertRaisesRegex(FEError, r"step-6 is snapped at 16:05:46, after step-7 \(16:02:12\)"):
+            set_status(cov, cell["scenario"]["id"], "done", evidence=[scenario])
+        at(os.path.join(scenario, "step-6"), "16:00:31")
+        set_status(cov, cell["scenario"]["id"], "done", evidence=[scenario])
+        self.assertEqual([c["status"] for c in cell.values()], ["done", "done"])
 
     def test_a_pack_put_together_by_hand_is_not_evidence(self):
         cov = plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "full")
