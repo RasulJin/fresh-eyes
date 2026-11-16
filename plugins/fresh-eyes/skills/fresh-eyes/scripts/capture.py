@@ -42,7 +42,7 @@ from devices import Device
 from fe_common import FEError, image_size, read_json, write_json
 from geometry import moved_fraction, run_all
 from hierarchy import compress
-from motion import MOVE_EPS, analyze, run_ceiling_ms
+from motion import MOVE_EPS, analyze, extract_frames, keyboard as follow_keyboard, run_ceiling_ms
 from pixels import brightness, changed_fraction, corner_candidates, crop, downscale, som_overlay
 
 MIN_DP = {"android": 48, "ios": 44}
@@ -53,6 +53,8 @@ CORNER_CROP = 96  # px around a corner, zoomed x2 for the reviewer
 GAP_CONTEXT = 160  # px of content above and below a blank band, so its crop shows what it separates
 PAGES = 4  # a long screen: the first viewport and up to 4 more
 PAGE_STEP = 0.5  # each drag moves half the list: a blank band up to half a viewport lies whole in some frame
+RECHECK = re.compile(r"-recheck(?!\w)")  # <pack>-recheck, -recheck-2, and the folders inside them
+MAX_ALL_FRAMES = 240  # ponytail: a 60 s screen that never settles has more; raise it if a verifier needs them
 PAGE_MS = 800  # a slow drag, so the list stops where the finger does
 TOUCH_SLOP_DP = 8  # the drag a list eats before it starts to move
 
@@ -190,7 +192,20 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
     if app_theme or (key and key[2] == os.path.basename(os.path.normpath(out)) and key[2].startswith(THEME_STATES)):
         write_json(os.path.join(out, "theme-note.json"), {"ui_night_mode": devices.night_mode(dev),
                                                           "app_theme": app_theme})
+    if keyboard and os.path.isfile(os.path.join(out, "kb-show", "video.mp4")):
+        meta["keyboard_json"] = _keyboard_json(out) or "written"
+        write_json(os.path.join(out, "meta.json"), meta)
     return 0
+
+
+def _keyboard_json(pack):
+    """keyboard.json of a keyboard-open pack once its focus video and its snap are there (and again after
+    kb-hide): a recheck ran the probe without motion.py --keyboard and had none (0.5.12). The error, if any."""
+    try:
+        follow_keyboard(pack)
+        return None
+    except FEError as e:
+        return str(e)
 
 
 def main_list(nodes, screen_h):
@@ -289,9 +304,16 @@ def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=N
     devices.stop_recording(rec)
     t0 = round(t_action - rec.started, 3) if platform == "android" else 0.0  # Android: first change ~ the action
     report = analyze(os.path.join(out, "video.mp4"), out, ceiling_ms, record_s, t0)
-    write_json(os.path.join(out, "around.json"), {"action": action, "action_exit": code, "record_s": record_s,
-                                                  "flags": [f["type"] for f in report["flags"]],
-                                                  "animated": report["peak_change"] >= MOVE_EPS})
+    extra = {}
+    if RECHECK.search(out):  # a verifier asked again: every frame, not 8 around each of the first 4 flags
+        extra["frames_all"] = len(extract_frames(os.path.join(out, "video.mp4"), os.path.join(out, "frames_all"),
+                                                 max_frames=MAX_ALL_FRAMES))
+    parent = os.path.dirname(os.path.normpath(out))
+    if os.path.basename(os.path.normpath(out)) == "kb-hide" and os.path.isfile(os.path.join(parent, "nodes.json")):
+        extra["keyboard_json"] = _keyboard_json(parent) or "written"
+    write_json(os.path.join(out, "around.json"), dict({"action": action, "action_exit": code, "record_s": record_s,
+                                                       "flags": [f["type"] for f in report["flags"]],
+                                                       "animated": report["peak_change"] >= MOVE_EPS}, **extra))
     return 0 if code == 0 else 2
 
 

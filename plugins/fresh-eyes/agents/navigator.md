@@ -147,13 +147,16 @@ Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exa
 For each entry in each `requests.json` that has no `done` yet, reach the pack's screen first: `resnap` → new
 `snap` into `<pack>-recheck` (exit 5: another screen is up; reach it and redo, never mark that entry done);
 `repeat-probe` → run the probe
-again into `<pack>-recheck`, adding the entry's `args` (e.g. `--interval-ms 150`) to the probe's command; `crop` → `python3 $S/pixels.py crop <pack>/screen.png <pack>/crops/req-<finding>.png
+again into `<pack>-recheck` with every step of it the original ran (keyboard-open: kb-show, the `--keyboard`
+snap, kb-hide; kill-relaunch: `devices.py app --do relaunch` under `capture.py around`), adding the entry's
+`args` (e.g. `--interval-ms 150`) to the probe's command; `crop` → `python3 $S/pixels.py crop <pack>/screen.png <pack>/crops/req-<finding>.png
 --bbox x,y,w,h --zoom 2`. Add `"done": "<path>"` to each entry you fulfilled and save the file. An entry you cannot fulfil gets
 `"failed": "<why>"` instead. Skip `redo-cell` entries: the orchestrator puts those cells back in the plan.
 An entry with `"times": N`: run it N times, into `<pack>-recheck-1` … `-N`, `done` naming them all. A `why`
 says what to do (which target alone to tap, how long to record): follow it. A tap's recheck: snap
 `<pack>-recheck` before the tap (it checks the screen), then `taps.py tap --label <target> --after
-<pack>-recheck/after` (or `--id`, or `--som N` from that snap): it snaps the result there itself, with `tap.json`.
+<pack>-recheck/after` (or `--id`, or `--som N` from that snap): it snaps the result there itself, with `tap.json`;
+add `--record` when the `why` waits for a toast or a label that changes back (it is gone by the snap).
 Probe `edge`: as probes.md `### edge` says, `taps.py edge` with the entry's `args` under `capture.py around`, then
 the recheck snap with `--before <pack>`.
 

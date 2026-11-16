@@ -245,6 +245,31 @@ class TapsJsonTest(unittest.TestCase):
                              (2, "new: Скопировано", "no change"))
             self.assertEqual(read_json(os.path.join(pack, "tap-2", "tap.json"))["node"]["text"], "Row C")
 
+    def test_record_puts_the_tap_and_its_toast_on_video_before_the_snap(self):
+        # 0.5.12 vio-guide: «Скопировано» lasts 2 s, the after-snap came ~3 s after the tap
+        events = []
+
+        def around(platform, dev, out, action, settle=2.5, ceiling_ms=None, call=None):
+            events.append(("record", os.path.basename(out), settle))
+            call()
+        with tmpdir() as d:
+            cov = run_dir(d, [dict(CELL, id="android/feed/default/tap-everything", probe="tap-everything")], False)
+            after = os.path.join(d, "android", "feed", "default-tap-everything-recheck", "after")
+            argv = ["taps.py", "tap", "--platform", "android", "--device", "e", "--after", after, "--record",
+                    "--text", "Row B", "--coverage", cov, "--cell", "android/feed/default/tap-everything"]
+            with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(io.StringIO()), \
+                    mock.patch.object(taps.nav, "hierarchy", lambda dev: (ROWS, "uiautomator")), \
+                    mock.patch.object(devices, "keyboard_top", lambda dev, nodes=(): None), \
+                    mock.patch.object(devices, "screenshot", lambda dev, dst: make_png(dst, 1080, 2400)), \
+                    mock.patch.object(devices, "tap", lambda dev, x, y: events.append(("tap", x, y))), \
+                    mock.patch.object(taps, "settle", lambda dev, before: {"settled": True, "changed": True,
+                                                                            "ms": 600}), \
+                    mock.patch.object(taps.capture, "around", around), \
+                    mock.patch.object(taps.capture, "snap", lambda p, dv, o, **kw: events.append(("snap",)) or 0):
+                taps.main()
+            self.assertTrue(read_json(os.path.join(after, "tap.json"))["settled"])
+        self.assertEqual(events, [("record", "after", 2.0), ("tap", 540, 760), ("snap",)])
+
     def test_what_changed_reads_focus_keyboard_and_moves(self):
         field = node(5, "", 1500, "app:id/input", "android.widget.EditText")
         focused = [dict(field, focused=True)]

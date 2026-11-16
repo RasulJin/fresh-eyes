@@ -26,8 +26,7 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
   before; rows move after state changes, never reuse them). `--interval-ms 30` only when a request asks for it.
 - Oracle: one Back/dismiss later nothing of it is left on screen: `taps.py back` once, then
   `capture.py snap --out <pack>/afterback` (`coverage.py set` refuses the cell without it).
-- Control, same pack: the same with `--count 1` into `<pack>/single` and `<pack>/single/afterback`.
-- Mutating: no (but if the button sends something, the probe belongs to a mutating cell).
+- Control: `--count 1` into `<pack>/single` and `<pack>/single/afterback`. Mutating only if the button sends.
 
 ### tap-outside
 - Reveals: cards/sheets/menus that do not dismiss, scrims that pass taps through, sheets sliding under cards.
@@ -41,9 +40,8 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
 ### back-during-animation
 - Reveals: half-open states, invisible windows that eat taps, jumps.
 - `taps.py tap-back --x X --y Y --delay-ms 100` (x, y: the control that opens the sheet/menu/screen, from a
-  fresh `nav.py screen`): the tap and Back go out in one command, Back lands mid-transition (iOS: the
-  edge swipe, no sooner than ~225 ms). Repeat with `--delay-ms 50` and `150`. Then tap the content behind to
-  check it responds.
+  fresh `nav.py screen`): the tap and Back go out in one command, Back lands mid-transition (iOS: the edge
+  swipe, no sooner than ~225 ms). Repeat with `--delay-ms 50` and `150`. Then tap the content behind.
 - Evidence: `capture.py around` around each `tap-back`, `--out <pack>/d100`, `<pack>/d50`, `<pack>/d150` (the
   delay in the name; `coverage.py set` reads these sub-folders). It refuses the cell when no recorded frame
   moved (Back landed before the transition began): repeat with a longer `--delay-ms`, or on Android widen the
@@ -68,14 +66,15 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
 
 ### kill-relaunch
 - Reveals: state that should persist (session, drafts, theme, onboarding done) but does not; welcome flashes.
-- Android: `am force-stop`, then launch under `capture.py around`. iOS: `simctl terminate` + `launch`.
+- `capture.py around --out <pack> -- python3 $S/devices.py app --platform P --device ID --app <app id> --do
+  relaunch`: it stops the app, starts it and returns 4 s after its first frame, so the video holds the splash.
 
 ### keyboard-open
 - Reveals: what the keyboard or a footer on it hides; focus without keyboard; a field that jumps twice or lags.
 - Steps: focus the main input under `capture.py around --out <pack>/kb-show -- python3 $S/nav.py tap ...`, then
   `capture.py snap --keyboard --before <pack before focus>`; Android: Back only hides it, recorded with
-  `capture.py around --out <pack>/kb-hide -- python3 $S/taps.py back ...`; `motion.py --keyboard <pack>`. Then
-  the other inputs; type with real key taps when the IME matters.
+  `capture.py around --out <pack>/kb-hide -- python3 $S/taps.py back ...`; `keyboard.json` comes by itself
+  (after the snap, again after kb-hide). Then the other inputs; type with real key taps when the IME matters.
 - Focus it again, leave (a link, avatar or tab, not Back; a modal: close and reopen) and return; keyboard up
   again: one `taps.py back`, wait 1.5 s; `capture.py snap --out <pack>/return` (a stale inset). `coverage.py set`
   needs `keyboard.json` and that snap with the keyboard closed. Open/close 3–4 times: does the form creep?
@@ -170,7 +169,8 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
   `taps.py tap --pack <pack> --som N` (its mark in the pack's `som.json`, or `--id`/`--label`; `--x --y` only
   with `--expect-id`): it finds the node in a dump taken just before the tap (refused: gone, off screen, under
   the keyboard), waits until the screen settles (≤3 s), snaps the result with `tap.json` into `<pack>/tap-<k>`
-  and appends row k of `taps.json` (label, `changed`, `result`) itself. Go back.
+  and appends row k of `taps.json` (label, `changed`, `result`) itself. Go back. `--record` on a label that
+  promises a short reply (Copy, Like, Save): a 2 s toast is gone by the snap, the video keeps it.
 - Reply/comment buttons and inputs only focus a field, they change no data: tap them too, and first, so the
   later taps leave and return with the keyboard having been up.
 

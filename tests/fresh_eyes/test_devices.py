@@ -195,6 +195,17 @@ class DevicesTest(unittest.TestCase):
         devices.launch(Device("android", "emulator-5560", "fresh-eyes-pixel"), "com.example.app")
         self.assertIn("am start -n com.example.app/.MainActivity", " | ".join(c[-1] for c in fake.calls))
 
+    def test_relaunch_returns_seconds_after_the_first_frame(self):
+        # 0.5.12 welcome: the cold start was recorded for 1.3 s and showed only the launcher
+        fake = self.patch({"resolve-activity": "com.example.app/.MainActivity\n"})
+        slept = []
+        with mock.patch.object(devices.time, "sleep", slept.append):
+            devices.relaunch(Device("android", "emulator-5560", "fresh-eyes-pixel"), "com.example.app")
+        shell = [c[-1] for c in fake.calls if "shell" in c]
+        self.assertEqual([c for c in shell if c.startswith("am ")],
+                         ["am force-stop com.example.app", "am start -W -n com.example.app/.MainActivity"])
+        self.assertEqual(slept, [4.0])
+
     def test_photos_are_counted_in_the_gallery_and_pushed_only_to_owned_devices(self):
         self.patch({"content query": "Row: 0 _id=31\nRow: 1 _id=32\n"})
         self.assertEqual(devices.photo_count(Device("android", "emulator-5560", "fresh-eyes-pixel")), 2)

@@ -6,13 +6,15 @@ CLI:
   taps.py rapid   --platform P --device ID --x X --y Y [--count 3] [--interval-ms 120] [--hold-ms 6000]
                   --coverage C --cell ID      (returns --hold-ms after the first tap: a late sheet is on the video)
   taps.py tap     --platform P --device ID (--id SUFFIX | --label RE | --text RE | --som N
-                  | --x X --y Y --expect-id SUFFIX) [--index N] (--pack PACK | --after DIR) --coverage C --cell ID
+                  | --x X --y Y --expect-id SUFFIX) [--index N] (--pack PACK | --after DIR) [--record]
+                  --coverage C --cell ID
                   (one tap on the node where a dump taken right before shows it: refused when it is not there, off
                   screen or under the keyboard; --x --y must lie in that node. --som N: mark N of PACK (or of DIR's
                   parent), found again by its class, id, text and label. Once the screen settled, the snap of where
                   the tap led and tap.json (the point, the node and its bounds at the tap) go to DIR, or with
                   --pack to PACK/tap-<k>, k being the row this tap appends to PACK/taps.json: label, changed (nodes
-                  or pixels before vs after), result: what appeared, went, took focus)
+                  or pixels before vs after), result: what appeared, went, took focus). --record: the tap and
+                  2 s after the screen settled are recorded there too (capture.py around), for a toast)
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
   taps.py tap-back --platform P --device ID --x X --y Y [--delay-ms 100] --coverage C --cell ID
@@ -162,8 +164,16 @@ def tap(a, dev, after, som_pack):
         before = devices.screenshot(dev, os.path.join(d, "before.png"))
         screen_wh = image_size(before)
         (x, y), node, by = target(a, nodes, kb_top, screen_wh, som_pack)
-        devices.tap(dev, x, y)
-        result = settle(dev, before)
+        held = {}
+
+        def act():
+            devices.tap(dev, x, y)
+            held.update(settle(dev, before))
+        if a.record:  # a toast or a "Copied" label is gone ~3 s later, when the snap comes
+            capture.around(a.platform, a.device, after, ["taps.py", "tap"], settle=RECORD_AFTER_S, call=act)
+        else:
+            act()
+        result = dict(held)
     code = capture.snap(a.platform, a.device, after)
     snapped = os.path.isfile(os.path.join(after, "nodes.json"))
     meta = read_json(os.path.join(after, "meta.json")) if os.path.isfile(os.path.join(after, "meta.json")) else {}
@@ -177,6 +187,7 @@ def tap(a, dev, after, som_pack):
     return code, rec
 
 
+RECORD_AFTER_S = 2.0  # --record: the recording runs on this long after the screen settled (a 2 s toast leaves)
 GESTURE_SETTLE_S = 1.5  # after a drag-interrupt gesture: the snap shows where it came to rest
 
 
@@ -213,6 +224,8 @@ def main():
                 p.add_argument(flag)
             p.add_argument("--som", type=int, help="a mark of the som.json in --pack, or in the parent of --after")
             p.add_argument("--index", type=int, default=0)
+            p.add_argument("--record", action="store_true", help="record the tap into the result's pack (video, "
+                                                                 "motion.json): for a toast or a short-lived label")
             g = p.add_mutually_exclusive_group(required=True)
             g.add_argument("--pack", help="tap-everything: the row goes to PACK/taps.json, the result to tap-<row>")
             g.add_argument("--after", help="the pack the tap's result is snapped into (a recheck)")
