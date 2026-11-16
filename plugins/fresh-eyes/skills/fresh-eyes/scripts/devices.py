@@ -571,6 +571,13 @@ def set_dark(dev, on):
         _simctl("ui", dev.id, "appearance", "dark" if on else "light")
 
 
+def night_mode(dev):
+    """The phone's own theme as the system reports it ("Night mode: yes" / "dark"), for a pack's theme-note."""
+    if dev.platform == "android":
+        return _shell(dev, "cmd uimode night", check=False).strip()
+    return _simctl("ui", dev.id, "appearance", check=False).strip()
+
+
 def set_font_scale(dev, level):
     _require_owned(dev, "change font size")
     if dev.platform == "android":

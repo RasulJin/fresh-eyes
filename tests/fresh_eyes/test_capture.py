@@ -212,6 +212,20 @@ class SnapTest(unittest.TestCase):
             self.assertEqual(pids, ["com.example.app"])
             self.assertTrue(read_json(os.path.join(pack, "meta.json"))["app_running"])
 
+    def test_a_theme_pack_notes_the_phones_and_the_apps_theme(self):
+        with open(os.path.join(FIXTURES, "settings_uiautomator.xml"), encoding="utf-8") as f:
+            xml = f.read()
+        with tmpdir() as run, mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml), \
+                mock.patch.object(devices, "night_mode", lambda dev: "Night mode: yes"):
+            screen = os.path.join(run, "android", "trip-map")
+            capture.snap("android", "e", os.path.join(screen, "theme-mismatch-none"), app_theme="Светлая")
+            capture.snap("android", "e", os.path.join(screen, "dark-none"))
+            capture.snap("android", "e", os.path.join(screen, "default-none"))
+            self.assertEqual(read_json(os.path.join(screen, "theme-mismatch-none", "theme-note.json")),
+                             {"ui_night_mode": "Night mode: yes", "app_theme": "Светлая"})
+            self.assertIsNone(read_json(os.path.join(screen, "dark-none", "theme-note.json"))["app_theme"])
+            self.assertFalse(os.path.exists(os.path.join(screen, "default-none", "theme-note.json")))
+
     def test_snap_of_a_running_app_writes_no_log(self):
         meta, log = self._snap_with_app("4242\n")
         self.assertTrue(meta["app_running"])

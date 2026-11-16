@@ -18,7 +18,8 @@ logs:   Android only: the app's warnings and errors since the last `logs --clear
 
 CLI:
   capture.py snap --platform P --device ID --out PACK [--before PACK] [--keyboard] [--expect-differs PACK] [--pages]
-                  [--package PKG] [--marker WORD ...]
+                  [--package PKG] [--marker WORD ...] [--app-theme LABEL]
+                  (a dark-* or theme-mismatch-* pack, or --app-theme: theme-note.json {ui_night_mode, app_theme})
   capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms MS] -- CMD ...
   capture.py logs --platform android --device ID --out PACK --package PKG [--clear]
 """
@@ -81,7 +82,9 @@ def _crop_order(candidates):
     return order
 
 
-DERIVED = ("nodes.json", "hierarchy.txt", "candidates.json", "screen_1000.png", "som.png", "som.json")
+DERIVED = ("nodes.json", "hierarchy.txt", "candidates.json", "screen_1000.png", "som.png", "som.json",
+           "theme-note.json")
+THEME_STATES = ("dark-", "theme-mismatch-")  # packs that must prove the phone's and the app's theme
 
 
 def recheck_marker(out):
@@ -104,7 +107,8 @@ def run_app(path, platform):
     return ((read_json(pf).get("platforms") or {}).get(platform) or {}).get("app") if os.path.isfile(pf) else None
 
 
-def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=None, package=None, marker=()):
+def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=None, package=None, marker=(),
+         app_theme=None):
     dev = Device(platform, device_id, "")
     app = run_app(out, platform)
     if package and app and package != app:  # 0.5.12: a mistyped package read as a crash of the app
@@ -182,6 +186,10 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
     meta.update(source=source, nodes=len(nodes), candidates=len(candidates),
                 keyboard_up=kb_top is not None, **{k: ctx[k] for k in ("px_per_dp", "keyboard_top")})
     write_json(os.path.join(out, "meta.json"), meta)
+    key = coverage.pack_key(out)
+    if app_theme or (key and key[2] == os.path.basename(os.path.normpath(out)) and key[2].startswith(THEME_STATES)):
+        write_json(os.path.join(out, "theme-note.json"), {"ui_night_mode": devices.night_mode(dev),
+                                                          "app_theme": app_theme})
     return 0
 
 
@@ -346,6 +354,8 @@ def main():
     s.add_argument("--pages", action="store_true", help="then a pack per scrolled page in scroll-<k>/")
     s.add_argument("--package", help="Android app id: records app_running, a dead app's crash goes to logcat.txt")
     s.add_argument("--marker", nargs="+", default=(), help="the screen's marker words (coverage.json cell)")
+    s.add_argument("--app-theme", help="dark / theme-mismatch: the app's own theme option now picked (its label, "
+                                       "or system): theme-note.json")
     r = sub.choices["around"]
     r.usage = "capture.py around --platform P --device ID --out PACK [--settle S] [--ceiling-ms MS] -- CMD ..."
     r.add_argument("--settle", type=float, default=2.5)
@@ -357,7 +367,7 @@ def main():
     out = {}
     if a.cmd == "snap":
         code = snap(a.platform, a.device, a.out, before=a.before, keyboard=a.keyboard,
-                    expect_differs=a.expect_differs, package=a.package, marker=a.marker)
+                    expect_differs=a.expect_differs, package=a.package, marker=a.marker, app_theme=a.app_theme)
         out = {k: v for k, v in read_json(os.path.join(a.out, "meta.json")).items() if k == "app_running"}
         if code == 0 and a.pages:
             m = pages(a.platform, a.device, a.out)

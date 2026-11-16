@@ -92,9 +92,12 @@ nobody answers in a night run.
    screen, mark the cell blocked with note "not enough items". `loading`/`error`: run `hooks.loading` / `hooks.error` from
    `config.json` (repo root) right before the snap, and undo it after if the hook says how.
    `theme-mismatch`: `--what dark`, then pick the app's own Light theme the way `app_theme` in `config.json`
-   says, come back and snap without `--expect-differs` (done right, it looks like `default`); restore with
-   `--what light` and leave the app on Light. A `dark` cell where the app stays light (exit 4) while
-   `app_theme` is set: the app's own theme is pinned, so pick its Dark, snap again, then pick Light back.
+   says, come back and snap without `--expect-differs` but with `--app-theme <that option's label>` (done right,
+   it looks like `default`); restore with `--what light` and leave the app on Light. `dark` snaps get
+   `--app-theme <the app's option now picked>` too (its system one, or its Dark). Both write `theme-note.json`
+   (the phone's night mode and that option); `coverage.py` refuses a theme-mismatch pack without it. A `dark`
+   cell where the app stays light (exit 4) while `app_theme` is set: the app's own theme is pinned, so pick its
+   Dark, snap again, then pick Light back.
 3. **Run the probe** exactly as `probes.md` says. Fast probes use `taps.py` (with `--coverage` and `--cell`).
    Wrap transitions and probes in `capture.py around ... -- <command>` so they are recorded.
 4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --package PKG --out <run>/<platform>/<screen>/<state>-<probe>`
