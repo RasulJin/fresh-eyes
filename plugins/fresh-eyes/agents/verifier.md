@@ -139,6 +139,10 @@ it (no reaction on a settled frame, another screen, the cut or overlap) → add 
 `steps`, the recheck as evidence), ruled by the same rules as any BUG (a tap's result by its `tap.json`): a cut
 or overlap a settled frame shows is `confirmed`; a behaviour (a tap, a gesture) needs as many rechecks showing
 it as a repeat of its severity (a low one 1, a medium 2), else `unsure`, "seen once: <pack>".
+A conflict pair (the orchestrator sends two findings, maybe of two folders, that `coverage.py verdict` saw ruled
+both ways): both are yours to write. One defect → one ruling for both, on the stronger evidence of the two, the
+other's `same_as` to it. Two defects → remove the `same_as` between them, make each title name what differs, and
+rule each on its own; say which in both `verify_note`s.
 
 ## Reply (≤10 lines)
 

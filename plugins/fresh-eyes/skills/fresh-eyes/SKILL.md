@@ -174,6 +174,9 @@ words / nothing (= the current diff).
     `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`
     and `python3 $S/coverage.py map --cov $RUN/coverage.json --language <config>`. If the verdict names done
     cells no reviewer looked at, send those packs to a reviewer (`findings-<k>.json`), verify, and rerun it.
+    Code `CONFLICT` (one defect ruled both ways): each pair of its `conflicts` goes to one verifier, `second pass`
+    with both findings files and the pair (the first file's verifier by SendMessage, else a fresh one); when all
+    are back, run `findings.py same` and the verdict again.
     Then `python3 $S/backlog.py match --index $RUN/backlog-index.md --findings <all findings*.json> --out
     $RUN/imp.md --language <config>`: an IMP an open backlog entry already proposes gets its `backlog_id`, and
     imp.md holds every IMP in full (the new ones numbered, the known ones a line each). Then `python3

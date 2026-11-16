@@ -130,6 +130,16 @@ class AgentsTest(unittest.TestCase):
             self.assertIn(word, skill, word)
         self.assertEqual(skill.count(".fresh-eyes/known-proposed.md`,"), 2)  # reviewer and verifier prompts
 
+    def test_a_conflict_pair_goes_to_one_verifier_0_5_13(self):
+        # 0.5.12 run: feed#2f1 rejected as flaky, feed-trips#2f1 confirmed with same_as to it
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ("A conflict pair", "both are yours to write", "remove the `same_as` between them"):
+            self.assertIn(word, verifier, word)
+        with open(os.path.join(PLUGIN, "skills", "fresh-eyes", "SKILL.md"), encoding="utf-8") as f:
+            skill = " ".join(f.read().split())
+        self.assertIn("Code `CONFLICT` (one defect ruled both ways): each pair of its `conflicts` goes to one verifier",
+                      skill)
+
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
         nav = " ".join(frontmatter("navigator")[1].split())
