@@ -259,17 +259,25 @@ def pages(platform, device_id, out, max_pages=PAGES):
     return meta
 
 
-def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None):
+def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=None):
+    """Record the screen around the command `action`, or around `call()` (then `action` only describes it)."""
     dev = Device(platform, device_id, "")
     os.makedirs(out, exist_ok=True)
     if ceiling_ms is None:
         ceiling_ms = run_ceiling_ms(out)
     rec = devices.start_recording(dev, os.path.join(out, "video.mp4"))
-    time.sleep(0.5)
-    t_action = time.time()
-    code = subprocess.run(action).returncode
-    time.sleep(settle)
-    record_s = round(time.time() - rec.started, 3)  # before stopping: the pull is not recording
+    try:
+        time.sleep(0.5)
+        t_action = time.time()
+        code = subprocess.run(action).returncode if call is None else (call() or 0)
+        time.sleep(settle)
+        record_s = round(time.time() - rec.started, 3)  # before stopping: the pull is not recording
+    except BaseException:
+        try:  # a recorder left running on the device would hold the next recording's file
+            devices.stop_recording(rec)
+        except FEError:
+            pass
+        raise
     devices.stop_recording(rec)
     t0 = round(t_action - rec.started, 3) if platform == "android" else 0.0  # Android: first change ~ the action
     report = analyze(os.path.join(out, "video.mp4"), out, ceiling_ms, record_s, t0)

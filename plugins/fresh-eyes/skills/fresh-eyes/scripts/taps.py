@@ -16,10 +16,15 @@ CLI:
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
   taps.py tap-back --platform P --device ID --x X --y Y [--delay-ms 100] --coverage C --cell ID
+  taps.py slow      --platform P --device ID --from X,Y --to X,Y [--ms 2000] --pack PACK --coverage C --cell ID
+                    (--to: where a drag across the whole surface ends; drags 40 % of it, 1.5 s later 60 %)
   taps.py drag-back --platform android --device ID --from X,Y --to X,Y [--ms 2000] [--back-at-ms 700]
-                    --coverage C --cell ID
+                    --pack PACK --coverage C --cell ID
   taps.py swipe-tap --platform android --device ID --from X,Y --to X,Y [--ms 250] [--delay-ms MS] --x X --y Y
-                    --coverage C --cell ID      (--delay-ms: the run's motion_ceiling_ms unless given)
+                    --pack PACK --coverage C --cell ID   (--delay-ms: the run's motion_ceiling_ms unless given)
+                    (slow, drag-back, swipe-tap: a drag-interrupt step in one call: PACK/<step>/before snapped on
+                    the cell's screen (its marker; refused elsewhere), the gesture recorded into PACK/<step>, and
+                    1.5 s later the snap of where it left, into PACK/<step> itself)
   taps.py edge    --platform P --device ID --pack P --node nN --side top|bottom|left|right [--dp 2]
                   --coverage C --cell ID      (a tap just outside the node's visible edge, from the pack's nodes)
 """
@@ -172,16 +177,35 @@ def tap(a, dev, after, som_pack):
     return code, rec
 
 
+GESTURE_SETTLE_S = 1.5  # after a drag-interrupt gesture: the snap shows where it came to rest
+
+
+def gesture(a, dev, cell, call):
+    """Snap PACK/<step>/before, record call() into PACK/<step>, snap PACK/<step>: all in one call, so no step is
+    snapped again after the next one ran (0.5.12 profile-trips: three sub-snaps retaken after all gestures)."""
+    sub = os.path.join(a.pack, a.cmd)
+    code = capture.snap(a.platform, a.device, os.path.join(sub, "before"), marker=tuple(cell.get("marker") or ()))
+    if code:
+        raise FEError("%s/before: snap exit %d (see its meta.json): the gesture did not run; bring the screen back "
+                      "to rest and run it again" % (sub, code))
+    capture.around(a.platform, a.device, sub, ["taps.py", a.cmd], settle=GESTURE_SETTLE_S, call=call)
+    return capture.snap(a.platform, a.device, sub)
+
+
+def _part(src, to, f):
+    return round(src[0] + (to[0] - src[0]) * f), round(src[1] + (to[1] - src[1]) * f)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("rapid", "tap", "outside", "back", "tap-back", "drag-back", "swipe-tap", "edge"):
+    for name in ("rapid", "tap", "outside", "back", "tap-back", "slow", "drag-back", "swipe-tap", "edge"):
         p = sub.add_parser(name)
         p.add_argument("--platform", required=True, choices=["android", "ios"])
         p.add_argument("--device", required=True)
         p.add_argument("--coverage", required=True)
         p.add_argument("--cell", required=True)
-        if name not in ("back", "drag-back", "edge"):
+        if name not in ("back", "slow", "drag-back", "edge"):
             p.add_argument("--x", type=int, required=name != "tap")
             p.add_argument("--y", type=int, required=name != "tap")
         if name == "tap":
@@ -200,10 +224,11 @@ def main():
             p.add_argument("--hold-ms", type=int, default=6000)
         if name in ("tap-back", "swipe-tap"):
             p.add_argument("--delay-ms", type=int, default=100 if name == "tap-back" else None)
-        if name in ("drag-back", "swipe-tap"):
+        if name in ("slow", "drag-back", "swipe-tap"):
             p.add_argument("--from", dest="src", type=_xy, required=True)
             p.add_argument("--to", type=_xy, required=True)
-            p.add_argument("--ms", type=int, default=2000 if name == "drag-back" else 250)
+            p.add_argument("--ms", type=int, default=250 if name == "swipe-tap" else 2000)
+            p.add_argument("--pack", required=True, help="the drag-interrupt pack: snaps go to PACK/%s" % name)
         if name == "drag-back":
             p.add_argument("--back-at-ms", type=int, default=700)
         if name == "edge":
@@ -219,7 +244,7 @@ def main():
             ap.error("tap needs one target: --id, --label, --text, --som, or --x --y with --expect-id")
         if a.x is not None and not a.expect_id:
             ap.error("--x --y only with --expect-id: a point from an older screen lands on whatever moved there")
-    guard(a.coverage, a.cell, a.platform)
+    cell = guard(a.coverage, a.cell, a.platform)
     heartbeat(a.coverage, a.platform, "taps.py %s %s" % (a.cmd, a.cell))
     dev = Device(a.platform, a.device, "")
     if a.cmd == "rapid":
@@ -251,11 +276,23 @@ def main():
         devices.tap(dev, a.x, a.y)
     elif a.cmd == "tap-back":
         devices.tap_then_back(dev, a.x, a.y, a.delay_ms)
-    elif a.cmd == "drag-back":
-        devices.drag_then_back(dev, *a.src, *a.to, ms=a.ms, back_at_ms=a.back_at_ms)
-    elif a.cmd == "swipe-tap":
-        delay = a.delay_ms if a.delay_ms is not None else run_ceiling_ms(os.path.dirname(a.coverage))
-        devices.swipe_then_tap(dev, *a.src, *a.to, a.x, a.y, ms=a.ms, delay_ms=delay)
+    elif a.cmd in ("slow", "drag-back", "swipe-tap"):
+        if a.cmd == "slow":  # under half it springs back, over half it moves on
+            def call():
+                devices.swipe(dev, *a.src, *_part(a.src, a.to, 0.4), a.ms)
+                time.sleep(GESTURE_SETTLE_S)
+                devices.swipe(dev, *a.src, *_part(a.src, a.to, 0.6), a.ms)
+        elif a.cmd == "drag-back":
+            def call():
+                devices.drag_then_back(dev, *a.src, *a.to, ms=a.ms, back_at_ms=a.back_at_ms)
+        else:
+            delay = a.delay_ms if a.delay_ms is not None else run_ceiling_ms(os.path.dirname(a.coverage))
+
+            def call():
+                devices.swipe_then_tap(dev, *a.src, *a.to, a.x, a.y, ms=a.ms, delay_ms=delay)
+        code = gesture(a, dev, cell, call)
+        print(json.dumps({"probe": a.cmd, "cell": a.cell, "pack": os.path.join(a.pack, a.cmd), "snap_exit": code}))
+        return code
     else:
         devices.back(dev, a.count, a.interval_ms)
     print(json.dumps({"probe": a.cmd, "cell": a.cell, "ok": True}))

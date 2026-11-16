@@ -113,12 +113,14 @@ nobody answers in a night run.
    It also refuses a state or `keyboard-open` pack that shows none of the screen's `marker`:
    you snapped another screen, so go there and snap again. If it is that screen and it is blank or broken, set
    done with `--note` saying what it shows.
-6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell.
+6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell, and end the cell on its
+   screen at rest (nothing open, a pager on a page): the next cell's first snap checks it.
 
 Journey cells (`<platform>/journey/<id>/journey`): follow the journey's `steps` from `config.json` end to end;
 snap after every step's action (never before it) into `<run>/<platform>/journey/<id>-journey/step-<n>/`, n being
 the step's place in `steps` (the first `→` part is 1), and write `steps.json`
-(`[{"n": 1, "did": "...", "screen": "..."}]`). If the journey creates test data, delete it afterwards.
+(`[{"n": 1, "did": "...", "screen": "..."}]`; a step that left the screen as it was: `"unchanged": true`). If
+the journey creates test data, delete it afterwards.
 
 Second pass: a cell id ending in `#2` belongs to an independent second pass. Its pack takes the suffix `-p2`
 (`<state>-<probe>-p2`, journeys `<id>-journey-p2`); take your own path and do not open the first pass's packs.

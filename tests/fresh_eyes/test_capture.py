@@ -351,6 +351,18 @@ class AroundTest(unittest.TestCase):
             capture.around("android", "emulator-5560", pack, [sys.executable, "-c", "pass"], settle=0, **kw)
         return seen[0]
 
+    def test_a_failing_call_still_stops_the_recorder(self):
+        stopped = []
+
+        def boom():
+            raise capture.FEError("adb gone")
+        with tmpdir() as d, mock.patch.object(devices, "start_recording", lambda dev, dst, limit_s=60: "rec"), \
+                mock.patch.object(devices, "stop_recording", stopped.append), \
+                mock.patch.object(capture.time, "sleep", lambda s: None):
+            with self.assertRaises(capture.FEError):
+                capture.around("android", "e", os.path.join(d, "p"), ["taps.py", "slow"], call=boom)
+        self.assertEqual(stopped, ["rec"])
+
     def test_ceiling_comes_from_the_runs_coverage(self):
         with tmpdir() as d:
             write_json(os.path.join(d, "coverage.json"), {"cells": [], "motion_ceiling_ms": 300})

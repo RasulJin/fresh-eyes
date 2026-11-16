@@ -52,21 +52,54 @@ class EdgeTest(unittest.TestCase):
                          [(120, 195), (120, 224), (95, 210), (144, 210)])
 
 
-class SwipeTapTest(unittest.TestCase):
-    def test_the_delay_is_the_runs_motion_ceiling(self):
-        cell = dict(CELL, id="android/feed/default/drag-interrupt", probe="drag-interrupt")
-        calls = []
+class GestureTest(unittest.TestCase):
+    """drag-interrupt steps snap before and after themselves (0.5.12: sub-snaps retaken after all gestures)."""
+    def run_gesture(self, cmd, extra, snap_codes=(0, 0), coverage_extra=None):
+        cell = dict(CELL, id="android/feed/default/drag-interrupt", probe="drag-interrupt", marker=["Лента"])
+        events = []
+        codes = list(snap_codes)
+
+        def snap(platform, dev, out, **kw):
+            events.append(("snap", os.path.basename(out), kw.get("marker", ())))
+            return codes.pop(0)
+
+        def around(platform, dev, out, action, settle=2.5, ceiling_ms=None, call=None):
+            events.append(("record", os.path.basename(out)))
+            call()
         with tmpdir() as d:
             cov = run_dir(d, [cell], False)
-            write_json(cov, {"run_id": "r", "cells": [cell], "motion_ceiling_ms": 250})
-            argv = ["taps.py", "swipe-tap", "--platform", "android", "--device", "e", "--from", "500,1500",
-                    "--to", "500,2300", "--x", "540", "--y", "800", "--coverage", cov, "--cell", cell["id"]]
+            write_json(cov, dict({"run_id": "r", "cells": [cell]}, **(coverage_extra or {})))
+            pack = os.path.join(d, "android", "feed", "default-drag-interrupt")
+            argv = ["taps.py", cmd, "--platform", "android", "--device", "e", "--pack", pack,
+                    "--coverage", cov, "--cell", cell["id"]] + extra
             with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(io.StringIO()), \
-                    mock.patch.object(devices, "swipe_then_tap", lambda dev, *a, **kw: calls.append(kw)):
+                    mock.patch.object(taps.capture, "snap", snap), mock.patch.object(taps.capture, "around", around), \
+                    mock.patch.object(taps.time, "sleep", lambda s: None), \
+                    mock.patch.object(devices, "swipe", lambda dev, *a: events.append(("swipe",) + a)), \
+                    mock.patch.object(devices, "drag_then_back", lambda dev, *a, **kw: events.append(("drag-back",))), \
+                    mock.patch.object(devices, "swipe_then_tap", lambda dev, *a, **kw: events.append(kw)):
                 taps.main()
-                with mock.patch.object(sys, "argv", argv + ["--delay-ms", "120"]):
-                    taps.main()
-        self.assertEqual([c["delay_ms"] for c in calls], [250, 120])
+        return events
+
+    def test_before_on_the_screen_then_the_recorded_gesture_then_where_it_left(self):
+        events = self.run_gesture("drag-back", ["--from", "100,1200", "--to", "900,1200"])
+        self.assertEqual(events, [("snap", "before", ("Лента",)), ("record", "drag-back"), ("drag-back",),
+                                  ("snap", "drag-back", ())])
+
+    def test_slow_drags_forty_then_sixty_percent(self):
+        events = self.run_gesture("slow", ["--from", "100,1200", "--to", "1100,1200"])
+        self.assertEqual([e for e in events if e[0] == "swipe"],
+                         [("swipe", 100, 1200, 500, 1200, 2000), ("swipe", 100, 1200, 700, 1200, 2000)])
+
+    def test_no_gesture_off_the_screen(self):
+        with self.assertRaises(FEError):
+            self.run_gesture("drag-back", ["--from", "1,2", "--to", "3,4"], snap_codes=(5,))
+
+    def test_swipe_tap_delay_is_the_runs_motion_ceiling(self):
+        args = ["--from", "500,1500", "--to", "500,2300", "--x", "540", "--y", "800"]
+        events = self.run_gesture("swipe-tap", args, coverage_extra={"motion_ceiling_ms": 250}) + \
+            self.run_gesture("swipe-tap", args + ["--delay-ms", "120"], coverage_extra={"motion_ceiling_ms": 250})
+        self.assertEqual([e["delay_ms"] for e in events if isinstance(e, dict)], [250, 120])
 
 
 class Clock(object):
