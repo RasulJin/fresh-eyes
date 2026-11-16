@@ -276,18 +276,27 @@ def _when(snap):
 
 
 def _order(pack, names):
-    """A step snapped after the next one began: later than the next step's snap, or than the end of its video
-    (the file's time: the pull right after the recording)."""
+    """Snaps out of turn. A step's events come in order: <step>/before (taps.py --pack), its video (the file's
+    time: the pull right after the recording), the snap in <step> itself; a step's snap is older than all of
+    the next step's, and its before is older than its own video."""
+    def events(step):
+        video = os.path.join(pack, step, "video.mp4")
+        return [(step + "/before (%s)", _when(os.path.join(pack, step, "before"))),
+                (step + "'s video (recorded until %s)",
+                 datetime.fromtimestamp(os.path.getmtime(video)) if os.path.isfile(video) else None),
+                (step + " (%s)", _when(os.path.join(pack, step)))]
+
+    def hh(t):
+        return t.strftime("%H:%M:%S")
     found = []
-    for a, b in zip(names, names[1:]):
-        ta, tb = _when(os.path.join(pack, a)), _when(os.path.join(pack, b))
-        video = os.path.join(pack, b, "video.mp4")
-        tv = datetime.fromtimestamp(os.path.getmtime(video)) if os.path.isfile(video) else None
-        if ta and tb and ta > tb:
-            found.append("%s is snapped at %s, after %s (%s)" % (a, ta.time(), b, tb.time()))
-        elif ta and tv and ta > tv:
-            found.append("%s is snapped at %s, after %s's video (recorded until %s)"
-                         % (a, ta.time(), b, tv.strftime("%H:%M:%S")))
+    for k, step in enumerate(names):
+        (before, t0), (video, tv), _ = events(step)
+        if t0 and tv and t0 > tv:
+            found.append("%s is snapped at %s, after %s" % (before.split()[0], hh(t0), video % hh(tv)))
+        ta = _when(os.path.join(pack, names[k - 1])) if k else None
+        late = next((what % hh(t) for what, t in events(step) if ta and t and ta > t), None)
+        if late:
+            found.append("%s is snapped at %s, after %s" % (names[k - 1], hh(ta), late))
     return ["%s: snap each step right after its action, never again later" % p for p in found]
 
 

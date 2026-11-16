@@ -487,6 +487,8 @@ class StatusTest(unittest.TestCase):
 
         def at(path, when, video=None):
             write_json(os.path.join(path, "meta.json"), {"time": "2026-11-16T" + when, "source": "uiautomator"})
+            with open(os.path.join(path, "screen.png"), "w") as f:
+                f.write(path)
             if video:
                 open(os.path.join(path, "video.mp4"), "w").close()
                 t = datetime.datetime.strptime("2026-11-16T" + video, "%Y-%m-%dT%H:%M:%S").timestamp()
@@ -501,6 +503,23 @@ class StatusTest(unittest.TestCase):
         at(os.path.join(drag, "slow"), "12:30:20")
         at(os.path.join(drag, "drag-back"), "12:31:00")
         set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[drag])
+        # taps.py --pack (0.5.13): <step>/before, then the video and the snap after in <step> itself
+        laid = make_pack(root, dict(cell["drag-interrupt"], state="laid"))
+        for sub, before, video, after in (("slow", "13:00:01", "13:00:12", "13:00:14"),
+                                          ("drag-back", "13:00:16", "13:00:22", "13:00:24"),
+                                          ("swipe-tap", "13:00:26", "13:00:31", "13:00:33")):
+            at(os.path.join(laid, sub, "before"), before)
+            at(os.path.join(laid, sub), after, video)
+        set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[laid])
+        self.assertIn(os.path.join(laid, "slow", "before"), sum(pack_groups(os.path.dirname(laid)), []))
+        at(os.path.join(laid, "drag-back", "before"), "13:00:23")  # retaken after its gesture
+        with self.assertRaisesRegex(FEError, r"drag-back/before is snapped at 13:00:23, after drag-back's video "
+                                             r"\(recorded until 13:00:22\)"):
+            set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[laid])
+        at(os.path.join(laid, "drag-back", "before"), "13:00:16")
+        at(os.path.join(laid, "slow"), "13:00:17")  # retaken after drag-back's before
+        with self.assertRaisesRegex(FEError, r"slow is snapped at 13:00:17, after drag-back/before \(13:00:16\)"):
+            set_status(cov, cell["drag-interrupt"]["id"], "done", evidence=[laid])
         scenario = make_pack(root, cell["scenario"])
         for n, when in ((5, "15:59:00"), (6, "16:05:46"), (7, "16:02:12")):
             at(os.path.join(scenario, "step-%d" % n), when)
