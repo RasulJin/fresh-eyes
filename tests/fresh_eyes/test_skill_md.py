@@ -82,6 +82,12 @@ class SkillMdTest(unittest.TestCase):
         with open(os.path.join(SKILL_DIR, "references", "report-format.md"), encoding="utf-8") as f:
             self.assertIn("one round only: a pair still ruled both ways turns `unsure`", " ".join(f.read().split()))
 
+    def test_a_declined_known_candidate_leaves_known_proposed(self):
+        # 0.5.13 acceptance: "leave known-proposed.md with the ones they decline" read both ways
+        body = " ".join(text().split())
+        self.assertIn("declined (a real bug) → deleted, so reviewers flag it again", body)
+        self.assertNotIn("leave `known-proposed.md` with the ones they decline", body)
+
     def test_credentials_and_photos_reach_the_navigator(self):
         plugin = os.path.dirname(os.path.dirname(SKILL_DIR))
         with open(os.path.join(plugin, "agents", "navigator.md"), encoding="utf-8") as f:
