@@ -139,7 +139,8 @@ Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exa
 1. `capture.py snap --out $P/before`, `nav.py swipe` inside the list, `capture.py snap --out $P --before $P/before`.
 2. For each `pages` entry k of the cell: open it by its tab, wait 1.5 s, back by this screen's tab, swipe to the
    end, snap `--out $P/page-<k>/before`, swipe once more, snap `--out $P/page-<k> --before $P/page-<k>/before`.
-3. `coverage.py set ... --evidence $P`. No other folders for this cell, no renaming.
+3. `coverage.py set ... --evidence $P`. No other folders for this cell, no renaming. The swipe moved nothing
+   because the list is too short (one result): `--status na` or `blocked` with note "not enough items".
 
 ## Requests mode (for the verifier)
 
