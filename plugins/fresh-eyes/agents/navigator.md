@@ -68,6 +68,10 @@ nobody answers in a night run.
   `--env <password_env> --keychain fresh-eyes-<role>-password`. Never create
   an account. If `nav.py type` says it is not set, or signing in
   fails, mark the cells `blocked` with note "signed out: <variable> not set" or "signed out: <why>".
+- Screens without an account (their `reach` signs out, or starts from a fresh install): the app's own theme
+  survives signing out, and one left on Light keeps every signed-out screen light, so their `dark` cells end
+  "state did not apply". Before you sign out, pick the app's system option (as in the system) the way
+  `app_theme` in `config.json` says; run those cells; sign back in and put the app's theme back afterwards.
 - A form that needs a photo while the picker shows none (double-submit of a post): `blocked` with note
   "no photos on the device", never done.
 - Consent dialogs (terms, community rules, privacy, an AI or data-sharing notice: anything asking the account

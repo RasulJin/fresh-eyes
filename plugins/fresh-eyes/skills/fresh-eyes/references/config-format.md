@@ -99,6 +99,7 @@ noted. Example (generic values):
   leftwards to close it", "the Trips / Posts pager, sideways").
   `pages` (for `swipe-inside`): the other pages of the pager or tab set this screen is a page of, by their tab
   labels ("the Posts tab", "the Saved tab"); the probe opens each, comes back and scrolls to the end.
-- `app_theme`: how to pick the app's own Light and Dark theme, in words (where the control is, its labels);
+- `app_theme`: how to pick the app's own Light, Dark and system ("as in the system") theme, in words (where the
+  control is, its labels); the navigator picks the system one before signing out for screens without an account;
   without it the `theme-mismatch` state is reported as not checked. List `theme-mismatch` after `dark`.
 - `journeys[]`: end-to-end paths for full mode; `mutating: true` journeys only run when mutation is allowed.
