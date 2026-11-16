@@ -77,9 +77,10 @@ For each BUG with `verdict: "pending"`:
    A pack with `app_running: false` in `meta.json` is a crash: a launcher on its frame is not "another app".
    What a tap did (opened another screen or app, did nothing, fired twice) is confirmed only on a pack whose
    `tap.json` (`taps.py` writes it with the tap: `point`, `node`, `bounds`) has the `point` inside the `bounds`
-   of the element the finding names. No `tap.json`, the point outside those bounds or on another node: the tap
-   may have hit something else; request `"do": "repeat-probe"`, `"probe": "tap-everything"`, `"why": "tap
-   «<label>» by its node, tap.json in the pack"` and rule on the second pass by that recheck's `tap.json`.
+   of the element the finding names. No `tap.json`: request `"do": "repeat-probe"`, `"probe": "tap-everything"`,
+   `"why": "tap «<label>» by its node, tap.json in the pack"` and rule on the second pass by that recheck's
+   `tap.json`. Its point outside those bounds, on another node: that element was never tapped → `rejected`,
+   "tap hit «<that node>» (tap.json)", plus the same request with `"from": "<this findings file>"`.
 3. If the evidence decides it → set `verdict` to `confirmed` or `rejected` with a one-line `verify_note`.
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
