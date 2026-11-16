@@ -2,9 +2,10 @@
 """Check (and with --fix, repair) everything that would hide bugs or make a run unsafe, before a run starts.
 
 Writes preflight.json: {ok, platforms:{p:{ok, device, name, owned, small_device, app, app_installed, build,
-soft_keyboard, animations, photos, problems}}, env:{name, verified, api_host}, mutating_allowed, tools:{...},
+soft_keyboard, animations, photos, installed, problems}}, env:{name, verified, api_host}, mutating_allowed, tools:{...},
 source:{ref, root}|null, disk_free_gb, unchecked:[...]}
 build: sha256 of the installed app; `coverage.py verdict` compares it again at the end of the run.
+installed: what --fix put on a device this time, [{device, artifact, build}] (absolute path, sha256).
 source: where the code the tested build was made from lives (`--source built` after building it from this checkout,
 `--source <git ref>` for an installed build made elsewhere: exported to .fresh-eyes/cache/src-<sha>; Metro builds
 are the working tree). Reviewers look up hit areas and comments only there; unknown → not looked up.
@@ -14,8 +15,9 @@ With --fix an empty gallery gets the photos of references/fixtures/; with --sour
 platform without a build artifact on disk (it would test no build or an old one).
 
 With --fix the run's build (--apk, else config builds.<mode>.<platform>.artifact) is installed on the main and the
-small device wherever another build or none is (over another build not with `--source <ref>` alone: that one is
-what the user asked to test); no build on disk and no app: not ready, saying so.
+small device wherever no app is; over another build only with --apk or `--source built` (an artifact left on disk
+may be old: 0.5.13 put it over the build under test); the small device also gets it when main has it. No build on
+disk and no app: not ready, saying so.
 
 CLI: preflight.py --project DIR --mode quick|full [--fix] [--brief] [--platforms android,ios] [--source built|REF]
      [--apk PATH] --out preflight.json
@@ -149,9 +151,9 @@ def artifact_build(path):
         return None
 
 
-def _install(dev, app_id, artifact, want, replace):
+def _install(dev, app_id, artifact, want, replace, log):
     """--fix: the run's build onto `dev` unless it is there already; over another installed build only when
-    `replace`. None, or why it could not."""
+    `replace`. Each install goes to `log`. None, or why it could not."""
     have = devices.app_build(dev, app_id) if devices.app_installed(dev, app_id) else None
     if have == want or (have and not replace):
         return None
@@ -159,6 +161,7 @@ def _install(dev, app_id, artifact, want, replace):
         devices.install(dev, artifact)
     except FEError as e:
         return "installing %s on %s: %s" % (artifact, dev.name, e)
+    log.append({"device": dev.name, "artifact": os.path.abspath(artifact), "build": want})
     return None
 
 
@@ -219,7 +222,7 @@ def _platform_state(config, platform, kind_needed_small, fix, artifact=None, wak
          % ("%s is not on disk" % artifact if artifact else "config builds has no artifact"))
     owned = [d for d in devices.list_devices() if d.platform == platform and devices.is_owned(d)]
     state = {"ok": False, "device": None, "name": None, "owned": False, "small_device": False,
-             "app_installed": False, "soft_keyboard": True, "animations": True, "problems": []}
+             "app_installed": False, "soft_keyboard": True, "animations": True, "installed": [], "problems": []}
     main = next((d for d in owned if not d.name.endswith(("small", "16e"))), None)
     if main is None and fix and wake:
         try:
@@ -240,7 +243,7 @@ def _platform_state(config, platform, kind_needed_small, fix, artifact=None, wak
     state["small_device"] = small is not None
     if small is not None:
         state["small_device_id"] = small.id
-    err = fix and want and _install(main, app_id, artifact, want, replace)
+    err = fix and want and _install(main, app_id, artifact, want, replace, state["installed"])
     earlier = state["problems"] + ([err] if err else [])
     state.update(_prepare(main, platform, app_id, fix, no_app))
     state["problems"] = earlier + state["problems"]
@@ -249,7 +252,8 @@ def _platform_state(config, platform, kind_needed_small, fix, artifact=None, wak
         state["problems"].append("--apk %s is not on disk" % apk if want is None else
                                  "%s has another build than --apk %s: run preflight with --fix" % (main.name, apk))
     if small is not None:  # the small device may lag a build behind: the run's build too, if main has it
-        err = fix and want and _install(small, app_id, artifact, want, replace or state["build"] == want)
+        err = fix and want and _install(small, app_id, artifact, want, replace or state["build"] == want,
+                                        state["installed"])
         small_state = _prepare(small, platform, app_id, fix, no_app)
         small_state["problems"] += [err] if err else []
         if small_state["ok"] and small_state["build"] != state["build"]:
@@ -408,7 +412,7 @@ def check(config, mode, fix=False, project=".", only=None, source=None, apk=None
         art = apk if apk and p == "android" else art and os.path.join(project, art)
         platforms[p] = _platform_state(config, p, wants_small, fix, art,
                                        wake=not source or bool(art and os.path.exists(art)),
-                                       replace=bool(apk) or source in (None, "built"), apk=p == "android" and apk)
+                                       replace=bool(apk) or source == "built", apk=p == "android" and apk)
         if mode == "full" and p == "android" and platforms[p]["ok"]:
             st = platforms[p]
             problem = _smoke(devices.Device(p, st["device"], st["name"]), st["app"])
@@ -449,7 +453,8 @@ def check(config, mode, fix=False, project=".", only=None, source=None, apk=None
 def _brief(res):
     lines = ["preflight %s (%s)" % ("OK" if res["ok"] else "NOT READY", res["mode"])]
     for p, s in res["platforms"].items():
-        lines.append("  %s: %s %s" % (p, "ready" if s["ok"] else "not ready", s.get("name") or ""))
+        lines.append("  %s: %s %s%s" % (p, "ready" if s["ok"] else "not ready", s.get("name") or "",
+                                        "; installed " + s["installed"][0]["artifact"] if s.get("installed") else ""))
     lines.append("  backend: %s, verified=%s, mutating=%s" % (res["env"]["name"], res["env"]["verified"],
                                                               res["mutating_allowed"]))
     if res.get("source"):

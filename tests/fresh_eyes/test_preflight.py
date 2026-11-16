@@ -291,7 +291,7 @@ class PreflightTest(unittest.TestCase):
         self.assertFalse(res["ok"])
         self.assertIn("no build to install: pass preflight --apk <path>", " ".join(res["unchecked"]))
 
-    def test_an_installed_build_named_by_source_is_not_replaced(self):
+    def test_only_apk_or_source_built_replaces_an_installed_build_and_says_so(self):
         self.fake_devices()
         with tmpdir() as repo:
             os.makedirs(os.path.join(repo, "build"))
@@ -300,8 +300,13 @@ class PreflightTest(unittest.TestCase):
             with mock.patch.object(preflight, "_source", lambda project, ref, metro: {"ref": ref, "root": repo}):
                 preflight.check(config(), "full", fix=True, project=repo, source="v1.2")
                 self.assertEqual(installed, [])
-                preflight.check(config(), "full", fix=True, project=repo, source="built")
+                st = preflight.check(config(), "full", fix=True, project=repo)["platforms"]["android"]
+                self.assertEqual((installed, st["installed"]), ([], []))  # 0.5.13: an old artifact went over it
+                st = preflight.check(config(), "full", fix=True, project=repo, source="built")["platforms"]["android"]
                 self.assertEqual(installed, [(PIXEL.id, "app.apk")])
+            apk = os.path.abspath(os.path.join(repo, "build", "app.apk"))
+            self.assertEqual(st["installed"], [{"device": PIXEL.name, "artifact": apk,
+                                                "build": preflight.artifact_build(apk)}])
 
     def test_build_drift_names_the_device_whose_app_changed(self):
         small = Device("android", "emulator-5562", "fresh-eyes-small")

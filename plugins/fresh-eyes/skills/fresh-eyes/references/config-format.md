@@ -74,7 +74,8 @@ noted. Example (generic values):
   stands in a cell's way blocks the cell with note `consent: <its text>`. Preflight prints the list.
 - `builds.quick|full.<platform>`: `build` (command, run in `cwd`), `install` (optional), `start` (Metro),
   `metro_env` (env for Metro), `artifact` (built file to install: `preflight.py --fix` puts it on both devices
-  wherever another build or none is; `--apk <path>` names another APK for the run).
+  where no app is, and over another build only with `--source built`; `--apk <path>` names another APK for the
+  run and always replaces; preflight.json `installed` says what went where).
 - `hooks`: optional project commands, run from the repo root: `seed` creates data for `empty`/`long-text`/`long-list`
   and `cleanup` removes what the run created (the orchestrator runs both, only when preflight allowed
   mutation); `loading` / `error` put the app into that state (e.g. a slow or failing mock), run by the

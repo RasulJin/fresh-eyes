@@ -45,7 +45,8 @@
   Release builds with `expo-updates` on may run a downloaded update instead of the embedded bundle: turn
   updates off in test builds, or the check proves nothing.
 - **Stale build**: the installed app must be the build under test (rebuild or reload Metro after changes);
-  `preflight.py --fix` installs the config's `artifact` (or `--apk <path>`) on both devices, never `adb` by hand.
+  `preflight.py --fix` installs the config's `artifact` (or `--apk <path>`) on both devices, never `adb` by hand;
+  the artifact replaces another installed build only with `--source built` (it may be an old file).
 - **First minutes after install** behave differently (caches, permissions, onboarding). Run part of the
   probes right after a fresh install.
 

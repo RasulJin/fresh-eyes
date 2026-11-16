@@ -92,7 +92,8 @@ words / nothing (= the current diff).
    (`built` when step 2 built the app here; the commit the user names for an installed build made elsewhere;
    nothing when Metro serves it). Add `--apk <path>` when the build to test is not at
    `builds.<mode>.android.artifact` (made elsewhere, downloaded): `--fix` installs it on both owned devices;
-   never `adb install` by hand. Reviewers read code only from its `source.root`. If iOS reports
+   never `adb install` by hand. Without `--apk` or `--source built` the artifact goes only where no app is;
+   `installed` in preflight.json lists what went where. Reviewers read code only from its `source.root`. If iOS reports
    "no Maestro iOS driver", call the Maestro MCP `inspect_screen` on that simulator once and run preflight
    again. If no platform is ready, or the computer's disk is nearly full (`disk_free_gb` under 15), stop: tell
    the user what is missing or how much is free; the verdict is INCOMPLETE.
