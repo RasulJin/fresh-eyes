@@ -75,6 +75,7 @@ LABELS = {
            "CONFLICT": "RULINGS DISAGREE"},
 }
 CODE_EXT = (".ts", ".tsx", ".js", ".jsx")
+GUESS = 0.4  # a BUG this unsure is a guess (0.5.12 run: guesses were 19 of the 32 rejects)
 DARK_MAX = 120  # mean gray of a dark-theme frame: dark screens measured 56-68, light ones 173-196
 
 
@@ -438,7 +439,7 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_st
     finding on a screen, or citing a section, changed since the spec's Updated turns unsure. One defect ruled
     both ways (_conflicts) stops at CONFLICT: one verifier rules on each pair, then the verdict runs again."""
     labels = LABELS.get(language, LABELS["en"])
-    conflicts = _conflicts(findings)
+    conflicts, everything = _conflicts(findings), list(findings)
     old = set((spec_stale or {}).get("stale_screens", []))
     stale, sections = [], set()
     for f in findings:
@@ -523,7 +524,13 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_st
         code = "INCOMPLETE"
     else:
         code = "CLEAN"
-    return {"code": code, "label": labels[code], "reasons": reasons, "merged": [_ref(f) for f in merged],
+    # П-24: a guess is a request (a resnap settles it) or an IMP, never a BUG; the reviewer's prompt says so
+    guesses = [_ref(f) for f in everything if f.get("kind", "BUG") == "BUG" and not f.get("_requested")
+               and isinstance(f.get("confidence"), (int, float)) and f["confidence"] <= GUESS]
+    warnings = ["%d BUGs at confidence <= %s with no request in their folder: a guess is a request or an IMP, "
+                "not a BUG: %s" % (len(guesses), GUESS, ", ".join(guesses))] if guesses else []
+    return {"code": code, "label": labels[code], "reasons": reasons, "warnings": warnings,
+            "merged": [_ref(f) for f in merged],
             "asked": [_ref(f) for f in asked], "stale": [_ref(f) for f in stale],
             "conflicts": [[_ref(a), _ref(b)] for a, b in conflicts]}
 
@@ -718,7 +725,7 @@ def _load_findings(paths, run="."):
     A confirmed finding that a question asks about (its `finding`: "f3", or "<file>#f3" in another file) turns
     unsure: the run asked the owner whether it is a bug, so it cannot also call it one. Not one with backlog_id:
     the owner already put that bug in the backlog."""
-    findings, reviewed, asked = [], [], []
+    findings, reviewed, asked, asks = [], [], [], defaultdict(list)
     for p in paths:
         try:
             data = read_json(p)
@@ -730,6 +737,7 @@ def _load_findings(paths, run="."):
             f["_file"] = rel
         findings += items
         reviewed += data.get("reviewed_packs", []) if isinstance(data, dict) else []
+        asks[os.path.dirname(rel)] += (data.get("requests") or []) if isinstance(data, dict) else []
         for q in (data.get("questions") or []) if isinstance(data, dict) else []:
             if isinstance(q, dict) and q.get("finding"):
                 file, _, fid = q["finding"].rpartition("#")
@@ -738,7 +746,19 @@ def _load_findings(paths, run="."):
         if f.get("verdict") == "confirmed" and not f.get("backlog_id") and any(
                 f.get("id") == fid and os.path.normpath(f["_file"]) == file for file, fid, _ in asked):
             f["verdict"], f["_asked"] = "unsure", True
+    for folder in asks:  # the verifier's requests.json beside the reviewers' own requests
+        path = os.path.join(run, folder, "requests.json")
+        asks[folder] += read_json(path) if os.path.isfile(path) else []
+    for f in findings:
+        f["_requested"] = any(_asks_for(r, f) for r in asks[os.path.dirname(f["_file"])] if isinstance(r, dict))
     return findings, reviewed
+
+
+def _asks_for(request, f):
+    """A request names the finding: `finding` "f1" (from its file, when `from` says which) or "<file>#f1"."""
+    file, _, fid = str(request.get("finding") or "").rpartition("#")
+    file = file or request.get("from") or ""
+    return fid == f.get("id") and (not file or os.path.basename(file) == os.path.basename(f["_file"]))
 
 
 BULKY = (".png", ".jpg", ".mp4")  # ~97% of a run (a full one is ~0.5 GB); the json, txt and report stay

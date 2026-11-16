@@ -689,6 +689,26 @@ class VerdictTest(unittest.TestCase):
         for other in (dict(b, rule="spec:G-other"), dict(b, kind="IMP"), dict(b, title="Аватар обрезан")):
             self.assertEqual(verdict(self.cov, [a, other], "en", packs)["conflicts"], [])
 
+    def test_a_bug_at_low_confidence_without_a_request_is_a_warning(self):
+        packs = done_all(self.cov, self.root)
+        own = os.path.join(self.root, "android", "a", "findings-2.json")
+
+        def bug(fid, conf, verdict_="confirmed"):
+            return dict(finding("low", verdict_), id=fid, confidence=conf)
+        write_json(own, {"findings": [bug("f1", 0.3), bug("f2", 0.4, "rejected"), bug("f3", 0.35), bug("f4", 0.2),
+                                      bug("f5", 0.6), dict(bug("f6", 0.2), kind="IMP")],
+                         "requests": [{"finding": "f3", "do": "resnap"}]})
+        write_json(os.path.join(self.root, "android", "a", "requests.json"),  # the verifier's, f4 from this file
+                   [{"finding": "f4", "from": "findings-2.json", "do": "crop"},
+                    {"finding": "f1", "from": "findings-1.json", "do": "repeat-probe"}])
+        findings, _ = _load_findings([own], self.root)
+        v = verdict(self.cov, findings, "en", packs)
+        self.assertEqual(len(v["warnings"]), 1)
+        self.assertIn("2 BUGs at confidence <= 0.4", v["warnings"][0])
+        self.assertTrue(v["warnings"][0].endswith("android/a/findings-2.json#f1, android/a/findings-2.json#f2"))
+        self.assertEqual(v["code"], "CLEAN")  # a warning, never a verdict
+        self.assertEqual(verdict(self.cov, [bug("f5", 0.6)], "en", packs)["warnings"], [])
+
     def test_one_log_error_on_many_screens_counts_once(self):
         packs = done_all(self.cov, self.root)
 
