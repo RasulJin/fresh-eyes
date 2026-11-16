@@ -179,6 +179,52 @@ class TapByNodeTest(unittest.TestCase):
         self.assertIn("under the keyboard", str(e.exception))
 
 
+class TapsJsonTest(unittest.TestCase):
+    """0.5.12 thread: folders tap-7/8/9 were not rows 7-9, rows written by hand, emoji and likes `changed: false`."""
+    def test_each_tap_appends_its_row_and_snaps_into_the_rows_folder(self):
+        afters = [ROWS + [node(9, "Скопировано", 2000)], ROWS]  # a toast; then nothing moved
+
+        def snap(platform, dev, out, **kw):
+            write_json(os.path.join(out, "nodes.json"), afters.pop(0))
+            write_json(os.path.join(out, "meta.json"), {"keyboard_up": False})
+            return 0
+        with tmpdir() as d:
+            cov = run_dir(d, [dict(CELL, id="android/feed/default/tap-everything", probe="tap-everything")], False)
+            pack = os.path.join(d, "android", "feed", "default-tap-everything")
+            write_json(os.path.join(pack, "nodes.json"), ROWS)
+            write_json(os.path.join(pack, "som.json"), [{"n": 2, "node_ids": ["n2"], "bbox": ROWS[1]["bounds"]}])
+            for args in (["--som", "2"], ["--text", "Row C|Row A", "--index", "1"]):
+                argv = ["taps.py", "tap", "--platform", "android", "--device", "e", "--pack", pack,
+                        "--coverage", cov, "--cell", "android/feed/default/tap-everything"] + args
+                with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(io.StringIO()), \
+                        mock.patch.object(taps.nav, "hierarchy", lambda dev: (ROWS, "uiautomator")), \
+                        mock.patch.object(devices, "keyboard_top", lambda dev, nodes=(): None), \
+                        mock.patch.object(devices, "screenshot", lambda dev, dst: make_png(dst, 1080, 2400)), \
+                        mock.patch.object(devices, "tap", lambda dev, x, y: None), \
+                        mock.patch.object(taps, "settle", lambda dev, before: {"settled": True, "changed": False,
+                                                                                "ms": 3000}), \
+                        mock.patch.object(taps.capture, "snap", snap):
+                    taps.main()
+            rows = read_json(os.path.join(pack, "taps.json"))
+            self.assertEqual([(r["n"], r["pack"], r["label"], r["changed"]) for r in rows],
+                             [(1, "tap-1", "Row B", True), (2, "tap-2", "Row C", False)])
+            self.assertEqual((rows[0]["som"], rows[0]["result"], rows[1]["result"]),
+                             (2, "new: Скопировано", "no change"))
+            self.assertEqual(read_json(os.path.join(pack, "tap-2", "tap.json"))["node"]["text"], "Row C")
+
+    def test_what_changed_reads_focus_keyboard_and_moves(self):
+        field = node(5, "", 1500, "app:id/input", "android.widget.EditText")
+        focused = [dict(field, focused=True)]
+        self.assertEqual(taps.what_changed([field], focused, False, True, False),
+                         (True, "focus: app:id/input; keyboard up"))
+        moved = [dict(field, bounds=[0, 900, 1080, 120])]
+        self.assertEqual(taps.what_changed([field], moved, False, False, False), (True, "moved"))
+        clock = node(6, "12:01", 0, "com.android.systemui:id/clock")
+        self.assertEqual(taps.what_changed([field, clock], [field, dict(clock, text="12:02")], False, False, False),
+                         (False, "no change"))
+        self.assertEqual(taps.what_changed([field], None, False, None, True), (True, "no after snap, the screen changed"))
+
+
 class RapidHoldTest(unittest.TestCase):
     def test_rapid_returns_six_seconds_after_the_first_tap(self):
         # 0.5.11: the share sheet came 2.6 s after three taps, the 2.2 s video missed it: a false "nothing opened"

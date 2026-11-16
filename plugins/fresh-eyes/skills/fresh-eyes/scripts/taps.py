@@ -6,11 +6,13 @@ CLI:
   taps.py rapid   --platform P --device ID --x X --y Y [--count 3] [--interval-ms 120] [--hold-ms 6000]
                   --coverage C --cell ID      (returns --hold-ms after the first tap: a late sheet is on the video)
   taps.py tap     --platform P --device ID (--id SUFFIX | --label RE | --text RE | --som N
-                  | --x X --y Y --expect-id SUFFIX) [--index N] --after DIR --coverage C --cell ID
+                  | --x X --y Y --expect-id SUFFIX) [--index N] (--pack PACK | --after DIR) --coverage C --cell ID
                   (one tap on the node where a dump taken right before shows it: refused when it is not there, off
-                  screen or under the keyboard; --x --y must lie in that node. --som N: mark N of DIR's parent
-                  pack, found again by its class, id, text and label. Once the screen settled, DIR gets the snap of
-                  where the tap led and tap.json: the point, the node and its bounds at the tap)
+                  screen or under the keyboard; --x --y must lie in that node. --som N: mark N of PACK (or of DIR's
+                  parent), found again by its class, id, text and label. Once the screen settled, the snap of where
+                  the tap led and tap.json (the point, the node and its bounds at the tap) go to DIR, or with
+                  --pack to PACK/tap-<k>, k being the row this tap appends to PACK/taps.json: label, changed (nodes
+                  or pixels before vs after), result: what appeared, went, took focus)
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
   taps.py tap-back --platform P --device ID --x X --y Y [--delay-ms 100] --coverage C --cell ID
@@ -121,8 +123,34 @@ def target(a, nodes, kb_top, screen_wh, som_pack):
     return (a.x, a.y), node, by
 
 
+def _names(nodes):
+    return {(n["text"] or n["label"])[:40] for n in nodes
+            if (n["text"] or n["label"]) and not n["rid"].startswith("com.android.systemui")}
+
+
+def what_changed(before, after, kb_before, kb_after, pixels):
+    """(changed, result) of a tap from the app's nodes before and after it: a typed emoji or a toggled like
+    changes a node while under 1 % of the pixels moved (0.5.12 read those `changed: false`)."""
+    if after is None:
+        return pixels, "no after snap" + (", the screen changed" if pixels else "")
+    new, gone = sorted(_names(after) - _names(before)), sorted(_names(before) - _names(after))
+    focus = [nav._name(n) for n in after if n["focused"] and not n["rid"].startswith("com.android.systemui")]
+    parts = (["new: " + ", ".join(new[:4])] if new else []) + (["gone: " + ", ".join(gone[:4])] if gone else [])
+    if focus != [nav._name(n) for n in before if n["focused"] and not n["rid"].startswith("com.android.systemui")]:
+        parts.append("focus: " + (", ".join(focus) or "none"))
+    if kb_before != kb_after:
+        parts.append("keyboard " + ("up" if kb_after else "down"))
+    def layout(nodes):  # not the status bar: its clock ticks
+        return sorted(str([n[k] for k in ("cls", "text", "label", "rid", "bounds")]) for n in nodes
+                      if not n["rid"].startswith("com.android.systemui"))
+    if not parts and layout(before) != layout(after):
+        parts.append("moved")
+    return bool(parts) or pixels, "; ".join(parts) or ("pixels only" if pixels else "no change")
+
+
 def tap(a, dev, after, som_pack):
-    """One tap on a node from a fresh dump, the settled result snapped into `after` with tap.json beside it."""
+    """One tap on a node from a fresh dump, the settled result snapped into `after` with tap.json beside it.
+    Returns (snap exit, tap.json)."""
     nodes, source = nav.hierarchy(dev)
     kb_top = devices.keyboard_top(dev, nodes)
     with tempfile.TemporaryDirectory() as d:
@@ -132,11 +160,16 @@ def tap(a, dev, after, som_pack):
         devices.tap(dev, x, y)
         result = settle(dev, before)
     code = capture.snap(a.platform, a.device, after)
-    write_json(os.path.join(after, "tap.json"), dict(
-        {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "point": [x, y], "by": by,
-         "node": {k: node[k] for k in ("cls", "rid", "text", "label")}, "bounds": node["bounds"],
-         "keyboard_top": kb_top, "screen_wh": list(screen_wh), "source": source, "snap_exit": code}, **result))
-    return code, nodes, node, result
+    snapped = os.path.isfile(os.path.join(after, "nodes.json"))
+    meta = read_json(os.path.join(after, "meta.json")) if os.path.isfile(os.path.join(after, "meta.json")) else {}
+    changed, summary = what_changed(nodes, read_json(os.path.join(after, "nodes.json")) if snapped else None,
+                                    kb_top is not None, meta.get("keyboard_up"), result["changed"])
+    rec = dict({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "point": [x, y], "by": by,
+                "node": {k: node[k] for k in ("cls", "rid", "text", "label")}, "bounds": node["bounds"],
+                "keyboard_top": kb_top, "screen_wh": list(screen_wh), "source": source, "snap_exit": code},
+               **dict(result, pixels_changed=result["changed"], changed=changed, result=summary))
+    write_json(os.path.join(after, "tap.json"), rec)
+    return code, rec
 
 
 def main():
@@ -154,9 +187,11 @@ def main():
         if name == "tap":
             for flag in ("--id", "--label", "--text", "--expect-id"):
                 p.add_argument(flag)
-            p.add_argument("--som", type=int, help="a mark of the som.json in the parent of --after")
+            p.add_argument("--som", type=int, help="a mark of the som.json in --pack, or in the parent of --after")
             p.add_argument("--index", type=int, default=0)
-            p.add_argument("--after", required=True, help="the pack the tap's result is snapped into")
+            g = p.add_mutually_exclusive_group(required=True)
+            g.add_argument("--pack", help="tap-everything: the row goes to PACK/taps.json, the result to tap-<row>")
+            g.add_argument("--after", help="the pack the tap's result is snapped into (a recheck)")
         if name in ("rapid", "back"):
             p.add_argument("--count", type=int, default=3 if name == "rapid" else 1)
             # a person's fast taps; 30 ms is the evil race a script alone makes, asked for explicitly
@@ -192,9 +227,16 @@ def main():
         devices.rapid_taps(dev, a.x, a.y, a.count, a.interval_ms)
         time.sleep(max(0.0, a.hold_ms / 1000.0 - (time.time() - t0)))
     elif a.cmd == "tap":
-        code, _, node, result = tap(a, dev, a.after, os.path.dirname(os.path.normpath(a.after)))
-        print(json.dumps(dict({"probe": "tap", "cell": a.cell, "node": nav._name(node), "after": a.after,
-                               "snap_exit": code}, **result), ensure_ascii=False))
+        rows_path = os.path.join(a.pack or "", "taps.json")
+        rows = read_json(rows_path) if a.pack and os.path.isfile(rows_path) else []
+        after = os.path.join(a.pack, "tap-%d" % (len(rows) + 1)) if a.pack else a.after
+        code, rec = tap(a, dev, after, a.pack or os.path.dirname(os.path.normpath(a.after)))
+        row = dict({"n": len(rows) + 1, "label": nav._name(rec["node"]), "by": rec["by"]},
+                   **({"som": a.som} if a.som is not None else {}),
+                   pack=os.path.basename(after), changed=rec["changed"], result=rec["result"])
+        if a.pack:  # the folder is the row's number, the navigator writes no row (0.5.12: tap-7/8/9 were rows 4-6)
+            write_json(rows_path, rows + [row])
+        print(json.dumps(dict(row, cell=a.cell, after=after, snap_exit=code), ensure_ascii=False))
         return code
     elif a.cmd == "edge":
         node = next((n for n in read_json(os.path.join(a.pack, "nodes.json")) if n["id"] == a.node), None)

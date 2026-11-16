@@ -59,8 +59,8 @@ class ReferencesTest(unittest.TestCase):
         for word in ("## Open spec conflicts", "counts the sub-items (M5)", "`flaky:`", '"times": 2'):
             self.assertIn(word, schema, word)
         probes = " ".join(read("probes.md").split())
-        for word in ("returns 6 s after the first", "`<pack>/single`", "`taps.py tap --som N --after <pack>/tap-<k>`",
-                     "dump taken just before the tap", "snaps the result with `tap.json`"):
+        for word in ("returns 6 s after the first", "`<pack>/single`", "`taps.py tap --pack <pack> --som N`",
+                     "dump taken just before the tap", "snaps the result with `tap.json`", "appends row k of `taps.json`"):
             self.assertIn(word, probes, word)
 
     def test_no_project_specific_data(self):

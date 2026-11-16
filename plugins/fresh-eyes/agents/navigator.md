@@ -45,8 +45,9 @@ nobody answers in a night run.
   (slow, ~35 s).
 - A screen that never gets idle (an endless animation): `nav.py` and `capture.py` read it through the Maestro
   CLI by themselves (~20 s a call, `source: maestro` in meta.json); they refuse while a Maestro driver runs.
-- Packs come only from `capture.py`: never copy, move or write a pack's files yourself. Each step gets its own
-  snap, even on the same screen (`coverage.py` refuses `step-N is a copy of step-M`).
+- Packs come only from `capture.py` and `taps.py`: never copy, move or write a pack's files yourself. Each step
+  gets its own snap, even on the same screen (`coverage.py` refuses `step-N is a copy of step-M`). Every snap
+  goes inside its cell's pack (`<state>-<probe>/...`), never into a folder of its own beside the packs.
 - iOS: `nav.py` talks to the Maestro driver the orchestrator started. If `nav.py` says "no Maestro iOS driver",
   stop and reply `needs: ios-driver` with the cells or requests left (the orchestrator restarts it and calls
   you again).
@@ -115,7 +116,8 @@ nobody answers in a night run.
 6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell.
 
 Journey cells (`<platform>/journey/<id>/journey`): follow the journey's `steps` from `config.json` end to end;
-snap after every step into `<run>/<platform>/journey/<id>-journey/step-<n>/` and write `steps.json`
+snap after every step's action (never before it) into `<run>/<platform>/journey/<id>-journey/step-<n>/`, n being
+the step's place in `steps` (the first `→` part is 1), and write `steps.json`
 (`[{"n": 1, "did": "...", "screen": "..."}]`). If the journey creates test data, delete it afterwards.
 
 Second pass: a cell id ending in `#2` belongs to an independent second pass. Its pack takes the suffix `-p2`
@@ -125,8 +127,8 @@ Scenario cells: follow `scenario` in probes.md with the screen's `task` from `co
 your `package`. Look first, touch second: snap after each action before you tap anything, so the frame shows
 what the app did by itself (a field it should have focused, a sheet it opened).
 
-For `tap-everything`, write `<pack>/taps.json`: `[{"som": n, "label": "...", "result": "<screen/state after>",
-"changed": <taps.py tap's>}]`.
+For `tap-everything`, `taps.py tap --pack <pack>` writes each row of `<pack>/taps.json` itself (label, `changed`,
+`result`) and snaps the result into `<pack>/tap-<row>`: never write or edit `taps.json` by hand.
 
 Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exactly here and in this order:
 1. `capture.py snap --out $P/before`, `nav.py swipe` inside the list, `capture.py snap --out $P --before $P/before`.

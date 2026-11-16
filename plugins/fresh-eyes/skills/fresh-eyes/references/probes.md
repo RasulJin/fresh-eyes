@@ -167,10 +167,10 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
 - Reveals: dead taps, wrong destinations, labels that lie ("Follow" opening the profile), disabled controls
   that look enabled.
 - Steps: for each clickable node in `nodes.json` (skip destructive labels: delete, remove, log out, pay, send),
-  `taps.py tap --som N --after <pack>/tap-<k>` (its mark in the pack's `som.json`, or `--id`/`--label`; `--x --y`
-  only with `--expect-id`): it finds the node in a dump taken just before the tap (refused: gone, off screen,
-  under the keyboard), waits until the screen settles (≤3 s) and snaps the result with `tap.json`. Go back.
-  `taps.json`: "tapped N → screen/state" and its `changed`.
+  `taps.py tap --pack <pack> --som N` (its mark in the pack's `som.json`, or `--id`/`--label`; `--x --y` only
+  with `--expect-id`): it finds the node in a dump taken just before the tap (refused: gone, off screen, under
+  the keyboard), waits until the screen settles (≤3 s), snaps the result with `tap.json` into `<pack>/tap-<k>`
+  and appends row k of `taps.json` (label, `changed`, `result`) itself. Go back.
 - Reply/comment buttons and inputs only focus a field, they change no data: tap them too, and first, so the
   later taps leave and return with the keyboard having been up.
 
