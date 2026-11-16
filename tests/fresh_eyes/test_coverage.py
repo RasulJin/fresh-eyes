@@ -184,6 +184,20 @@ class PlanTest(unittest.TestCase):
         self.assertEqual({c["screen"] for c in cov["cells"]}, {"recheck-BUG-3"})
         self.assertEqual(plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "quick")["cells"], [])
 
+    def test_plan_warns_of_screens_without_a_marker(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"].append(dict(cfg["screens"][0], id="trips", marker=["Поездки"]))
+        self.assertEqual([w.split(" has no marker")[0] for w in plan(cfg, BOTH_OK_MUT_OFF, "full")["warnings"]],
+                         ["screen profile-trips"])
+        self.assertEqual(plan(cfg, BOTH_OK_MUT_OFF, "quick", ["trips"])["warnings"], [])  # only planned screens
+        with tmpdir() as d:
+            write_json(os.path.join(d, "c.json"), cfg)
+            write_json(os.path.join(d, "p.json"), BOTH_OK_MUT_OFF)
+            out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "coverage.py"), "plan", "--config",
+                                  os.path.join(d, "c.json"), "--preflight", os.path.join(d, "p.json"), "--mode",
+                                  "full", "--out", os.path.join(d, "cov.json")], stdout=subprocess.PIPE, check=True)
+        self.assertIn("profile-trips has no marker", json.loads(out.stdout)["warnings"][0])
+
     def test_unknown_screen_raises(self):
         with self.assertRaises(FEError):
             plan(ONE_SCREEN, BOTH_OK_MUT_OFF, "quick", ["nope"])

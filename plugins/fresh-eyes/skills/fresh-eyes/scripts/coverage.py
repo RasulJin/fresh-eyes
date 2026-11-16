@@ -183,8 +183,11 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
     if passes == 2:  # one pass catches ~75-80% of what two independent passes do: a release gets a second one
         cells += [dict(c, id=c["id"] + "#2", evidence=[], **{"pass": 2}) for c in cells
                   if not c["screen"].startswith("recheck-")]
+    # without a marker `set` cannot tell a pack snapped on another screen (0.5.12 run: trips, settings, post-create)
+    warnings = ["screen %s has no marker in config: set cannot tell its packs from another screen's; add a text "
+                "or testID only this screen shows" % sid for sid in chosen if not by_id[sid].get("marker")]
     return {"run_id": time.strftime("%Y%m%d-%H%M") + "-" + mode, "mode": mode, "cells": cells,
-            "unchecked": unchecked, "motion_ceiling_ms": config.get("motion_ceiling_ms", 300)}
+            "unchecked": unchecked, "warnings": warnings, "motion_ceiling_ms": config.get("motion_ceiling_ms", 300)}
 
 
 def _find(cov, cell_id):
@@ -786,7 +789,8 @@ def main():
         cov = plan(read_json(a.config), read_json(a.preflight), a.mode, a.screens.split(",") if a.screens else None,
                    a.recheck.split(",") if a.recheck else (), a.max_screens, a.passes)
         write_json(a.out, cov)
-        print(json.dumps({"cells": len(cov["cells"]), "unchecked": len(cov["unchecked"]), "out": a.out}))
+        print(json.dumps({"cells": len(cov["cells"]), "unchecked": len(cov["unchecked"]), "out": a.out,
+                          "warnings": cov["warnings"]}, ensure_ascii=False))
     elif a.cmd == "set":
         with locked(a.cov):
             cov = read_json(a.cov)
