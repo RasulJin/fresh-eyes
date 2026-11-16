@@ -69,6 +69,11 @@ For each BUG with `verdict: "pending"`:
    only the app's own process and crashes that name the app), confirm it if the line is there and is an error
    (`E/`, `F/`) or a crash; a warning only when it floods (hundreds of lines). Do not request a frame for it.
    A pack with `app_running: false` in `meta.json` is a crash: a launcher on its frame is not "another app".
+   What a tap did (opened another screen or app, did nothing, fired twice) is confirmed only on a pack whose
+   `tap.json` (`taps.py` writes it with the tap: `point`, `node`, `bounds`) has the `point` inside the `bounds`
+   of the element the finding names. No `tap.json`, the point outside those bounds or on another node: the tap
+   may have hit something else; request `"do": "repeat-probe"`, `"probe": "tap-everything"`, `"why": "tap
+   «<label>» by its node, tap.json in the pack"` and rule on the second pass by that recheck's `tap.json`.
 3. If the evidence decides it → set `verdict` to `confirmed` or `rejected` with a one-line `verify_note`.
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
@@ -125,9 +130,9 @@ at). Adjust `severity` if the evidence shows a different impact, and say so in `
 An entry `from` a findings file: judge its `-recheck` pack (a tap's result: its `after/`) as a reviewer would.
 It does not show what `why` names as the defect (the tap does what its label says) → nothing to write; it shows
 it (no reaction on a settled frame, another screen, the cut or overlap) → add a BUG to that file (`id` `r<k>`,
-`steps`, the recheck as evidence), ruled by the same rules as any BUG: a cut or overlap a settled frame shows is
-`confirmed`; a behaviour (a tap, a gesture) needs as many rechecks showing it as a repeat of its severity (a
-low one 1, a medium 2), else `unsure`, "seen once: <pack>".
+`steps`, the recheck as evidence), ruled by the same rules as any BUG (a tap's result by its `tap.json`): a cut
+or overlap a settled frame shows is `confirmed`; a behaviour (a tap, a gesture) needs as many rechecks showing
+it as a repeat of its severity (a low one 1, a medium 2), else `unsure`, "seen once: <pack>".
 
 ## Reply (≤10 lines)
 

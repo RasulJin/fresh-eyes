@@ -107,6 +107,13 @@ class AgentsTest(unittest.TestCase):
                      "that is no repeat and no `flaky:`"):
             self.assertIn(word, verifier, word)
 
+    def test_a_tap_result_needs_tap_json_on_its_target_0_5_13(self):
+        # 0.5.12 run: the only high (robot opens Google Maps) was a tap at old coordinates that hit the place chip
+        verifier = " ".join(frontmatter("verifier")[1].split())
+        for word in ("What a tap did", "`tap.json`", "has the `point` inside the `bounds`",
+                     "rule on the second pass by that recheck's `tap.json`", "a tap's result by its `tap.json`"):
+            self.assertIn(word, verifier, word)
+
     def test_consents_only_from_the_owners_list(self):
         # 0.5.9: "Community rules → Accept" and an AI notice blocked ~10 checks; the owner allows them in config
         nav = " ".join(frontmatter("navigator")[1].split())
