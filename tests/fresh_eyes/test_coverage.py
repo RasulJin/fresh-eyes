@@ -877,6 +877,36 @@ class PackGroupsTest(unittest.TestCase):
         self.assertIn("askvio-nohierarchy has nodes.json but no source", dropped[0])
 
 
+    def test_recordings_are_snaps_and_a_folder_no_cell_owns_goes_to_no_reviewer(self):
+        # 20261116-1107-full: trip-map d50/d100/d150 (around only) were not listed, post-detail/kb-before was
+        with tmpdir() as d:
+            screen = os.path.join(d, "android", "trip-map")
+            for rel in ("default-back-during-animation", "kb-before", "default-none-recheck-1", "dark-none-p2",
+                        "default-scratch"):
+                os.makedirs(os.path.join(screen, rel))
+                open(os.path.join(screen, rel, "screen.png"), "w").close()
+            for k in (50, 100, 150):
+                write_json(os.path.join(screen, "default-back-during-animation", "d%d" % k, "around.json"), {})
+                os.makedirs(os.path.join(screen, "default-back-during-animation", "d%d" % k, "frames_0"))
+            open(os.path.join(screen, "findings.json"), "w").close()
+            cov = plan({"screens": [{"id": "trip-map", "route": "x", "states": ["default", "dark"],
+                                     "probes": ["back-during-animation"]}], "platforms": ["android"]},
+                       {"platforms": {"android": {"ok": True}}}, "full", passes=2)
+            cov["cells"][0]["evidence"] = ["/elsewhere/run/android/trip-map/default-scratch"]  # as it was done
+            dropped = []
+            groups = [[os.path.relpath(p, screen) for p in g] for g in pack_groups(screen, dropped=dropped, cov=cov)]
+            self.assertEqual(groups, [["default-back-during-animation"] + ["default-back-during-animation/d%d" % k
+                                                                           for k in (100, 150, 50)]
+                                      + ["default-scratch"], ["dark-none-p2"]])
+            self.assertEqual(sorted(dropped), ["default-none-recheck-1: no cell of android/trip-map has this pack",
+                                               "kb-before: no cell of android/trip-map has this pack"])
+            write_json(os.path.join(d, "coverage.json"), cov)
+            out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "coverage.py"), "packs", "--dir", screen],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            self.assertNotIn("kb-before", out.stdout.decode())
+            self.assertIn("dropped: kb-before", out.stderr.decode())
+
+
 class DiffScreensTest(unittest.TestCase):
     def _git(self, repo, *args):
         subprocess.run(["git", "-C", repo] + list(args), check=True, stdout=subprocess.DEVNULL)

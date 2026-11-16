@@ -663,13 +663,28 @@ def screens_from_diff(repo, base, config, head="HEAD", files=None):
     return {"screens": sorted(hits, key=lambda s: (-hits[s], s)), "unmapped": unmapped}
 
 
-def pack_groups(screen_dir, max_n=15, dropped=None):
-    """The screen's snaps (folders with a screen.png) in groups of at most max_n, one reviewer each. A pack's
-    sub-packs stay together unless they alone are more; a group never mixes the passes of `twice`. A folder
-    capture.py did not write (_snap_problem) is left out, its reason appended to `dropped`."""
+def pack_groups(screen_dir, max_n=15, dropped=None, cov=None):
+    """The screen's snaps (folders with a screen.png or a recording's around.json, like back-during-animation's
+    d50/d100/d150) in groups of at most max_n, one reviewer each. A pack's sub-packs stay together unless they
+    alone are more; a group never mixes the passes of `twice`. Left out, the reason appended to `dropped`: a
+    folder capture.py did not write (_snap_problem) and, with cov, a top folder that is no cell's pack (a scratch
+    snap like post-detail/kb-before)."""
     groups, cur, cur_p2, max_n = [], [], False, max(1, max_n)
+    where = tuple(os.path.normpath(os.path.abspath(screen_dir)).split(os.sep)[-2:])
+    owned = None if cov is None else set()
+    for c in (cov or {}).get("cells", []):
+        if (c["platform"], c["screen"]) == where:
+            owned.add("%s-%s%s" % (c["state"], c["probe"], "-p2" if c.get("pass") == 2 else ""))
+            owned.update(k[2] for k in map(pack_key, c.get("evidence", [])) if k and k[:2] == where)
     for top in sorted(os.listdir(screen_dir), key=lambda t: (t.endswith("-p2"), t)):
-        subs = sorted(r for r, _, files in os.walk(os.path.join(screen_dir, top)) if "screen.png" in files)
+        if not os.path.isdir(os.path.join(screen_dir, top)):
+            continue
+        if owned is not None and top not in owned:
+            if dropped is not None:
+                dropped.append("%s: no cell of %s has this pack" % (top, "/".join(where)))
+            continue
+        subs = sorted(r for r, _, files in os.walk(os.path.join(screen_dir, top))
+                      if "screen.png" in files or "around.json" in files)
         bad = [r for r in subs if _snap_problem(r)]
         if dropped is not None:
             dropped += [_snap_problem(r) for r in bad]
@@ -800,7 +815,9 @@ def main():
         print(coverage_map(read_json(a.cov), a.language))
     elif a.cmd == "packs":
         dropped = []
-        print(json.dumps(pack_groups(a.dir, a.max, dropped), ensure_ascii=False))
+        cov = os.path.join(a.dir, os.pardir, os.pardir, "coverage.json")  # <run>/coverage.json
+        cov = read_json(cov) if os.path.isfile(cov) else None
+        print(json.dumps(pack_groups(a.dir, a.max, dropped, cov), ensure_ascii=False))
         for why in dropped:
             print("dropped: " + why, file=sys.stderr)
     elif a.cmd == "prune":
