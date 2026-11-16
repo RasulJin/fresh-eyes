@@ -6,7 +6,7 @@ same:  before each verifier's first pass, and once more before the verdict. A pe
        reports the case of a BUG in another screen folder (same platform; at least 3 word stems of the titles shared
        and half of the shorter title's; when both titles quote on-screen text, a quote in common) gets `same_as` to
        it and `same_as_auto`: only that one is verified. A linked finding whose target is ruled (or became an IMP)
-       takes its kind, verdict and severity. Only --findings files are written: never a file a verifier holds.
+       takes its kind, verdict and severity, again whenever the target's ruling changes. Only --findings files are written: never a file a verifier holds.
        Prints `verify`: the --findings files that still need a verifier (a pending BUG not linked, or requests).
 known: appends to OUT the run's `known` questions and the BUGs rejected as `test data:`, each text once.
 
@@ -80,11 +80,12 @@ def same(run, paths):
                 continue
             changed.add(p)  # a link made above or earlier
             t = refs.get(f["same_as"])
-            if t is None or f.get("verdict", "pending") != "pending":
+            if t is None or (t.get("kind", "BUG") == "BUG" and t.get("verdict", "pending") == "pending"):
                 continue
-            if t.get("kind", "BUG") != "BUG" or t.get("verdict", "pending") != "pending":
-                f.update({k: t[k] for k in ("kind", "verdict", "severity", "backlog_id") if k in t})
-                f["verify_note"] = "%s (same case: %s)" % (t.get("verify_note", ""), f["same_as"])
+            ruling = {k: t[k] for k in ("kind", "verdict", "severity", "backlog_id") if k in t}
+            ruling["verify_note"] = "%s (same case: %s)" % (t.get("verify_note", ""), f["same_as"])
+            if any(f.get(k) != v for k, v in ruling.items()):  # a target ruled again (CONFLICT) moves its copies
+                f.update(ruling)
                 settled += 1
     for p, data, writable in files:
         if p in changed:

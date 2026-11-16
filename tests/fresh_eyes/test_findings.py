@@ -69,6 +69,21 @@ class SameTest(unittest.TestCase):
         self.assertEqual((f["verdict"], f["severity"], out["settled"], out["verify"]), ("rejected", "medium", 1, []))
         self.assertTrue(f["verify_note"].startswith("test data:"))  # a flaky: or test data: note keeps its word
 
+    def test_a_target_ruled_again_moves_its_copy(self):
+        # 0.5.13 acceptance: the target changed its ruling after a CONFLICT round, the copy kept the old one
+        with tmpdir() as run:
+            a = put(run, "trip-detail", [bug("f1", "trip-detail", DEMO_1, verdict="rejected",
+                                             verify_note="flaky: once")])
+            b = put(run, "trip-map", [bug("f2", "trip-map", DEMO_2)])
+            same(run, [a, b])
+            write_json(a, {"findings": [bug("f1", "trip-detail", DEMO_1, verdict="confirmed", severity="medium",
+                                            verify_note="reproduced 2 of 2")]})
+            self.assertEqual(same(run, [a, b])["settled"], 1)
+            f = read_json(b)["findings"][0]
+            self.assertEqual(same(run, [a, b])["settled"], 0)  # nothing new: the note is not stacked
+        self.assertEqual((f["verdict"], f["severity"]), ("confirmed", "medium"))
+        self.assertTrue(f["verify_note"].startswith("reproduced 2 of 2 (same case:"))
+
     def test_a_target_turned_imp_takes_the_link_along(self):
         with tmpdir() as run:
             a = put(run, "trip-detail", [bug("f1", "trip-detail", DEMO_1)])
