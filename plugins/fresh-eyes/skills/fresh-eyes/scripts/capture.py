@@ -24,6 +24,8 @@ CLI:
                   (a dark-* or theme-mismatch-* pack, or --app-theme: theme-note.json {ui_night_mode, app_theme})
   capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms MS] -- CMD ...
   capture.py logs --platform android --device ID --out PACK --package PKG [--clear]
+  capture.py step --renumber PACK   (step-N folders 1, 2, … in the order they were snapped, steps.json "n" with
+                  them: the fix for steps out of order, never deleting one)
 """
 import argparse
 import json
@@ -327,6 +329,46 @@ def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=N
     return 0 if code == 0 else 2
 
 
+STEP = re.compile(r"step-(\d+)")
+
+
+def _step_time(folder):
+    """When the step was snapped: its meta.json time, else its before/ snap's, else the folder's mtime."""
+    for meta in (os.path.join(folder, "meta.json"), os.path.join(folder, "before", "meta.json")):
+        if os.path.isfile(meta) and read_json(meta).get("time"):
+            return read_json(meta)["time"]
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(os.path.getmtime(folder)))
+
+
+def renumber(pack):
+    """step-N folders numbered 1, 2, … in the order they were snapped, steps.json's "n" moved with them (a step
+    there without a folder stays after the one it followed). Fixes an order coverage.py refuses without deleting
+    a step (0.5.13 quick: the navigator removed step-10 and step-13). Returns {old: new} of what moved."""
+    folders = {int(m.group(1)): d for d in os.listdir(pack) for m in [STEP.fullmatch(d)]
+               if m and os.path.isdir(os.path.join(pack, d))}
+    path = os.path.join(pack, "steps.json")
+    steps = read_json(path) if os.path.isfile(path) else []
+    loose, lead, cur = {}, [], None  # steps.json entries without a folder, after the folder step they followed
+    for n in sorted(set(folders) | {s["n"] for s in steps if isinstance(s.get("n"), int)}):
+        if n in folders:
+            cur = n
+        else:
+            (loose.setdefault(cur, []) if cur is not None else lead).append(n)
+    order = lead + [m for f in sorted(folders, key=lambda f: (_step_time(os.path.join(pack, folders[f])), f))
+                    for m in [f] + loose.get(f, [])]
+    moved = {old: k + 1 for k, old in enumerate(order) if old != k + 1}
+    for old in moved:
+        if old in folders:
+            os.rename(os.path.join(pack, folders[old]), os.path.join(pack, ".renumber-%d" % old))
+    for old, new in moved.items():
+        if old in folders:
+            os.rename(os.path.join(pack, ".renumber-%d" % old), os.path.join(pack, "step-%d" % new))
+    if steps and moved:
+        write_json(path, sorted([dict(s, n=moved.get(s.get("n"), s.get("n"))) for s in steps],
+                                key=lambda s: s["n"] if isinstance(s.get("n"), int) else 0))
+    return moved
+
+
 CRASH_TAGS = ("AndroidRuntime", "DEBUG", "libc")  # a crash is logged by the system, not by the app's own pid
 BUFFERS = ("-b", "main", "-b", "system", "-b", "crash")  # the crash buffer is not a default on every image
 _BRIEF = re.compile(r"([WEF])/([^(]+)\(\s*(\d+)\): (.*)")
@@ -375,6 +417,8 @@ def main():
         argv, action = argv[:i], argv[i + 1:]
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("step").add_argument("--renumber", metavar="PACK", required=True,
+                                        help="number PACK's step-N folders in snap order, steps.json with them")
     for name in ("snap", "around", "logs"):
         p = sub.add_parser(name)
         p.add_argument("--platform", required=True, choices=["android", "ios"])
@@ -395,6 +439,10 @@ def main():
     g = sub.choices["logs"]
     g.add_argument("--package", required=True); g.add_argument("--clear", action="store_true")
     a = ap.parse_args(argv)
+    if a.cmd == "step":
+        print(json.dumps({"pack": a.renumber, "renumbered": {"step-%d" % k: "step-%d" % v
+                                                             for k, v in renumber(a.renumber).items()}}))
+        return 0
     fe_common.load_secrets(a.out)  # the config above the run: its credentials never reach a pack
     fe_common.heartbeat(a.out, a.platform, "capture.py %s %s" % (a.cmd, a.out))
     out = {}

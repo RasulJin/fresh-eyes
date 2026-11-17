@@ -9,8 +9,9 @@ CLI:
                   | --x X --y Y --expect-id SUFFIX) [--index N] (--pack PACK | --after DIR) [--record]
                   --coverage C --cell ID
                   (one tap on the node where a dump taken right before shows it: refused when it is not there, off
-                  screen or under the keyboard; --x --y must lie in that node. --som N: mark N of PACK (or of DIR's
-                  parent), found again by its class, id, text and label. Once the screen settled, the snap of where
+                  screen or under the keyboard, or when that dump lacks the cell's marker ("not this screen");
+                  --x --y must lie in that node. --som N: mark N of PACK (or of DIR's parent), found again by its
+                  class, id, text and label. Once the screen settled, the snap of where
                   the tap led and tap.json (the point, the node and its bounds at the tap) go to DIR, or with
                   --pack to PACK/tap-<k>, k being the row this tap appends to PACK/taps.json: label, changed (nodes
                   or pixels before vs after), result: what appeared, went, took focus). --record: the tap and
@@ -155,10 +156,21 @@ def what_changed(before, after, kb_before, kb_after, pixels):
     return bool(parts) or pixels, "; ".join(parts) or ("pixels only" if pixels else "no change")
 
 
-def tap(a, dev, after, som_pack):
-    """One tap on a node from a fresh dump, the settled result snapped into `after` with tap.json beside it.
-    Returns (snap exit, tap.json)."""
+def on_screen(nodes, marker):
+    """Refuse a probe off its cell's screen: none of the screen's marker words (config) in the dump. 0.5.13
+    profile-trips: a photo viewer stayed open, ten taps "no change" landed on it and the cell was done."""
+    want = [m.casefold() for m in marker or ()]
+    if want and not any(w in (n.get(k) or "").casefold() for n in nodes for k in ("text", "label", "rid")
+                        for w in want):
+        raise FEError("not this screen: %s missing: go back to the cell's screen, then tap again"
+                      % " / ".join(marker))
+
+
+def tap(a, dev, after, som_pack, marker=()):
+    """One tap on a node from a fresh dump (on the cell's screen: its marker), the settled result snapped into
+    `after` with tap.json beside it. Returns (snap exit, tap.json)."""
     nodes, source = nav.hierarchy(dev)
+    on_screen(nodes, marker)
     kb_top = devices.keyboard_top(dev, nodes)
     with tempfile.TemporaryDirectory() as d:
         before = devices.screenshot(dev, os.path.join(d, "before.png"))
@@ -269,7 +281,7 @@ def main():
         rows_path = os.path.join(a.pack or "", "taps.json")
         rows = read_json(rows_path) if a.pack and os.path.isfile(rows_path) else []
         after = os.path.join(a.pack, "tap-%d" % (len(rows) + 1)) if a.pack else a.after
-        code, rec = tap(a, dev, after, a.pack or os.path.dirname(os.path.normpath(a.after)))
+        code, rec = tap(a, dev, after, a.pack or os.path.dirname(os.path.normpath(a.after)), cell.get("marker"))
         row = dict({"n": len(rows) + 1, "label": nav._name(rec["node"]), "by": rec["by"]},
                    **({"som": a.som} if a.som is not None else {}),
                    pack=os.path.basename(after), changed=rec["changed"], result=rec["result"])

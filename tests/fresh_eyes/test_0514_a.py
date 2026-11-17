@@ -1,13 +1,14 @@
 """fresh-eyes 0.5.14, part a (device scripts): П-35 … П-50. All credentials here are fake test values."""
 import contextlib
 import io
+import json
 import os
 import subprocess
 import sys
 import unittest
 from unittest import mock
 
-from tests.fresh_eyes.helpers import make_png, tmpdir
+from tests.fresh_eyes.helpers import SCRIPTS, make_png, tmpdir
 import capture
 import devices
 import fe_common
@@ -209,6 +210,69 @@ class LitTopTest(unittest.TestCase):
             self.assertEqual((meta["app_theme_set"], meta["lit_top"] < 60), (None, True))
             capture.snap("android", "e", pack, app_theme="Тёмная")
             self.assertEqual(read_json(os.path.join(pack, "meta.json"))["app_theme_set"], "Тёмная")
+
+
+TAP_CELL = {"id": "android/feed/default/tap-everything", "platform": "android", "screen": "feed", "state": "default",
+            "probe": "tap-everything", "mutating": False, "status": "todo", "evidence": [], "note": "",
+            "marker": ["Лента"]}
+
+
+def node(i, text, y, rid="", cls="android.widget.TextView", clickable=True, **kw):
+    return dict({"id": "n%d" % i, "parent": None, "depth": 1, "cls": cls, "text": text, "label": "", "rid": rid,
+                 "bounds": [0, y, 1080, 120], "clickable": clickable, "focused": False, "enabled": True}, **kw)
+
+
+def run_folder(d, cells=(TAP_CELL,)):
+    write_json(os.path.join(d, "coverage.json"), {"run_id": "r", "cells": list(cells)})
+    write_json(os.path.join(d, "preflight.json"), {"mutating_allowed": False})
+    return os.path.join(d, "coverage.json")
+
+
+def tap_patches(dumps, taps_=None, settle_changed=True):
+    seq = list(dumps)
+    return [mock.patch.object(taps.nav, "hierarchy", lambda dev: (seq.pop(0) if len(seq) > 1 else seq[0],
+                                                                  "uiautomator")),
+            mock.patch.object(devices, "keyboard_top", lambda dev, nodes=(): None),
+            mock.patch.object(devices, "screenshot", lambda dev, dst: make_png(dst, 108, 240)),
+            mock.patch.object(devices, "tap", lambda dev, x, y: (taps_ if taps_ is not None else []).append((x, y))),
+            mock.patch.object(taps, "settle", lambda dev, before: {"settled": True, "changed": settle_changed,
+                                                                    "ms": 5})]
+
+
+class OwnScreenTest(unittest.TestCase):
+    """П-38: tap-everything went on tapping a photo viewer left open over the screen (ten «no change»)."""
+    def test_a_tap_off_the_cells_screen_is_refused(self):
+        rows = [node(1, "Фото 1 из 3", 400), node(2, "Закрыть", 700)]
+        with tmpdir() as d, contextlib.ExitStack() as stack:
+            cov = run_folder(d)
+            pack = os.path.join(d, "android", "feed", "default-tap-everything")
+            for p in tap_patches([rows]) + [mock.patch.object(taps.capture, "snap", lambda *a, **kw: 0)]:
+                stack.enter_context(p)
+            argv = ["taps.py", "tap", "--platform", "android", "--device", "e", "--pack", pack, "--text", "Закрыть",
+                    "--coverage", cov, "--cell", TAP_CELL["id"]]
+            out, code = run_cli(taps.main, argv)
+            self.assertEqual(code, 2)
+            self.assertIn("not this screen: Лента missing", out)
+            self.assertFalse(os.path.exists(os.path.join(pack, "taps.json")))
+        taps.on_screen(rows + [node(3, "", 0, rid="app:id/feed-лента-tab")], ["лента"])  # id, any case
+
+
+class RenumberTest(unittest.TestCase):
+    """П-38: steps out of order are renumbered by snap time, never deleted (0.5.13 quick removed two)."""
+    def test_steps_follow_their_snap_time_and_steps_json_follows_them(self):
+        with tmpdir() as pack:
+            for n, t in ((1, "10:00:00"), (2, "10:00:30"), (3, "10:00:10"), (5, "10:01:00")):
+                write_json(os.path.join(pack, "step-%d" % n, "meta.json"), {"time": "2026-11-17T" + t, "n": n})
+            write_json(os.path.join(pack, "steps.json"), [{"n": k, "did": "did %d" % k} for k in (1, 2, 3, 4, 5)])
+            out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "capture.py"), "step", "--renumber", pack],
+                                 stdout=subprocess.PIPE, check=True).stdout
+            self.assertEqual(json.loads(out)["renumbered"], {"step-2": "step-4", "step-3": "step-2", "step-4": "step-3"})
+            self.assertEqual([read_json(os.path.join(pack, "step-%d" % k, "meta.json"))["n"] for k in (1, 2, 4, 5)],
+                             [1, 3, 2, 5])
+            self.assertFalse(os.path.exists(os.path.join(pack, "step-3")))  # step 3 of steps.json has no snap
+            self.assertEqual([(s["n"], s["did"]) for s in read_json(os.path.join(pack, "steps.json"))],
+                             [(1, "did 1"), (2, "did 3"), (3, "did 4"), (4, "did 2"), (5, "did 5")])
+            self.assertEqual(capture.renumber(pack), {})  # in order now
 
 
 if __name__ == "__main__":
