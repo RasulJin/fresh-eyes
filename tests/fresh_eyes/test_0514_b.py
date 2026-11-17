@@ -16,6 +16,7 @@ from tests.fresh_eyes.test_coverage import BOTH_OK_MUT_ON, ONE_SCREEN, make_pack
 from fe_common import FEError, read_json, write_json
 from coverage import NOTES_MARK, _load_findings, plan, set_status, verdict
 import backlog
+import bench
 import findings
 import stats
 
@@ -455,6 +456,19 @@ class ImpCopiesTest(unittest.TestCase):
                       "«месяц» и выше соседних — IMP-312 «Вторая карточка быстрого старта переносится на две строки и "
                       "выше соседних» · `android/vio-guide/findings-1.json#f2` `android/vio-guide/findings-3.json#f6`",
                       text)
+
+
+class BenchInScoreTest(unittest.TestCase):
+    """П-49: the seeded bench a full run was gated on is in its score.json and stays there."""
+
+    def test_bench_score_goes_into_the_runs_score_json(self):
+        run = os.path.join(_root(self), "run")
+        shutil.copytree(os.path.join(FIXTURES, "score-run"), run)  # gated before navigation: no score.json yet
+        scores = {"SEED-%d" % k: {"hits": h, "attempts": 3, "caught": h >= 2} for k, h in enumerate((3, 2, 2, 1, 3))}
+        self.assertEqual(bench.record(run, scores), {"caught": 4, "of": 5})
+        card = read_json(stats.score(run)["out"])  # the run scored again after the bench
+        self.assertEqual(card["bench"], {"caught": 4, "of": 5})
+        self.assertIn("M1", card)
 
 
 if __name__ == "__main__":

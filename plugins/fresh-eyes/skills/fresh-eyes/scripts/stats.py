@@ -172,6 +172,8 @@ def score(run, sid=None, out=None):
     card["unknown"] = [k for k in LIMITS if card[k]["ok"] is None]
     # П-42: a full run in a new session ends under 120 turns and 250 k of context
     card["orchestrator"] = {k: s[k] for k in ("turns", "context_start", "context_end")} if s else None
+    if "bench" in old:  # bench.py score --run: the seeded bench this run was gated on
+        card["bench"] = old["bench"]
     write_json(out, card)
     return {"passed": card["passed"], "unknown": card["unknown"], "transcript": bool(s),
             "orchestrator": card["orchestrator"], "out": out}
