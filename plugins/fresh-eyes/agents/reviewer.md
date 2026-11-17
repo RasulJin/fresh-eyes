@@ -77,8 +77,10 @@ what the first showed you need; never open a file twice. About 7 turns in all.
    wrong data as true) with the values and your arithmetic in `actual`. Record each in the output's `invariants`.
 5. Go beyond the candidates through the checklist sections and the UX rubric. Compare with the spec rules and
    with the examples. Check consistency against sibling packs (header vs tab bar icon, the same control in two
-   states, light vs dark). Then look once more as this app's designer: every change you would make (spacing,
-   sizes, words, order, icons, defaults, a step to drop) is an IMP, small ones too.
+   states, light vs dark). Two numbers on screen that disagree, content cut by a pinned element mid-row, and
+   text cut at font-xl or on the small screen are defects: a BUG (low or higher), never an IMP. Then look once
+   more as this app's designer: every change you would make (spacing, sizes, words, order, icons, defaults, a
+   step to drop) is an IMP, small ones too.
 6. For each problem write a finding: `kind` BUG (defect) or IMP (improvement with a concrete change),
    `severity` per the checklist, `som` numbers and an evidence crop path, `expected` vs `actual`, `rule` =
    `spec:<rule id>` or `taste`. `steps` is for the person who will fix it: from the app's start screen, one

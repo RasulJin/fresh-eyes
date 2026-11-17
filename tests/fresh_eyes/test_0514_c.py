@@ -127,6 +127,20 @@ class Text0514Test(unittest.TestCase):
         self.assertIn("A defect that follows wholly from another finding of the same pack", agent("reviewer"))
         self.assertIn("a finding whose defect follows wholly from another one's", agent("verifier"))
 
+    def test_p49_full_needs_the_seeded_bench_and_human_classes_are_bugs(self):
+        # 0.5.13 run: M11 2 of 5; trip-wizard#76 and profile-trips#43 came out as IMPs
+        body = skill()
+        self.assertIn("Before step 6: `bench seeded`", body)
+        self.assertIn("fewer than 4 of 5 caught → stop", body)
+        reviewer = agent("reviewer")
+        for word in ("Two numbers on screen that disagree", "content cut by a pinned element mid-row",
+                     "text cut at font-xl or on the small screen are defects: a BUG (low or higher), never an IMP"):
+            self.assertIn(word, reviewer, word)
+        checklist = ref("checklist.md")
+        for word in ("**Numbers that disagree**", "cut by a pinned bar, header or button in the middle of a row",
+                     "running out of its control here is a BUG (low or higher), never an IMP"):
+            self.assertIn(word, checklist, word)
+
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):

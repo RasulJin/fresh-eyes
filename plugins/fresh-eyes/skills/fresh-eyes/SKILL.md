@@ -206,6 +206,8 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
   --keychain fresh-eyes-<role>-email`, the same for the password (the values live in the user's environment or
   keychain, never in prompts or files). No `accounts` in config → keep the installed state, and say so.
 - The navigator gets one journey or one screen per call.
+- Before step 6: `bench seeded` (it needs no device); fewer than 4 of 5 caught → stop and tell the user (the
+  reviewers would miss what a person sees: verdict INCOMPLETE). score.json carries it as `bench`.
 
 ## Checkpoints and resume
 
