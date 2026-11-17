@@ -61,5 +61,45 @@ class MutatingScenarioTest(unittest.TestCase):
         set_status(self.cov, self.cell["id"], "done", evidence=[self.pack])
 
 
+class ThemeBothWaysTest(unittest.TestCase):
+    """П-37: a light-theme cell cannot be dark, and a dark cell's app theme is the one this capture set."""
+
+    def setUp(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(states=["default", "dark", "keyboard"], probes=["background-foreground"])
+        self.cov = plan(cfg, BOTH_OK_MUT_ON, "full")
+        self.cells = {(c["state"], c["probe"]): c for c in self.cov["cells"] if c["platform"] == "android"}
+        self.root = _root(self)
+
+    def test_a_light_cell_left_on_the_dark_app_theme_is_not_done(self):
+        # import after dark-none: keyboard-none and background-foreground at 17-18, default-none at 243
+        for key in (("keyboard", "none"), ("default", "background-foreground")):
+            cell = self.cells[key]
+            with self.assertRaisesRegex(FEError, r"lit_top 17 < 60\) in a light-theme cell"):
+                set_status(self.cov, cell["id"], "done", evidence=[make_pack(self.root, cell, lit_top=17)])
+            set_status(self.cov, cell["id"], "done", evidence=[make_pack(self.root, cell, lit_top=17)],
+                       note="a full-screen video, dark by design")
+        for lit in (243, None):  # light, or a capture from before lit_top
+            cell = self.cells["default", "none"]
+            meta = {"lit_top": lit} if lit else {}
+            set_status(self.cov, cell["id"], "done", evidence=[make_pack(self.root, cell, **meta)])
+        dark = self.cells["dark", "none"]  # the dark cell is dark at the top too
+        set_status(self.cov, dark["id"], "done", evidence=[make_pack(self.root, dark, brightness=60, lit_top=17)])
+
+    def test_a_dark_cell_names_only_the_app_theme_its_capture_set(self):
+        dark = self.cells["dark", "none"]
+        pack = make_pack(self.root, dark, brightness=60, app_theme_set=None)
+        write_json(os.path.join(pack, "theme-note.json"), {"ui_night_mode": "yes", "app_theme": "Как в системе"})
+        with self.assertRaisesRegex(FEError, "«Как в системе», but this pack's capture did not set it"):
+            set_status(self.cov, dark["id"], "done", evidence=[pack])
+        for meta in ({"app_theme_set": "Как в системе"}, {}):  # set in this call, or a capture from before
+            pack = make_pack(self.root, dark, brightness=60, **meta)
+            write_json(os.path.join(pack, "theme-note.json"), {"ui_night_mode": "yes", "app_theme": "Как в системе"})
+            set_status(self.cov, dark["id"], "done", evidence=[pack])
+        pack = make_pack(self.root, dark, brightness=60, app_theme_set=None)  # no theme named: nothing to prove
+        write_json(os.path.join(pack, "theme-note.json"), {"ui_night_mode": "yes", "app_theme": None})
+        set_status(self.cov, dark["id"], "done", evidence=[pack])
+
+
 if __name__ == "__main__":
     unittest.main()

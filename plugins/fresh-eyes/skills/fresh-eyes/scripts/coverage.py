@@ -77,6 +77,8 @@ LABELS = {
 CODE_EXT = (".ts", ".tsx", ".js", ".jsx")
 GUESS = 0.4  # a BUG this unsure is a guess (0.5.12 run: guesses were 19 of the 32 rejects)
 DARK_MAX = 120  # mean gray of a dark-theme frame: dark screens measured 56-68, light ones 173-196
+LIGHT_MIN = 60  # lit_top under it is a dark frame (0.5.13 full: import's light cells left dark 17-18, light 243)
+THEME_STATES = ("dark", "theme-mismatch")
 
 
 def _cell(platform, screen, state, probe):
@@ -377,14 +379,24 @@ def _probe_problems(c, packs, note):
                             "interrupted; tap-back again with a longer --delay-ms or devices.py set --what "
                             "slow-animations")
     meta0 = os.path.join(packs[0], "meta.json") if packs else ""
-    lit = read_json(meta0).get("brightness", 0) if c["state"] == "dark" and os.path.isfile(meta0) else 0
+    top = read_json(meta0) if os.path.isfile(meta0) else {}
+    lit = top.get("brightness", 0) if c["state"] == "dark" else 0
     if lit > DARK_MAX and not note:
         problems.append("the dark frame is light (brightness %d > %d): the app's own theme is pinned, pick its Dark "
                         "the way config app_theme says and snap again; dark but lit by a photo or map: pass --note "
                         "saying so" % (lit, DARK_MAX))
+    lit_top = top.get("lit_top")  # capture.py: the top half, keyboard and sheet scrim left out
+    if c["state"] not in THEME_STATES and isinstance(lit_top, (int, float)) and lit_top < LIGHT_MIN and not note:
+        problems.append("the frame is dark (lit_top %d < %d) in a light-theme cell: the app's theme was left on Dark "
+                        "after a dark cell; put it back the way config app_theme says and snap again; dark by "
+                        "design (a photo, a map, a video): pass --note saying so" % (lit_top, LIGHT_MIN))
     theme = read_json(os.path.join(packs[0], "theme-note.json")) \
-        if c["state"] == "theme-mismatch" and packs and os.path.isfile(os.path.join(packs[0], "theme-note.json")) \
+        if c["state"] in THEME_STATES and packs and os.path.isfile(os.path.join(packs[0], "theme-note.json")) \
         else {}
+    if c["state"] == "dark" and theme.get("app_theme") and "app_theme_set" in top and not top["app_theme_set"]:
+        problems.append("theme-note.json names the app theme «%s», but this pack's capture did not set it "
+                        "(meta.json app_theme_set is empty): pass --app-theme only in the call that picks it, "
+                        "pick it the way config app_theme says and snap again" % theme["app_theme"])
     if c["state"] == "theme-mismatch" and packs and not (
             str(theme.get("ui_night_mode")).casefold().endswith(("yes", "true", "dark")) and theme.get("app_theme")):
         problems.append("no proof of the mismatch: <pack>/theme-note.json from capture.py must show the phone dark "
