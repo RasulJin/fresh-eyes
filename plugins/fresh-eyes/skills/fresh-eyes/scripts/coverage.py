@@ -327,6 +327,15 @@ def _scenario_problems(pack, cell):
                     and os.path.isfile(os.path.join(pack, "step-%s" % s.get("n"), "meta.json"))).casefold()
     problems += ["a task step with its own snap <pack>/step-<n> through the form «%s» (config forms)" % f
                  for f in cell.get("forms", []) if f.casefold() not in done]
+    # 0.5.13 full: post-detail's scenario may write but only opened and closed the forms ("read-only run")
+    wrote = {"wrote": any(s.get("wrote") for s in steps), "cleaned": any(s.get("cleaned") for s in steps),
+             "found_in": any(s.get("found_in") for s in steps if s.get("kind") == "check")}
+    if cell.get("mutating") and not all(wrote.values()):
+        problems.append("real writes, since the cell may write (mutating: true): a step with \"wrote\" (what it "
+                        "created or changed), a check step with \"found_in\" (where that turned up) and a step "
+                        "with \"cleaned\" (what it removed after); missing: %s. A read-only pass is not this "
+                        "cell: write the test data and fix steps.json, or mark it blocked with --note why it "
+                        "could not write" % ", ".join(k for k, v in wrote.items() if not v))
     if android and not os.path.isfile(os.path.join(pack, "logcat.txt")):
         problems.append("no logcat.txt (capture.py logs)")
     return problems
