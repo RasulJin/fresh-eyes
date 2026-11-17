@@ -31,7 +31,8 @@ noted. Example (generic values):
     }
   },
   "hooks": {"seed": null, "cleanup": null, "new_account": null},
-  "backlog": {"path": "docs/qa-backlog.md", "template": "en-backlog", "images_dir": "docs/qa-backlog"},
+  "backlog": {"path": "docs/qa-backlog.md", "template": "en-backlog", "images_dir": "docs/qa-backlog",
+              "extra": {"cmd": "board list --open --format tsv"}},
   "maestro_dir": "apps/mobile/.maestro",
   "references": ["Threads", "Instagram"],
   "motion_ceiling_ms": 300,
@@ -82,6 +83,9 @@ noted. Example (generic values):
   navigator right before snapping those cells; `new_account` creates a fresh test account. A state without its
   hook is reported as not checked.
 - `backlog`: where confirmed findings go; `template` is `ru-backlog` or `en-backlog`; `images_dir` gets crops.
+  `extra` (optional): open tasks kept outside the backlog file (a task board), as a file path or `{"cmd":
+  "<command>"}` run from the repo root; each line `<id>\t<title>`. `backlog.py index` adds them to the index, so
+  a confirmed BUG one of them holds gets that id as `backlog_id` ("already open: <id>") instead of a new entry.
 - `maestro_dir`: existing flows (reused as setup steps) and where regression flows are written.
 - `references`: apps the user compares against; the UX rubric uses them.
 - `motion_ceiling_ms`: transition duration ceiling from the design system (default 300). `coverage.py plan`
@@ -101,6 +105,11 @@ noted. Example (generic values):
   leftwards to close it", "the Trips / Posts pager, sideways").
   `pages` (for `swipe-inside`): the other pages of the pager or tab set this screen is a page of, by their tab
   labels ("the Posts tab", "the Saved tab"); the probe opens each, comes back and scrolls to the end.
+  `signed_out` (optional, `true`): reached without an account (a welcome screen, a consent document); the plan
+  puts these screens first, since a full run starts from cleared data.
+  `skip_tap` (optional): labels `taps.py all` never taps on this screen, each matched case-insensitively as part
+  of a node's text, label or id: controls with a harmless look that send or write (a chat's suggested-prompt
+  chips that send a message); the `scenario` presses them.
 - `app_theme`: how to pick the app's own Light, Dark and system ("as in the system") theme, in words (where the
   control is, its labels); the navigator picks the system one before signing out for screens without an account;
   without it the `theme-mismatch` state is reported as not checked. List `theme-mismatch` after `dark`.

@@ -14,15 +14,18 @@ view hierarchy text.
 Scripts: `S=${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/scripts` (run with `python3 $S/<script>.py ...`).
 Probe instructions: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/probes.md` — read it once.
 Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md`.
-Read these with the Read tool only: `sed`, `cat` or `grep` on the plugin path in Bash waits for a permission
-nobody answers in a night run.
+Read these with the Read tool only, both in one message: `sed`, `cat` or `grep` on the plugin path in Bash
+waits for a permission nobody answers in a night run. Every turn re-reads your whole context: steps of a cell
+that need no look in between go in one Bash call (chained with `&&`), and `tap-everything` in one `taps.py all`.
 
 ## Input (from the orchestrator)
 
 - `run`: the run folder (has `coverage.json`, `preflight.json`), `config`: `.fresh-eyes/config.json`.
-- `platform`, `device` (id) and `name` (from `preflight.json` → `platforms.<p>`), the list of cell ids,
+- `platform`, `device` (id) and `name` of your queue's device (`preflight.json` → `platforms.<p>`), the cell ids,
   or `requests`: one or more `requests.json` files (one per screen folder) to fulfil for the verifier.
 - `package`: the app's Android package (`app.android_id`); every `capture.py snap` gets it.
+- `queue` (`main` or `small`): add `--queue <it>` to every `nav.py`, `capture.py` and `taps.py` call beside
+  `--run`: two navigators may share the platform, and each is watched by its own heartbeat.
 - `app language` (config `app.locale`), when set: the app must show it before your first cell (rule below).
 
 ## Hard rules
@@ -36,7 +39,9 @@ nobody answers in a night run.
   a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
   It refuses an empty `--id`/`--text` and a target under the open keyboard (the tap would land on a key): hide
   the keyboard with `nav.py back` first. Probe taps go through `taps.py tap`, which finds its node in a dump
-  taken right before the tap; never reuse coordinates from an older screen.
+  taken right before the tap; never reuse coordinates from an older screen. With `--cell` it first checks the
+  screen's marker: "not this screen: <marker> missing" means something else is up (a viewer, a sheet, another
+  screen): close it or reach the screen again, then tap.
 - **A crash**: the launcher or another app on the printed screen after an action means the app died. Snap
   into the cell's pack first (`capture.py snap` with `--package` saves the crash log), record it done with
   `--note "app crashed after <action>"`, and only then relaunch with `devices.py app --do launch`. Do not
@@ -45,7 +50,9 @@ nobody answers in a night run.
   (slow, ~35 s).
 - A screen that never gets idle (an endless animation): `nav.py` and `capture.py` read it through the Maestro
   CLI by themselves (~20 s a call, `source: maestro` in meta.json); they refuse while a Maestro driver runs.
-- Packs come only from `capture.py` and `taps.py`: never copy, move or write a pack's files yourself. Each step
+- Packs come only from `capture.py` and `taps.py`: never copy, move, delete or write a pack's files or folders
+  yourself (a failed try stays as evidence; snap the cell again into the same pack). Steps out of order
+  (`coverage.py` says so): `python3 $S/capture.py step --renumber <pack>`, never a deleted step. Each step
   gets its own snap, even on the same screen (`coverage.py` refuses `step-N is a copy of step-M`). Every snap
   goes inside its cell's pack (`<state>-<probe>/...`), never into a folder of its own beside the packs.
 - iOS: `nav.py` talks to the Maestro driver the orchestrator started. If `nav.py` says "no Maestro iOS driver",
@@ -65,9 +72,12 @@ nobody answers in a night run.
   bring the app to its `app language` first (rule above), then sign in once per device with the first role
   in `config.json` → `accounts`, the way a person would (the start screen's sign-in button, skip the
   onboarding hints), typing only with `nav.py type --env <email_env> --keychain fresh-eyes-<role>-email` and
-  `--env <password_env> --keychain fresh-eyes-<role>-password`. Never create
-  an account. If `nav.py type` says it is not set, or signing in
-  fails, mark the cells `blocked` with note "signed out: <variable> not set" or "signed out: <why>".
+  `--env <password_env> --keychain fresh-eyes-<role>-password`. Before each `type`, take a fresh `nav.py screen`
+  and tap that very field from it (`--id`/`--label` as this dump shows it; never an id or point from an earlier
+  dump: the form may have moved, and a password typed into a plain field is printed in clear). `nav.py type`
+  refuses when the focused node is no input, or no password field for a password: tap the field again, never
+  type it elsewhere. Never create an account. If `nav.py type` says it is not set, or signing in fails, mark
+  the cells `blocked` with note "signed out: <variable> not set" or "signed out: <why>".
 - Screens without an account (their `reach` signs out, or starts from a fresh install): the app's own theme
   survives signing out, and one left on Light keeps every signed-out screen light, so their `dark` cells end
   "state did not apply". Before you sign out, pick the app's system option (as in the system) the way
@@ -88,7 +98,8 @@ nobody answers in a night run.
    Three failed attempts → `coverage.py set ... --status blocked --note "<why>"` and move on.
 2. **Set the state** on the device (owned devices only):
    `python3 $S/devices.py set --platform P --device ID --name NAME --what dark|font-xl|offline|...`.
-   `keyboard`: focus the screen's main input. `small-screen`: use `platforms.<p>.small_device_id`. `font-xl`:
+   `keyboard`: focus the screen's main input. `small-screen`: these cells come with the small device as yours
+   (`platforms.<p>.small_device_id`); another navigator may drive the other device at the same time. `font-xl`:
    then `devices.py app --do terminate` and `--do launch`, and reach the screen again (an app open across the
    change keeps its old layouts).
    `empty`/`long-text`/`long-list`: the seeded data. `long-list`: snap the top, swipe inside the list until the
@@ -97,11 +108,11 @@ nobody answers in a night run.
    `config.json` (repo root) right before the snap, and undo it after if the hook says how.
    `theme-mismatch`: `--what dark`, then pick the app's own Light theme the way `app_theme` in `config.json`
    says, come back and snap without `--expect-differs` but with `--app-theme <that option's label>` (done right,
-   it looks like `default`); restore with `--what light` and leave the app on Light. `dark` snaps get
-   `--app-theme <the app's option now picked>` too (its system one, or its Dark). Both write `theme-note.json`
-   (the phone's night mode and that option); `coverage.py` refuses a theme-mismatch pack without it. A `dark`
-   cell where the app stays light (exit 4) while `app_theme` is set: the app's own theme is pinned, so pick its
-   Dark, snap again, then pick Light back.
+   it looks like `default`). `dark` with `app_theme` set: pick the app's system option (or its Dark) in this
+   cell too and snap with `--app-theme <its label>`. `--app-theme` names only an option you picked in this cell
+   (meta.json `app_theme_set`), never one you believe is picked. Both write `theme-note.json` (the phone's night
+   mode and that option); `coverage.py` refuses a theme-mismatch pack without it. A `dark` cell where the app
+   stays light (exit 4) while `app_theme` is set: the app's own theme is pinned, so pick its Dark, snap again.
 3. **Run the probe** exactly as `probes.md` says. Fast probes use `taps.py` (with `--coverage` and `--cell`).
    Wrap transitions and probes in `capture.py around ... -- <command>` so they are recorded.
 4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --package PKG --out <run>/<platform>/<screen>/<state>-<probe>`
@@ -121,7 +132,10 @@ nobody answers in a night run.
    you snapped another screen, so go there and snap again. If it is that screen and it is blank or broken, set
    done with `--note` saying what it shows.
 6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell, and end the cell on its
-   screen at rest (nothing open, a pager on a page): the next cell's first snap checks it.
+   screen at rest (nothing open, a pager on a page): the next cell's first snap checks it. A `dark` or
+   `theme-mismatch` cell ends with `--what light`, the app's own theme back on Light, and a light control
+   `capture.py snap --out <pack>/restored`: `lit_top` in its `meta.json` under 60 is a dark frame, so fix the
+   theme and snap it again; `coverage.py` refuses later light cells shot dark.
 
 Journey cells (`<platform>/journey/<id>/journey`): follow the journey's `steps` from `config.json` end to end;
 snap after every step's action (never before it) into `<run>/<platform>/journey/<id>-journey/step-<n>/`, n being
@@ -134,21 +148,27 @@ Second pass: a cell id ending in `#2` belongs to an independent second pass. Its
 
 Scenario cells: follow `scenario` in probes.md with the screen's `task` from `config.json`; `PKG` there is
 your `package`. Look first, touch second: snap after each action before you tap anything, so the frame shows
-what the app did by itself (a field it should have focused, a sheet it opened).
+what the app did by itself (a field it should have focused, a sheet it opened). A `"mutating": true` cell
+writes for real: its `steps.json` names what it `wrote`, where the `check` step `found_in` it, and what it
+`cleaned` (probes.md); one that cannot write is `blocked` with why, never a read-only walk marked done.
 
-For `tap-everything`, `taps.py tap --pack <pack>` writes each row of `<pack>/taps.json` itself (label, `changed`,
-`result`) and snaps the result into `<pack>/tap-<row>`: never write or edit `taps.json` by hand.
+For `tap-everything`, `taps.py all --pack <pack> --cell <cell>` (or `taps.py tap --pack <pack>` for one node)
+writes each row of `<pack>/taps.json` itself (label, `changed`, `result`) and snaps the result into
+`<pack>/tap-<row>`: never write or edit `taps.json` by hand.
 
 Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exactly here and in this order:
 1. `capture.py snap --out $P/before`, `nav.py swipe` inside the list, `capture.py snap --out $P --before $P/before`.
 2. For each `pages` entry k of the cell: open it by its tab, wait 1.5 s, back by this screen's tab, swipe to the
    end, snap `--out $P/page-<k>/before`, swipe once more, snap `--out $P/page-<k> --before $P/page-<k>/before`.
 3. `coverage.py set ... --evidence $P`. No other folders for this cell, no renaming. The swipe moved nothing
-   because the list is too short (one result): `--status na` or `blocked` with note "not enough items".
+   because the list is too short (one result): `--status na` with note "not enough items".
 
 ## Requests mode (for the verifier)
 
-For each entry in each `requests.json` that has no `done` yet, reach the pack's screen first: `resnap` → new
+For each entry in each `requests.json` that has no `done` yet, reach the pack's screen first and set its
+`conditions` (`devices.py set --what slow-animations` when `slow_animations`, the app theme `app_theme` names
+picked in the app, the tab or page `start_page` names), check on `nav.py screen` that it starts as the original
+did, and restore them after (`--what animations-on`, the app on Light). Then: `resnap` → new
 `snap` into `<pack>-recheck` (exit 5: another screen is up; reach it and redo, never mark that entry done);
 `repeat-probe` → run the probe
 again into `<pack>-recheck` with every step of it the original ran (keyboard-open: kb-show, the `--keyboard`
@@ -168,4 +188,6 @@ the recheck snap with `--before <pack>`.
 
 Counts of done / blocked / failed cells, the run folder, and one line per blocker. A screen you reached
 another way than its `reach` says (a deep link, another menu): one line `reach: <screen id>: <how>`. No
-screenshots, no logs.
+screenshots, no logs. The rest worth knowing (a cell redone and why, a workaround, a script that misbehaved, a
+pack you doubt) goes to `<run>/notes/<screen>-<your device name>.md`: Read it first when it exists, then Write
+it back with your lines added.

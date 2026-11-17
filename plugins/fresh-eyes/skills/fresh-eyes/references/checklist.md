@@ -15,12 +15,16 @@ How a picky QA engineer + product designer looks at one screen. Used by the revi
 6. A finding needs a frame. Never report a bug from code, a guess or a single hierarchy line. A guess
    (confidence ≤ 0.4, "needs a frame", "not checked", "seems") is a `requests` entry when new evidence can
    settle it, else an IMP; never a BUG, and no title "Not verified: …".
-7. "Could not see it" is not "it is fine": ask for the missing evidence in `requests`.
+7. "Could not see it" is not "it is fine": ask for the missing evidence in `requests` (only what can make a BUG
+   of medium or higher or settle an invariant, at most 2 per group: reviewer.md).
 
 ## Display defects (one frame shows it)
 
 - **Clipped content**: a row, card or grid cut by its container (only a sliver of the last row visible),
-  content under the tab bar / home indicator / status bar, a bottom sheet whose bottom is off screen.
+  content under the tab bar / home indicator / status bar, a bottom sheet whose bottom is off screen, content
+  cut by a pinned bar, header or button in the middle of a row (not at the list's scroll edge).
+- **Numbers that disagree**: two numbers on screen that must agree and do not (a counter and the list it counts,
+  a total and its rows, a row and the target its link opens). Recompute them from `hierarchy.txt`.
 - **Truncated text**: "…" or a hard cut where the full text matters (menu items, buttons, titles, chips).
   Compare the hierarchy's full text with what the crop shows.
 - **Overlap / occlusion**: text over text, a card over a card, a floating button over the last list item,
@@ -109,10 +113,12 @@ The phone in dark theme, the app set to its own light theme. Everything follows 
 view, chart, keyboard, native sheet or status bar in the phone's dark theme under a light app is a BUG.
 
 ### font-xl
-Largest accessibility font size. Nothing overlaps or clips; buttons stay inside the screen.
+Largest accessibility font size. Nothing overlaps or clips; buttons stay inside the screen. A text cut, wrapped
+mid-word or running out of its control here is a BUG (low or higher), never an IMP.
 
 ### small-screen
-Smallest supported phone. Titles do not run under buttons; CTAs stay on screen; sheets fit above system bars.
+Smallest supported phone. Titles do not run under buttons; CTAs stay on screen; sheets fit above system bars. A
+text cut here is a BUG (low or higher), never an IMP.
 
 ### keyboard
 Keyboard open on every input: the field, its counter, suggestions and the send/next button stay visible.

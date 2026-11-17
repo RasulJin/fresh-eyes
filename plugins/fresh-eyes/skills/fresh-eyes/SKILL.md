@@ -1,7 +1,7 @@
 ---
 name: fresh-eyes
 description: Tests a running iOS/Android app like a picky QA engineer and designer (visual, motion, interaction, UX bugs) and writes them to the backlog. Run only when the user asks: quick ~$10–15, full: hours.
-argument-hint: "init | quick [BUG-N | screens | what changed] [twice] | full [twice] [--resume] | bench [seeded]"
+argument-hint: "init | quick [BUG-N | screens | what changed] [twice] | full [twice] | resume [<run>] | bench [seeded]"
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
 ---
 
@@ -20,9 +20,9 @@ the heavy work runs in subagents that exchange files with you.
    `coverage.json`, which happens only when `preflight.json` verified a staging/local backend. Never improvise one.
 3. Only change devices whose name starts with `fresh-eyes`. The user's own emulators and phones are read-only.
 4. Never run the Maestro CLI on a device the Maestro MCP is driving (it kills the MCP session).
-5. Subagents get paths and return ≤10 lines. Keep screenshots and videos out of this conversation. Wait for
-   every agent you start before the next step (the pipeline of quick step 8 excepted) and never end your turn
-   while one runs: a headless run
+5. Subagents get paths and return ≤10 lines; their details go to `<run>/notes/` (`coverage.py notes` gathers
+   them), never into this conversation, and so do screenshots and videos. Wait for every agent you start before
+   the next step (the pipeline of quick step 8 excepted) and never end your turn while one runs: a headless run
    (`claude -p`) stops background agents 10 minutes after the turn ends.
 6. Never write secrets (passwords, tokens, test credentials) into files, prompts or reports.
 7. Questions to the user come from you (subagents cannot ask): spec conflicts, "bug or intended?", go-aheads.
@@ -39,7 +39,7 @@ the heavy work runs in subagents that exchange files with you.
   with the Agent tool and never pass `model` (it would override the agent's own model). Never stand in a
   general-purpose agent with their text: it starts with every MCP tool name and skill of the session (~78k
   tokens instead of ~7k) and repeats that on every turn. No such agents → the plugin is not loaded; stop.
-- Parse `$ARGUMENTS`: first word = subcommand (`init`, `quick`, `full`, `bench`); default `quick`.
+- Parse `$ARGUMENTS`: first word = subcommand (`init`, `quick`, `full`, `resume`, `bench`); default `quick`.
 
 ## init
 
@@ -82,9 +82,8 @@ Goal: after a fix or a feature, check what it touched and what it could break. A
 words / nothing (= the current diff).
 
 1. Slim older runs first: `python3 $S/coverage.py prune --runs .fresh-eyes/runs --keep 3` (runs before the last
-   three keep their reports and the images findings link; the newest full run stays whole for `--resume`).
-   Then `RUN=.fresh-eyes/runs/<YYYYMMDD-HHMM>-quick`
-   (mkdir). If `.fresh-eyes/config.json` is missing → run `init`.
+   three keep their reports and the images findings link; the newest full run stays whole for `resume`).
+   Then `RUN=.fresh-eyes/runs/<YYYYMMDD-HHMM>-quick` (mkdir). If `.fresh-eyes/config.json` is missing → `init`.
 2. Make the build current: for each platform, if Metro is not running with the config's `metro_env`, start
    `builds.quick.<p>.start` in the background with that env; if the app is missing, run `builds.quick.<p>.build`
    (background; minutes).
@@ -100,8 +99,8 @@ words / nothing (= the current diff).
    Then `python3 $S/spec.py stale --spec .fresh-eyes/spec.md --repo . --config .fresh-eyes/config.json --head
    <source.ref> --out $RUN/spec-stale.json`: screens whose code changed after the spec's `Updated` date (the
    verdict turns their `spec:` findings into questions; fix/docs/test/chore/style commits and commits naming a
-   BUG-N do not count). `<source.ref>` is preflight.json's commit, so a checkout
-   on another branch does not hide the build's changes; leave `--head` out when there is no commit there.
+   BUG-N do not count). `<source.ref>` is preflight.json's commit, so a checkout on another branch does not hide
+   the build's changes; leave `--head` out when there is no commit there.
 4. Screens:
    - `BUG-N`: read the entry in the backlog (heading + its fields); its replay becomes the coverage cell
      `<platform>/recheck-BUG-N/default/replay` (step 5, `--recheck BUG-N`), reviewed against its "Expected"
@@ -122,26 +121,27 @@ words / nothing (= the current diff).
    signed in first: a crash after sign-in shows here), stop and report why with its pack's `logcat.txt`.
    Any navigator reply `needs: ios-driver` (here, in step 7 or in requests mode): call the Maestro MCP
    `inspect_screen` on that simulator once, then call the navigator again with what it had left.
-7. Navigation: one `fresh-eyes:navigator` per platform (they may run in parallel), ≤15 cells per call, until
-   `coverage.py next` is empty. Prompt: run folder, config path, platform, device id and name from preflight,
-   the cell ids, `package: <app.android_id>` (it goes to every `capture.py snap --package`, which saves the
-   crash log when the app died), and `app language: <app.locale>` when config sets it. A navigator that finds
-   the app signed out signs in with `accounts` itself; cells blocked with
-   "signed out: <variable> not set" mean the user has to export that variable or add its keychain item
-   (`$R/config-format.md`) before the next run; cells
-   blocked with "consent: <text>" need the user's yes for that dialog in config `consents` (ask after the
-   report, never let an agent accept it). A reply line
-   `reach: <screen>: <how>`: write `<how>` into that screen's `reach` in `.fresh-eyes/config.json`, so the next
-   run does not hit the same wall. Liveness: every `capture.py` call and every `nav.py` call with `--run $RUN`
-   refreshes `$RUN/<platform>/heartbeat`. Right after starting a navigator, wait in one blocking call (Bash
-   timeout 600000), never by polling: `python3 $S/nav.py idle --run $RUN --platform <p> --until 540 --cells
-   <its cell ids>` (requests mode: `--requests <its requests.json paths>`). `"state"`: `done` = its cells are
-   recorded; `running` = it is working, call again; `stuck` = no heartbeat for 9 minutes (a permission prompt
-   nobody answers, a loop): stop it (TaskStop) and start a fresh one on the cells `coverage.py next` still lists.
-   Never go by the mtime of the agent's output file (a symlink: the time it was made).
+7. Navigation: per platform two `fresh-eyes:navigator`s at once, one per queue, ≤15 cells per call, until
+   `coverage.py next --cov $RUN/coverage.json --queue main|small` is empty: `main` on preflight's `device`,
+   `small` on its `small_device_id` (none: the small queue after main, on `device`). Prompt: run folder, config
+   path, platform, `queue: <main|small>`, that device's id and name, the cell ids, `package: <app.android_id>`
+   (`capture.py snap --package` keeps the crash log), and `app language: <app.locale>` when config sets it. A
+   navigator that finds the app signed out signs in with `accounts` itself; cells blocked with "signed out:
+   <variable> not set" mean the user has to export that variable or add its keychain item (`$R/config-format.md`)
+   before the next run; cells blocked with "consent: <text>" need the user's yes for that dialog in config
+   `consents` (ask after the report, never let an agent accept it). A reply line `reach: <screen>: <how>`: write
+   `<how>` into that screen's `reach` in `.fresh-eyes/config.json`. Liveness: every `capture.py`, `taps.py` and
+   `nav.py` call with `--run $RUN --queue <q>` refreshes `$RUN/<platform>/heartbeat-<q>`. Right after starting
+   navigators, wait in one blocking call each, in one message (Bash timeout 600000), never by polling: `python3
+   $S/nav.py idle --run $RUN --platform <p> --until 540 --queue <q> --cells <its cell ids>` (requests mode:
+   `--requests <its requests.json paths>`). `"state"`: `done` = its cells are recorded; `running` = call again;
+   `stuck` = no heartbeat for 9 minutes (a permission prompt nobody answers, a loop): stop it (TaskStop) and start
+   a fresh one on the cells `coverage.py next` still lists. Never go by the mtime of the agent's output file (a
+   symlink).
 8. Pipeline: as soon as a screen's cells on a platform are recorded (`idle` said `done`, or its navigator
-   replied), run this step and step 9's first pass for that screen while the next navigator works. Requests
-   mode and second passes wait until all navigation is done.
+   replied), run this step and step 9's first pass for that screen while the navigators work, in two messages:
+   one Bash call chaining its `spec.py slice` and `coverage.py packs`, then all its reviewers (and the next
+   navigator) at once. Requests mode and second passes wait until all navigation is done.
    Review: first, per screen with done cells, `python3 $S/spec.py slice --spec .fresh-eyes/spec.md --screens
    <id>,<its neighbors> --stale $RUN/spec-stale.json --out $RUN/spec/<id>.md` (the global rules and those
    sections; neighbors' rules often apply); journeys: `--screens` = the screens of the journeys walked, `--out
@@ -151,8 +151,7 @@ words / nothing (= the current diff).
    screen id and its spec slice path (never `.fresh-eyes/spec.md`), `.fresh-eyes/known.md`,
    `.fresh-eyes/known-proposed.md`, `.fresh-eyes/examples/`, the `references` and `language` from config,
    `source_root` (`source.root` from preflight.json, or `none`). Journey cells get one reviewer per platform over
-   `<run>/<platform>/journey/`;
-   its findings carry the real screen they concern.
+   `<run>/<platform>/journey/`; its findings carry the real screen they concern.
 9. Verify: once per run, `python3 $S/backlog.py index --file <backlog.path> --ref <source.ref> --config
    .fresh-eyes/config.json --out $RUN/backlog-index.md` (open backlog entries, one line each, as of the build's
    commit: a checkout on another branch has another backlog; no commit in preflight.json: no `--ref`; only
@@ -163,16 +162,17 @@ words / nothing (= the current diff).
    once: the others get `same_as` to it and later its ruling). Then one `fresh-eyes:verifier` per screen folder
    with a file in its `verify` list (up to 4 in parallel; IMPs and linked copies alone need none); the prompt is
    `first pass`, that folder, its spec slice, `.fresh-eyes/known.md`, `.fresh-eyes/known-proposed.md`,
-   `$RUN/backlog-index.md`, `language`,
-   `source_root`, and never the backlog file's path. Keep each verifier's agent id. The journey
-   folder's verifier also gets the findings files of the screens its findings concern (to mark duplicates). Folders whose verifier
-   answered `needs: requests`: first, each `"do": "redo-cell"` entry → `python3 $S/coverage.py set --cov
-   $RUN/coverage.json --cell <cell> --status todo --note "<why>"`, that cell navigated again (step 7) and its new
-   pack reviewed (step 8, a new `findings-<k>.json`), then the entry gets `"done": "<pack>"`; then one navigator per platform in requests mode with their `requests.json` paths;
-   when every entry has `done` or `failed`, send `second pass` with SendMessage to that folder's first-pass
-   verifier (it keeps what it already read). A fresh verifier with `second pass` and the same inputs only when
-   that agent is gone. A second pass that answers `needs: requests` again (a medium with one repeat back) gets
-   one more requests round and `second pass`; what is still pending after it stays pending.
+   `$RUN/backlog-index.md`, `language`, `source_root`, and never the backlog file's path. Keep each verifier's
+   agent id. The journey folder's verifier also gets the findings files of the screens its findings concern (to
+   mark duplicates). Folders whose verifier answered `needs: requests`: first, each `"do": "redo-cell"` entry →
+   `python3 $S/coverage.py set --cov $RUN/coverage.json --cell <cell> --status todo --note "<why>"`, that cell
+   navigated again (step 7) and its new pack reviewed (step 8, a new `findings-<k>.json`), then the entry gets
+   `"done": "<pack>"`; then `python3 $S/findings.py requests --run $RUN` (merges an entry asked twice) and
+   navigators in requests mode, ≤15 open entries per call, packs shot on the small device to its navigator, both
+   devices at once; when every entry has `done` or `failed`, send `second pass` with SendMessage to that folder's
+   first-pass verifier (it keeps what it already read; a fresh verifier with `second pass` and the same inputs
+   only when that agent is gone). A second pass that answers `needs: requests` again (a medium with one repeat
+   back) gets one more requests round and `second pass`; what is still pending after it stays pending.
 10. `python3 $S/findings.py same --run $RUN --findings <all findings*.json>` (the linked copies take their case's
     ruling; its `links`, every [copy, target], go to run-log.md: no verifier sees a copy), then
     `python3 $S/coverage.py verdict --cov $RUN/coverage.json --findings <all findings*.json> --language <config>`
@@ -189,9 +189,9 @@ words / nothing (= the current diff).
     $S/findings.py known --run $RUN --out .fresh-eyes/known-proposed.md`: the verifiers' known candidates and test
     data, which the next run's reviewers skip.
 11. Write `$RUN/report.md`, `rejected.md` and `run-log.md` by `$R/report-format.md` (see "Report"; `imp.md` is
-    step 10's). Then `python3 $S/coverage.py score --run $RUN --session "${CLAUDE_SESSION_ID}"`: the run's score
-    card (`$RUN/score.json`, the metrics a script counts; the judge fills M4, M7 and M11 and may correct M1, a
-    rerun keeps them).
+    step 10's). Then `python3 $S/coverage.py notes --run $RUN` (the agents' notes into `orchestrator-notes.md`)
+    and `python3 $S/coverage.py score --run $RUN --session "${CLAUDE_SESSION_ID}"`: the run's score card
+    (`$RUN/score.json`, the metrics a script counts; the judge fills M4, M7 and M11, may correct M1; a rerun keeps them).
 12. Review with the user, then write the backlog and regression flows (see "After the report").
 
 ## full
@@ -203,13 +203,22 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
   when preflight allowed mutation).
 - Fresh install on the owned devices: `devices.py app --do clear` (Android wipes the data; iOS uninstalls, so
   follow with `--do install --artifact <builds.full.ios.artifact>`), then `--do locale --locale <app.locale>` when
-  config sets it, then launch. Sign-in: the navigator types
-  `nav.py type --env <accounts.<role>.email_env> --keychain fresh-eyes-<role>-email`, the same for the password
-  (the values live in the user's environment or keychain, never in prompts or files). No `accounts` in config → keep the installed state instead of
-  clearing, and say so in the report.
+  config sets it, then launch. Sign-in: the navigator types `nav.py type --env <accounts.<role>.email_env>
+  --keychain fresh-eyes-<role>-email`, the same for the password (the values live in the user's environment or
+  keychain, never in prompts or files). No `accounts` in config → keep the installed state, and say so.
 - The navigator gets one journey or one screen per call.
-- `full --resume`: take the newest `.fresh-eyes/runs/*-full/`, re-run preflight into it, and continue with
-  `coverage.py next` until no todo cells remain. Never restart finished cells.
+- Before step 6: `bench seeded` (it needs no device) with `--run $RUN` on its `bench.py score`, which writes
+  `bench` into score.json; fewer than 4 of 5 caught → stop and tell the user (verdict INCOMPLETE).
+
+## Checkpoints and resume
+
+Checkpoints: after navigation (`coverage.py next` empty on every queue) and after every first verifier pass,
+once each agent you started is back, write `$RUN/RESUME.md`: the step reached; what is left (todo cells, packs
+no reviewer listed, folders without a first pass, open requests); the verifiers' agent ids; steps taken by hand.
+In `full`, then stop with one line: "continue: `/fresh-eyes resume <run>` in a new session" (a fresh context
+costs far less than carrying this one). `resume [<run>]` (default: the newest run; `full --resume`: the newest
+full one): read its `RESUME.md`, run step 3 into it again (same mode and `--source`), then go on from the first
+unfinished step (a second pass goes to a fresh verifier when the first one is gone). Never redo a done cell.
 
 ## twice
 
@@ -272,16 +281,16 @@ stop throws away a build or a sign-in someone put on it.
 2. New real bugs and taken improvements → backlog: write the finding to `$RUN/backlog-<k>.json`, then `python3
    $S/backlog.py append --file <backlog.path> --finding $RUN/backlog-<k>.json --template <template> --attach
    $RUN/<its main crop> --images-dir <backlog.images_dir>` (assigns the BUG or IMP id, copies the crop next to
-   the backlog, since run folders are git-ignored, and links it). A real bug with `backlog_id` gets no new entry (an improvement with one neither):
+   the backlog, since run folders are git-ignored, and links it). A real bug with `backlog_id` gets no new entry
+   (an improvement with one neither; an id from `backlog.extra` is only named in the report); the others get
    `python3 $S/backlog.py set-status --file <backlog.path> --id <backlog_id> --status open --note "<date>,
    <device>, <build>: still reproduces, <evidence>"`. For `quick BUG-N`: the same `set-status` with `--status
    verified|open` and `<result>` in the note.
 3. Intended bugs and declined improvements → append to `.fresh-eyes/known.md` (never raised again); record the
    intended bugs as "rejected by user" counts in `report.md` (this is the false-positive measure). Each line
    of `known-proposed.md` the user rules on leaves it: accepted → moved to `known.md`; declined (a real bug) →
-   deleted, so reviewers flag it again; only lines not yet ruled stay. A
-   `spec-text` pair they accept is a spec update (step 5), one they turn down (the app is wrong) a new bug: write
-   it as a finding for step 2.
+   deleted, so reviewers flag it again; only lines not yet ruled stay. A `spec-text` pair they accept is a spec
+   update (step 5), one they turn down (the app is wrong) a new bug: write it as a finding for step 2.
 4. For each new real BUG write a regression flow `<maestro_dir>/fresh-eyes-<BUG-id>.yaml` (tag `fresh-eyes`): reach
    the state, run the probe, assert the expected state (`assertVisible` / `assertNotVisible` /
    `extendedWaitUntil`). Visual-only bugs get a comment that `quick` re-checks them.

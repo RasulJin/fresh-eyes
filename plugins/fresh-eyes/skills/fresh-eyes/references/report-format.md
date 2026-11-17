@@ -61,10 +61,10 @@ then returns it in `merged`, and the report lists it under that finding.
   `candidates.json`), and only those. A done cell whose packs no reviewer listed keeps the verdict INCOMPLETE.
 - `invariants` (when the slice has a `### Invariants`): `[{"id", "pack", "result": "ok|broken|not shown"}]`, each
   `inv` line the reviewer recomputed (reviewer.md step 4); a `broken` one is also a BUG with the arithmetic.
-- `backlog_id` (`BUG-N` or `IMP-N`): the verifier sets it on a confirmed BUG or an IMP that an open entry of
-  `backlog-index.md` already describes, with `verify_note` "already open: <id>". A BUG still counts as
-  confirmed; the report lists it under "still reproduces" and the backlog gets a recheck line instead of a new
-  entry. An IMP with it gets no new entry.
+- `backlog_id` (`BUG-N`, `IMP-N`, or an id of config `backlog.extra`): the verifier sets it on a confirmed BUG or
+  an IMP that an open entry of `backlog-index.md` already describes, with `verify_note` "already open: <id>". A
+  BUG still counts as confirmed and the report lists it under "still reproduces"; the backlog gets a recheck
+  line instead of a new entry (an `extra` id: nothing). An IMP with it gets no new entry.
 - `rule: taste` (no spec rule behind it) caps `confidence` at 0.6.
 - The verifier sets `verdict` and `verify_note`. No BUG reaches the backlog while `pending`; IMPs are proposals
   and go in when the owner picks them. The verifier only rejects an IMP the spec slice or `known.md`
@@ -73,10 +73,12 @@ then returns it in `merged`, and the report lists it under that finding.
 ## `requests.json` (verifier → navigator, in the screen folder)
 
 `[{"finding": "f1", "pack": "<path>", "do": "resnap|repeat-probe|crop", "probe": "<id>", "bbox": [..],
-"args": "<extra probe flags, optional: --interval-ms 150>", "times": 2, "why": "", "from": "<findings file>"},
-{"do": "redo-cell", "cell": "<cell id>", "why": ""}]` (`times`, `why`, `from` optional; `from`: a reviewer's);
-the navigator adds `"done": "<path>"` or `"failed": "<why>"` to each entry but `redo-cell`, which the
-orchestrator handles (the cell back to `todo`, navigated and reviewed again, then `done`).
+"args": "<extra probe flags, optional: --interval-ms 150>", "times": 2, "why": "", "from": "<findings file>",
+"conditions": {"slow_animations": false, "app_theme": "<label> | null", "start_page": "<tab or page> | null"}},
+{"do": "redo-cell", "cell": "<cell id>", "why": ""}]` (`times`, `why`, `from` optional; `from`: a reviewer's;
+`conditions`: the source pack's, written by the verifier, set by the navigator before the repeat); the
+navigator adds `"done": "<path>"` or `"failed": "<why>"` to each entry but `redo-cell`, which the orchestrator
+handles (the cell back to `todo`, navigated and reviewed again, then `done`).
 
 ## Verdict
 
@@ -89,10 +91,10 @@ Computed only by `coverage.py verdict` (never by a model); the first that applie
   its `reasons` still say what the code would be without the conflict;
 - any confirmed BUG of severity high → `BLOCK` (НЕ ВЫПУСКАТЬ);
 - any confirmed BUG of severity medium → `ISSUES` (ЕСТЬ ПРОБЛЕМЫ), even when something was not checked;
-- any cell not done (`na` too: drop that probe from the config), any done cell whose packs no reviewer listed,
-  any BUG still `pending`, any `unsure` BUG of severity high or medium (intermittent, asked, stale spec), a build
-  that changed during the run, any unchecked item of this run (quick's screen limit, skipped neighbors) →
-  `INCOMPLETE` (НЕ ПРОВЕРЕНО ДО КОНЦА);
+- any cell not done (`na` is not counted: its reason lists it as not applicable, with its note), any done cell
+  whose packs no reviewer listed, any BUG still `pending`, any `unsure` BUG of severity high or medium
+  (intermittent, asked, stale spec), a build that changed during the run, any unchecked item of this run (quick's
+  screen limit, skipped neighbors) → `INCOMPLETE` (НЕ ПРОВЕРЕНО ДО КОНЦА);
 - otherwise `CLEAN` (ЧИСТО).
 
 Permanent gaps never block: plan items with `"gap": true`, which no run of this project as configured can
@@ -144,7 +146,7 @@ Evidence: <crop path> · found by <found_by>
 Also: <title of a finding merged into it> (<file>#<id>)
 
 ## Still reproduces
-- **<title>** (BUG-N), <platform>, <screen>, severity <s> · <crop path>
+- **<title>** (BUG-N or the `extra` id), <platform>, <screen>, severity <s> · <crop path>
 
 ## Improvements: <new> new, <known> already in the backlog (imp.md)
 | screen | new | already open | the new ones (imp.md numbers) |
@@ -175,8 +177,7 @@ Also: <title of a finding merged into it> (<file>#<id>)
 ```
 
 - Not checked in this run: the plan's `unchecked` items without `gap`, then each cell not done (`na`, `blocked`,
-  `failed`) with its note, e.g. `android/flight-search/default/swipe-inside — not enough items` (a swipe that
-  moved nothing is never done).
+  `failed`) with its note, e.g. `android/flight-search/default/swipe-inside — not enough items`.
 - A bug is at most 10 lines: at most 5 steps (join the way there into one, "Open Trips → Paris → Schedule"),
   expected and actual one sentence each; the backlog entry gets the full finding.
 - Unsure, by class, never one block per finding, in this order and only classes that have findings: `stale`
@@ -188,13 +189,12 @@ Also: <title of a finding merged into it> (<file>#<id>)
   findings files). At most 10 question sub-items in all, the same way. `coverage.py score` counts the sub-items (M5); keep the marker `spec text:` as is in any
   language: that sub-item is no question.
 - Open spec conflicts: the `conflict` entries, one line each, no question (the spec already asks the owner).
-- Known candidates: the `known` entries, one line each, not counted as questions; what the owner accepts goes
-  to `known.md`.
+- Known candidates: the `known` entries, one line each, not counted as questions; the owner's yes: `known.md`.
 
 ## Backlog templates
 
-`backlog.py` templates: `ru-backlog` (Где / Шаги / Ожидание / Факт / Заметки) and `en-backlog`
-(Where / Steps / Expected / Actual / Notes). New entries get the next free number and status `open`;
-`quick BUG-N` rechecks set `verified` or back to `open` with a recheck line under the heading; a confirmed
-finding with `backlog_id` gets a recheck line and status `open` instead of a new entry. `backlog.py index` lists
-the entries whose heading status is `open`, `in-progress`, `planned` or empty, one line each, for the verifier.
+`backlog.py` templates: `ru-backlog` (Где / Шаги / Ожидание / Факт / Заметки) and `en-backlog` (Where / Steps /
+Expected / Actual / Notes). New entries get the next free number and status `open`; `quick BUG-N` rechecks set
+`verified` or back to `open` with a recheck line under the heading; a confirmed finding with `backlog_id` gets a
+recheck line and status `open` instead of a new entry. `backlog.py index` lists the entries whose heading status
+is `open`, `in-progress`, `planned` or empty, then the `backlog.extra` lines, one line each, for the verifier.

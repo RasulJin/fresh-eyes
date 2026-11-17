@@ -13,8 +13,9 @@ a zoomed crop or a repeated probe, you ask for it in `requests.json` and the nav
 Read once: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/checklist.md` (severity, do-not-flag) and
 `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/report-format.md` (schemas).
 
-Every turn re-reads your whole context, so open files in batches: one message with all the reads you need
-(a pack's images and JSON together), not one file per turn.
+Every turn re-reads your whole context, so read in batches: list the folder's files with one Glob, then one
+message with every Read you need (the findings files, the slice, `known*.md`, the backlog index, each pending
+finding's crops and JSON), a second batch only for what the first showed you need; never open a file twice.
 
 ## Input (from the orchestrator)
 
@@ -41,6 +42,8 @@ the script copies that ruling. Another defect → delete `same_as` and `same_as_
 
 For each BUG with `verdict: "pending"`:
 1. Open its evidence crop(s); open the pack's `som.png` only when the crop lacks context. Read the spec rule.
+   Compare two frames (the original and its recheck) on `screen.png`, never `screen_1000.png`: the downscale
+   hides a 1-2 px cut or seam.
    A BUG at confidence ≤ 0.4, or whose `actual` says its evidence is missing ("needs a frame", "not checked",
    "seems"), is a guess: request the evidence that decides it (step 4), or set `kind` to `IMP` when none can.
 2. Try to disprove it:
@@ -88,7 +91,12 @@ For each BUG with `verdict: "pending"`:
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
    "probe": "<probe id>", "bbox": [x, y, w, h]}` and leave it pending. A repeat with other probe flags gets
-   `"args"`, e.g. `"--interval-ms 150"` (a person's pace) or `"--delay-ms 200"`.
+   `"args"`, e.g. `"--interval-ms 150"` (a person's pace) or `"--delay-ms 200"`. Every entry you append (a
+   reviewer's too) gets the source pack's `"conditions": {"slow_animations": <bool>, "app_theme": <label|null>,
+   "start_page": <tab or page|null>}`, read from its `meta.json` (`conditions`, `app_theme_set`), `around.json`
+   (slow animations) and its first frame (the selected tab or page): the navigator sets them before the repeat,
+   so a repeat under other conditions never comes back. The same pack, `do` and probe once (`findings.py
+   requests` merges copies).
 5. A cell whose probe never tested its oracle (snapped on another screen, the gesture never reached what it
    should interrupt): `{"do": "redo-cell", "cell": "<cell id>", "why": "<one line>"}`; the orchestrator runs it
    again, and on the second pass you rule on its findings from the new pack (the entry's `done`).
@@ -98,8 +106,11 @@ For each BUG with `verdict: "pending"`:
 
 Duplicates: when two findings (in this folder's files, or one here and one in a file you were given) report
 the same defect, set `same_as` on the one with weaker evidence, pointing at the other with its file relative
-to the run, e.g. `"same_as": "android/post-detail/findings-2.json#f3"`, and still rule on both. Files from
-other folders are read-only: set `same_as` and rule only on findings in your own folder. Write `verify_note` in the project language.
+to the run, e.g. `"same_as": "android/post-detail/findings-2.json#f3"`, and still rule on both. So does a
+finding whose defect follows wholly from another one's (the same pack, one cause; or the app derives it on
+purpose from that one's output, a label picked by the answer's language): `same_as` to the cause, the verdict
+merges it. Files from other folders are read-only: set `same_as` and rule only on findings in your own folder.
+Write `verify_note` in the project language.
 
 Judge from the evidence, not from the app's source code: no hunting for causes or file:line (whoever fixes the
 bug does that). The exceptions are single lookups, and only in `source_root` (the checkout can be another
@@ -155,4 +166,6 @@ rule each on its own; say which in both `verify_note`s.
 ## Reply (≤10 lines)
 
 Pass 1: `needs: requests` with the count, or `done`. Pass 2: counts of confirmed / rejected / unsure and the
-paths of the findings files you updated.
+paths of the findings files you updated. Anything more (evidence that looked wrong, a tool fault behind a
+reject) goes to `<run>/notes/<screen>-<platform>-verifier.md` (second pass: Read it, Write it back with your
+lines added), never into the reply.

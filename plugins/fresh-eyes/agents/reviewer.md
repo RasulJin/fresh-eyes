@@ -16,8 +16,9 @@ states, UX rubric, severity, do-not-flag) and, if motion evidence exists,
 `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/motion.md`. Output schema:
 `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/report-format.md`.
 
-Every turn re-reads your whole context, so open files in batches: one message with all the reads you need
-(a pack's images and JSON together), not one file per turn.
+Every turn re-reads your whole context, so read in batches: list your group's files with one Glob, then one
+message with every Read you need (the images and JSON of all the packs you will open), a second batch only for
+what the first showed you need; never open a file twice. About 7 turns in all.
 
 ## Input (from the orchestrator)
 
@@ -42,6 +43,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    sub-folders with a `meta.json` (`afterback/`, `return/`, `typed/`, `form-after/`, journey and scenario
    `step-N/`, `scroll-N/`) are packs too; `scroll-N/` is the same screen scrolled N half-screens down: judge what
    the first frame could not show, and a row cut at its top or bottom edge is the scroll, not a defect.
+   `restored/` only proves the light theme came back after a dark cell, `left/` only that a probe left the
+   screen: not evidence, skip them.
    Image budget, ~30 in total: `som.png` is required for the first pack of each state (`default-none`,
    `dark-none`, …) and for the first sub-pack of a probe (`scroll-1/`, `step-1/`, or its only one). Judge every
    other pack by its crops and `candidates.json`, and open its `som.png` only when they leave a doubt.
@@ -74,22 +77,28 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    wrong data as true) with the values and your arithmetic in `actual`. Record each in the output's `invariants`.
 5. Go beyond the candidates through the checklist sections and the UX rubric. Compare with the spec rules and
    with the examples. Check consistency against sibling packs (header vs tab bar icon, the same control in two
-   states, light vs dark). Then look once more as this app's designer: every change you would make (spacing,
-   sizes, words, order, icons, defaults, a step to drop) is an IMP, small ones too.
+   states, light vs dark). Two numbers on screen that disagree, content cut by a pinned element mid-row, and
+   text cut at font-xl or on the small screen are defects: a BUG (low or higher), never an IMP. Then look once
+   more as this app's designer: every change you would make (spacing, sizes, words, order, icons, defaults, a
+   step to drop) is an IMP, small ones too.
 6. For each problem write a finding: `kind` BUG (defect) or IMP (improvement with a concrete change),
    `severity` per the checklist, `som` numbers and an evidence crop path, `expected` vs `actual`, `rule` =
    `spec:<rule id>` or `taste`. `steps` is for the person who will fix it: from the app's start screen, one
    plain action per item (system settings too, like "set the system font to the largest"), buttons named by
    their on-screen text, the last item saying what to look at. No cell ids, pack names, step numbers, script
    commands or coordinates there: those go to `found_by` (cell id, probe, pack or scenario step). `confidence` reflects how
-   sure the evidence makes you; `taste` findings are capped at 0.6.
+   sure the evidence makes you; `taste` findings are capped at 0.6. A defect that follows wholly from another
+   finding of the same pack (one cause, two symptoms: a label in the answer's language when the answer is in
+   the wrong one) gets `"same_as": "<that findings file>#<id>"`, not a case of its own.
 7. A guess is not a BUG. What you suspect but no frame shows well enough (needs a zoom, another frame, the end
    of a list, a repeat): no finding, an entry in the output's `requests`: `{"pack": "<pack>", "do":
    "resnap|crop|repeat-probe", "probe": "<probe id>", "bbox": [x, y, w, h] (crop only), "why": "<what the new
    evidence shows if it is a bug>"}`; the verifier has it fetched and rules on it. So is a tap whose result no
    frame shows (no snap after it, one from before the transition, another screen on it):
    `{"pack": "<that tap's pack>", "do": "repeat-probe", "probe": "tap-everything", "why": "tap «<label>» alone,
-   snap after: <what it should open>"}`. A doubt no evidence can settle (a word, a choice): an IMP. So a BUG has
+   snap after: <what it should open>"}`. Each request is a trip to the device: ask only when the answer can make
+   a BUG of medium or higher or settles an invariant, at most 2 per group of packs (the most severe); a doubt
+   about a low one, or one no evidence can settle (a word, a choice), is an IMP. So a BUG has
    confidence above 0.4 and a frame or log line that shows it; its title never starts «Not verified» / «Не
    проверено», and its `actual` never says the evidence is missing («needs a frame», «not checked», «seems»,
    «нужен кадр», «не проверено», «похоже»).
@@ -127,3 +136,5 @@ report-format.md, all `verdict: "pending"`, evidence paths relative to the run f
 ## Reply (≤10 lines)
 
 The findings file path, counts by kind and severity, and the single most important problem in one line.
+Anything more (a pack that looked wrong, a script flag you overruled, what you could not judge) goes to
+`<run>/notes/<screen>-<platform>-<findings file name without .json>.md`, never into the reply.
