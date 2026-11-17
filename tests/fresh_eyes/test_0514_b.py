@@ -8,13 +8,14 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from datetime import datetime, timezone
 from unittest import mock
 
 from tests.fresh_eyes.helpers import FIXTURES, SCRIPTS
 from tests.fresh_eyes.test_coverage import BOTH_OK_MUT_ON, ONE_SCREEN, make_pack
 from fe_common import FEError, read_json, write_json
-from coverage import NOTES_MARK, _load_findings, plan, set_status, verdict
+from coverage import NOTES_MARK, _load_findings, next_cells, plan, set_status, verdict
 import backlog
 import bench
 import findings
@@ -469,6 +470,47 @@ class BenchInScoreTest(unittest.TestCase):
         card = read_json(stats.score(run)["out"])  # the run scored again after the bench
         self.assertEqual(card["bench"], {"caught": 4, "of": 5})
         self.assertIn("M1", card)
+
+
+class TwoQueuesTest(unittest.TestCase):
+    """П-41: plan splits a platform's cells between the main and the small device; next hands out one queue."""
+    NEAR = {"post-detail": ["thread"], "trips": ["trip-detail"], "trip-detail": ["trip-map", "trip-schedule"],
+            "welcome": ["consent-doc"]}
+
+    def _cfg(self):
+        ids = ["feed", "post-detail", "thread", "trips", "trip-detail", "trip-map", "trip-schedule", "vio-guide",
+               "settings", "welcome", "consent-doc"]
+        return dict(ONE_SCREEN, screens=[{"id": s, "route": "x.tsx", "marker": [s], "neighbors": self.NEAR.get(s, []),
+                                          "states": ["default", "dark", "small-screen"], "probes": ["tap-everything"]}
+                                         for s in ids])
+
+    def test_small_screen_goes_small_neighbors_stay_together_and_the_queues_even_out(self):
+        pre = {"platforms": {"android": {"ok": True, "small_device": True}, "ios": {"ok": True}}}
+        cov = plan(self._cfg(), pre, "full", passes=2)
+        android = [c for c in cov["cells"] if c["platform"] == "android"]
+        self.assertTrue(all(c["queue"] == "small" for c in android if c["state"] == "small-screen"))
+        queue = {}
+        for c in android:
+            if c["state"] != "small-screen":
+                queue.setdefault(c["screen"], set()).add(c["queue"])
+        self.assertTrue(all(len(q) == 1 for q in queue.values()))  # a screen never split
+        for together in (["post-detail", "thread"], ["trips", "trip-detail", "trip-map", "trip-schedule"],
+                         ["welcome", "consent-doc"]):
+            self.assertEqual(len({min(queue[s]) for s in together}), 1, together)
+        n = Counter(c["queue"] for c in android)
+        self.assertLessEqual(abs(n["main"] - n["small"]), 12)  # a group of 4 screens is 12 cells a pass
+        self.assertEqual({c["queue"] for c in cov["cells"] if c["platform"] == "ios"}, {"main"})  # no small iPhone
+        path = os.path.join(_root(self), "coverage.json")
+        write_json(path, cov)
+        small = _cli("coverage.py", "next", "--cov", path, "--queue", "small", "--limit", "500")
+        self.assertEqual(sorted(small), sorted(c["id"] for c in android if c["queue"] == "small"))
+
+    def test_without_a_small_device_every_cell_is_main(self):
+        pre = {"platforms": {"android": {"ok": True}}}
+        cov = plan(self._cfg(), pre, "full")
+        self.assertEqual({c["queue"] for c in cov["cells"]}, {"main"})
+        self.assertEqual(len(next_cells(cov, queue="small")), 0)
+        self.assertEqual(len(next_cells(cov, queue="main", limit=500)), len(cov["cells"]))
 
 
 if __name__ == "__main__":

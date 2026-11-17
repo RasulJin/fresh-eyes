@@ -8,7 +8,7 @@ CLI:
   coverage.py plan --config C --preflight P --mode quick|full [--screens a,b] [--recheck BUG-1,BUG-2]
                    [--max-screens 4] --out cov.json
   coverage.py set --cov cov.json --cell ID --status todo|done|failed|blocked|na [--evidence P ...] [--note T]
-  coverage.py next --cov cov.json [--platform android|ios] [--limit 10]
+  coverage.py next --cov cov.json [--platform android|ios] [--queue main|small] [--limit 10]
   coverage.py verdict --cov cov.json --findings F [F ...] [--language ru|en]
   coverage.py map --cov cov.json [--language ru|en]
   coverage.py diff-screens --repo R --base REF --config C
@@ -188,6 +188,7 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
             c["drag"] = list(by_id[c["screen"]]["drag"])
         if c["probe"] == "swipe-inside" and by_id[c["screen"]].get("pages"):
             c["pages"] = list(by_id[c["screen"]]["pages"])
+    _queues(cells, by_id, {p for p in ok if plats[p].get("small_device")})
     if passes == 2:  # one pass catches ~75-80% of what two independent passes do: a release gets a second one
         cells += [dict(c, id=c["id"] + "#2", evidence=[], **{"pass": 2}) for c in cells
                   if not c["screen"].startswith("recheck-")]
@@ -196,6 +197,36 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
                 "or testID only this screen shows" % sid for sid in chosen if not by_id[sid].get("marker")]
     return {"run_id": time.strftime("%Y%m%d-%H%M") + "-" + mode, "mode": mode, "cells": cells,
             "unchecked": unchecked, "warnings": warnings, "motion_ceiling_ms": config.get("motion_ceiling_ms", 300)}
+
+
+def _queues(cells, by_id, two):
+    """Each cell's "queue": "main" (the main device) or "small" (the small one, when the platform has it: two
+    navigators at once). small-screen cells go small; screens linked by neighbors (shared data: a post and its
+    thread, a trip and its map) stay in one queue; whole groups go to the queue with fewer cells so far."""
+    for c in cells:
+        c["queue"] = "small" if c["state"] == "small-screen" and c["platform"] in two else "main"
+    for p in two:
+        mine = [c for c in cells if c["platform"] == p]
+        screens = list(dict.fromkeys(c["screen"] for c in mine if c["screen"] in by_id))
+        group = {s: s for s in screens}
+
+        def root(s):
+            while group[s] != s:
+                s = group[s]
+            return s
+        for s in screens:
+            for n in by_id[s].get("neighbors", []):
+                if n in group:
+                    group[root(n)] = root(s)
+        load = Counter(c["queue"] for c in mine if c["queue"] == "small" or c["screen"] not in by_id)
+        size = Counter(root(c["screen"]) for c in mine if c["screen"] in by_id and c["queue"] == "main")
+        # ponytail: a cell is the unit of time; weight by probe if a scenario keeps one queue running long
+        for g in sorted(size, key=lambda g: -size[g]):
+            q = "small" if load["small"] < load["main"] else "main"
+            load[q] += size[g]
+            for c in mine:
+                if c["screen"] in by_id and root(c["screen"]) == g and c["state"] != "small-screen":
+                    c["queue"] = q
 
 
 def _find(cov, cell_id):
@@ -469,12 +500,14 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
     return c
 
 
-def next_cells(cov, platform=None, limit=10, mutating_allowed=True):
-    """Todo cells; mutating ones are blocked when the current preflight no longer allows mutation (resume)."""
+def next_cells(cov, platform=None, limit=10, mutating_allowed=True, queue=None):
+    """Todo cells (of one queue: one navigator per device); mutating ones are blocked when the current preflight
+    no longer allows mutation (resume)."""
     for c in cov["cells"]:
         if c["status"] == "todo" and c.get("mutating") and not mutating_allowed:
             c["status"], c["note"] = "blocked", "mutation not allowed by the current preflight"
-    return [c for c in cov["cells"] if c["status"] == "todo" and (platform is None or c["platform"] == platform)][:limit]
+    return [c for c in cov["cells"] if c["status"] == "todo" and (platform is None or c["platform"] == platform)
+            and (queue is None or c.get("queue", "main") == queue)][:limit]
 
 
 def pack_key(path):
@@ -882,6 +915,7 @@ def main():
     p.add_argument("--note", default="")
     p = sub.add_parser("next"); p.add_argument("--cov", required=True); p.add_argument("--platform")
     p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--queue", choices=["main", "small"], help="the cells of one device's navigator (plan's queue)")
     p = sub.add_parser("verdict"); p.add_argument("--cov", required=True); p.add_argument("--findings", nargs="*",
                                                                                         default=[])
     p.add_argument("--language", default="en")
@@ -914,7 +948,7 @@ def main():
         allowed = os.path.exists(pf) and read_json(pf).get("mutating_allowed") is True
         with locked(a.cov):
             cov = read_json(a.cov)
-            cells = next_cells(cov, a.platform, a.limit, allowed)
+            cells = next_cells(cov, a.platform, a.limit, allowed, a.queue)
             write_json(a.cov, cov)
         print(json.dumps([c["id"] for c in cells], ensure_ascii=False))
     elif a.cmd == "verdict":
