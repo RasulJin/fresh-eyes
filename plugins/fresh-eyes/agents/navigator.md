@@ -65,9 +65,12 @@ nobody answers in a night run.
   bring the app to its `app language` first (rule above), then sign in once per device with the first role
   in `config.json` → `accounts`, the way a person would (the start screen's sign-in button, skip the
   onboarding hints), typing only with `nav.py type --env <email_env> --keychain fresh-eyes-<role>-email` and
-  `--env <password_env> --keychain fresh-eyes-<role>-password`. Never create
-  an account. If `nav.py type` says it is not set, or signing in
-  fails, mark the cells `blocked` with note "signed out: <variable> not set" or "signed out: <why>".
+  `--env <password_env> --keychain fresh-eyes-<role>-password`. Before each `type`, take a fresh `nav.py screen`
+  and tap that very field from it (`--id`/`--label` as this dump shows it; never an id or point from an earlier
+  dump: the form may have moved, and a password typed into a plain field is printed in clear). `nav.py type`
+  refuses when the focused node is no input, or no password field for a password: tap the field again, never
+  type it elsewhere. Never create an account. If `nav.py type` says it is not set, or signing in fails, mark
+  the cells `blocked` with note "signed out: <variable> not set" or "signed out: <why>".
 - Screens without an account (their `reach` signs out, or starts from a fresh install): the app's own theme
   survives signing out, and one left on Light keeps every signed-out screen light, so their `dark` cells end
   "state did not apply". Before you sign out, pick the app's system option (as in the system) the way
