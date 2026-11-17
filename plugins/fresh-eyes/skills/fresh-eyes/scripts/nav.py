@@ -15,7 +15,7 @@ CLI (all print the compressed screen after acting; --platform defaults to androi
                  the variable when set, else the macOS keychain item; never printed. Refused unless a text field
                  has focus in a fresh dump, and, for a password (VAR or SERVICE says "password"), one with the
                  password flag; the field then prints as ‹typed›)
-  nav.py swipe  --device ID --from X,Y --to X,Y [--ms 300]
+  nav.py swipe  --device ID --from X,Y --to X,Y [--ms 300]   (refused from within 48 px of an edge: the system's)
   nav.py back   --device ID                      (iOS: edge swipe)
   nav.py wait   --device ID (--text RE | --label RE | --id SUFFIX) [--timeout 15]
   nav.py idle   --run RUN [--platform android|ios]   (seconds since the platform's last heartbeat)
@@ -43,7 +43,8 @@ SETTLE_S = 1.0
 
 
 def _dump_uiautomator(dev):
-    proc = fe_common.run([devices.adb_path(), "-s", dev.id, "exec-out", "uiautomator", "dump", "/dev/tty"], timeout=40)
+    proc = fe_common.run([devices.adb_path(), "-s", dev.id, "exec-out", "uiautomator", "dump", "/dev/tty"],
+                         timeout=DUMP_TIMEOUT_S)
     return (proc.stdout + proc.stderr).decode("utf-8", "replace")  # stderr: "could not get idle state" comes there
 
 
@@ -66,6 +67,7 @@ def _dump_maestro(dev):
 
 
 IDLE = "idle state"  # uiautomator dump: "could not get idle state" on a screen that animates forever
+DUMP_TIMEOUT_S = 20  # 0.5.13 welcome: dumps hung 40 s three times over (2 min) before the Maestro CLI was tried
 
 
 def hierarchy(dev):
@@ -87,8 +89,8 @@ def _hierarchy(dev):
             return normalize(_dump_uiautomator(dev), "uiautomator"), "uiautomator"
         except FEError as e:
             last = e
-            if IDLE in str(e):
-                break  # each retry waits another 10 s for the same answer
+            if IDLE in str(e) or "timed out" in str(e):
+                break  # each retry waits as long again for the same answer
             time.sleep(0.7)
     try:
         return normalize(_dump_maestro(dev), "maestro"), "maestro"

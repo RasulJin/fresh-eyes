@@ -11,6 +11,7 @@ import os
 import shutil
 
 from fe_common import FEError, FFMPEG, cli, image_size, read_gray, read_rgb, run, write_png
+from geometry import _ancestors
 
 DIFF_TOL = 24  # max per-channel difference still counted as "background"
 
@@ -128,6 +129,19 @@ SURFACE_MIN_SHARE = 0.12  # panels, sheets, dialogs, big cards
 SHARP_PX = 4
 
 
+def _on_edge(box, corner, panel):
+    """The corner lies on a straight edge of an enclosing panel that goes on past it: no corner is drawn there
+    (0.5.13 feed-trips: an inner ScrollView's corners in the middle of the menu panel's right edge)."""
+    x, y, w, h = box
+    ax, ay, aw, ah = panel
+    px, py = (x if corner[1] == "l" else x + w), (y if corner[0] == "t" else y + h)
+    on_side = abs(px - (ax if corner[1] == "l" else ax + aw)) <= 2 and \
+        (ay < py - 2 if corner[0] == "t" else ay + ah > py + 2)
+    on_top = abs(py - (ay if corner[0] == "t" else ay + ah)) <= 2 and \
+        (ax < px - 2 if corner[1] == "l" else ax + aw > px + 2)
+    return on_side or on_top
+
+
 def corner_candidates(src, nodes, screen_wh, max_surfaces=5):
     """Big surfaces with visibly sharp corners. Corners on the left/right screen edge are skipped:
     edge-to-edge surfaces show no corner there."""
@@ -136,6 +150,7 @@ def corner_candidates(src, nodes, screen_wh, max_surfaces=5):
     surfaces = [n for n in nodes if n["bounds"][2] * n["bounds"][3] >= SURFACE_MIN_SHARE * sw * sh
                 and not (n["bounds"][2] >= sw - 2 and n["bounds"][3] >= sh - 2)
                 and not n.get("rid", "").startswith("com.android.systemui")]
+    by_id, every = {n["id"]: n for n in surfaces}, {n["id"]: n for n in nodes}
     out, seen = [], set()
     for n in sorted(surfaces, key=lambda n: -n["bounds"][2] * n["bounds"][3]):
         box = tuple(n["bounds"])
@@ -143,10 +158,11 @@ def corner_candidates(src, nodes, screen_wh, max_surfaces=5):
             continue
         seen.add(box)
         x, y, bw, bh = box
+        panels = [by_id[p]["bounds"] for p in _ancestors(n, every) if p in by_id]
         sharp = []
         for corner in ("tl", "tr", "bl", "br"):
             cx = x if corner[1] == "l" else x + bw
-            if cx <= 1 or cx >= sw - 1:
+            if cx <= 1 or cx >= sw - 1 or any(_on_edge(box, corner, p) for p in panels):
                 continue
             if _radius_in(w, h, data, list(box), corner) < SHARP_PX:
                 sharp.append(corner)

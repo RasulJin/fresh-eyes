@@ -23,7 +23,8 @@ CLI:
   capture.py snap --platform P --device ID --out PACK [--before PACK] [--keyboard] [--expect-differs PACK] [--pages]
                   [--package PKG] [--marker WORD ...] [--app-theme LABEL]
                   (a dark-* or theme-mismatch-* pack, or --app-theme: theme-note.json {ui_night_mode, app_theme})
-  capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms MS] -- CMD ...
+  capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms MS] [--frame-width PX]
+                    -- CMD ...
   capture.py logs --platform android --device ID --out PACK --package PKG [--clear]
   capture.py step --renumber PACK   (step-N folders 1, 2, … in the order they were snapped, steps.json "n" with
                   them: the fix for steps out of order, never deleting one)
@@ -300,8 +301,9 @@ def pages(platform, device_id, out, max_pages=PAGES):
     return meta
 
 
-def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=None):
-    """Record the screen around the command `action`, or around `call()` (then `action` only describes it)."""
+def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=None, frame_width=None):
+    """Record the screen around the command `action`, or around `call()` (then `action` only describes it).
+    frame_width: the frames' width in px (default 300 px tall, ~136 px wide on a phone)."""
     dev = Device(platform, device_id, "")
     os.makedirs(out, exist_ok=True)
     if ceiling_ms is None:
@@ -322,11 +324,11 @@ def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=N
         raise
     devices.stop_recording(rec)
     t0 = round(t_action - rec.started, 3) if platform == "android" else 0.0  # Android: first change ~ the action
-    report = analyze(os.path.join(out, "video.mp4"), out, ceiling_ms, record_s, t0)
+    report = analyze(os.path.join(out, "video.mp4"), out, ceiling_ms, record_s, t0, frame_width)
     extra = {}
     if RECHECK.search(out):  # a verifier asked again: every frame, not 8 around each of the first 4 flags
         extra["frames_all"] = len(extract_frames(os.path.join(out, "video.mp4"), os.path.join(out, "frames_all"),
-                                                 max_frames=MAX_ALL_FRAMES))
+                                                 max_frames=MAX_ALL_FRAMES, width=frame_width))
     parent = os.path.dirname(os.path.normpath(out))
     if os.path.basename(os.path.normpath(out)) == "kb-hide" and os.path.isfile(os.path.join(parent, "nodes.json")):
         extra["keyboard_json"] = _keyboard_json(parent) or "written"
@@ -441,9 +443,11 @@ def main():
     s.add_argument("--app-theme", help="dark / theme-mismatch: the app's own theme option now picked (its label, "
                                        "or system): theme-note.json")
     r = sub.choices["around"]
-    r.usage = "capture.py around --platform P --device ID --out PACK [--settle S] [--ceiling-ms MS] -- CMD ..."
+    r.usage = ("capture.py around --platform P --device ID --out PACK [--settle S] [--ceiling-ms MS] "
+               "[--frame-width PX] -- CMD ...")
     r.add_argument("--settle", type=float, default=2.5)
     r.add_argument("--ceiling-ms", type=int, help="overrides the run's motion_ceiling_ms (coverage.json)")
+    r.add_argument("--frame-width", type=int, help="frames this many px wide (a recheck that must read them)")
     g = sub.choices["logs"]
     g.add_argument("--package", required=True); g.add_argument("--clear", action="store_true")
     a = ap.parse_args(argv)
@@ -466,7 +470,7 @@ def main():
     else:
         if not action:
             raise FEError("around needs an action command after --")
-        code = around(a.platform, a.device, a.out, action, a.settle, a.ceiling_ms)
+        code = around(a.platform, a.device, a.out, action, a.settle, a.ceiling_ms, frame_width=a.frame_width)
     print(json.dumps(dict({"exit": code, "pack": a.out}, **out)))
     return code
 

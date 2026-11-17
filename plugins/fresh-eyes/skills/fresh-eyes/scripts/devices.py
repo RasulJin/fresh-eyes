@@ -8,6 +8,7 @@ CLI:
   devices.py stop --platform android|ios      (shuts down every running fresh-eyes device of that platform)
   devices.py screenshot --platform P --device ID --out PNG
   devices.py set --platform P --device ID [--name NAME] --what dark|light|font-xl|font-default|offline|online|...
+                 (slow-animations: all three Android animation scales ×5; animations-on: back to 1)
   devices.py app --platform P --device ID [--name NAME] --app BUNDLE
                  --do launch|terminate|relaunch|clear|background|install|locale [--artifact APK_OR_APP] [--locale TAG]
                  (iOS clear uninstalls: install again before launch; relaunch: stop, start, return 4 s after the
@@ -393,9 +394,32 @@ def _android_touch(dev, what):
         raise FEError("%s is Android only here" % what)
 
 
+EDGE_PX = 48  # 0.5.13 profile-trips: a swipe from x=1040 of 1080 was the system's Back, not the pager
+
+
+def screen_size(dev):
+    """(width, height) in screenshot pixels, (None, None) when the device does not say."""
+    if dev.platform == "ios":
+        info = ios_info(dev)
+        return info["widthPixels"], info["heightPixels"]
+    out = _shell(dev, "wm size", check=False)
+    m = re.search(r"Override size: (\d+)x(\d+)", out) or re.search(r"Physical size: (\d+)x(\d+)", out)
+    return (int(m.group(1)), int(m.group(2))) if m else (None, None)
+
+
+def _off_edge(dev, x, y):
+    """A drag must start where the app gets it: within EDGE_PX of an edge the system takes it (Back, home, the
+    notification shade)."""
+    w, h = screen_size(dev)
+    if min(x, y) < EDGE_PX or (w and x > w - EDGE_PX) or (h and y > h - EDGE_PX):
+        raise FEError("a drag from (%d, %d) starts within %d px of the screen's edge, where the system takes it "
+                      "(Back, home, the shade): start it further in" % (x, y, EDGE_PX))
+
+
 def drag_then_back(dev, x1, y1, x2, y2, ms=2000, back_at_ms=700):
     """A slow drag with Back pressed while the finger is still down (`input` starts in ~10-40 ms on an emulator)."""
     _android_touch(dev, "drag-back")
+    _off_edge(dev, x1, y1)
     _shell(dev, "input swipe %d %d %d %d %d & sleep %g; input keyevent 4; wait"
            % (x1, y1, x2, y2, ms, back_at_ms / 1000.0))
 
@@ -404,11 +428,13 @@ def swipe_then_tap(dev, x1, y1, x2, y2, x, y, ms=250, delay_ms=300):
     """A drag that closes something, then a tap behind it once the closing animation is over (delay_ms: the
     motion ceiling; sooner, the tap lands in the animation and is eaten on a correct build too)."""
     _android_touch(dev, "swipe-tap")
+    _off_edge(dev, x1, y1)
     _shell(dev, "input swipe %d %d %d %d %d; sleep %g; input tap %d %d" % (x1, y1, x2, y2, ms, delay_ms / 1000.0, x, y))
 
 
 def swipe(dev, x1, y1, x2, y2, ms=300):
     _require_owned(dev, "send input")
+    _off_edge(dev, x1, y1)
     if dev.platform == "android":
         _shell(dev, "input swipe %d %d %d %d %d" % (x1, y1, x2, y2, ms))
         return
@@ -727,7 +753,7 @@ def set_orientation(dev, landscape):
 SETTINGS = {
     "dark": lambda d: set_dark(d, True), "light": lambda d: set_dark(d, False),
     "landscape": lambda d: set_orientation(d, True), "portrait": lambda d: set_orientation(d, False),
-    "slow-animations": _android_only("slow-animations", "settings put global animator_duration_scale 5"),
+    "slow-animations": _android_only("slow-animations", "; ".join("settings put global %s 5" % k for k in _SCALES)),
     "font-xl": lambda d: set_font_scale(d, "xl"), "font-default": lambda d: set_font_scale(d, "default"),
     "offline": lambda d: set_network(d, False), "online": lambda d: set_network(d, True),
     "soft-keyboard": set_soft_keyboard, "animations-on": enable_animations,

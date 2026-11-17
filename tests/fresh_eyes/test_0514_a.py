@@ -455,5 +455,101 @@ class KeyboardStateTest(unittest.TestCase):
         self.assertIn("Дальше", found[0]["detail"])
 
 
+def fake_adb(answers):
+    """fe_common.run answering adb shell commands by substring; records the shell lines."""
+    shells = []
+
+    def run(cmd, timeout=60, input=None, check=True, redact=()):
+        line = " ".join(cmd)
+        shells.append(cmd[-1])
+        out = next((v for k, v in dict({"emu avd name": "fresh-eyes-pixel\nOK\n"}, **answers).items() if k in line), "")
+        return subprocess.CompletedProcess(cmd, 0, out.encode(), b"")
+    return run, shells
+
+
+class ToolDetailsTest(unittest.TestCase):
+    """П-50: the small tool faults behind 0.5.13's rejects and retakes."""
+    OWN = Device("android", "emulator-5560", "fresh-eyes-pixel")
+
+    def test_a_hung_dump_goes_to_the_maestro_cli_after_one_short_wait(self):
+        seen, dumps = [], []
+
+        def run(cmd, timeout=60, **kw):
+            seen.append(timeout)
+            raise FEError("timed out after %ss: %s" % (timeout, " ".join(cmd)))
+        with mock.patch.object(nav.fe_common, "run", run), mock.patch.object(nav.devices, "adb_path", lambda: "adb"):
+            with self.assertRaises(FEError):
+                nav._dump_uiautomator(self.OWN)
+        self.assertEqual(seen, [nav.DUMP_TIMEOUT_S])
+        self.assertLessEqual(nav.DUMP_TIMEOUT_S, 20)
+
+        def hung(dev):
+            dumps.append(1)
+            raise FEError("timed out after 20s: adb exec-out uiautomator dump")
+        with mock.patch.object(nav, "_dump_uiautomator", hung), \
+                mock.patch.object(nav, "_dump_maestro", lambda dev: '{"attributes": {}, "children": [{"attributes": '
+                                  '{"bounds": "[0,0][1080,2400]", "text": "Добро пожаловать"}}]}'), \
+                mock.patch.object(nav.time, "sleep", lambda s: None):
+            nodes, source = nav.hierarchy(self.OWN)
+        self.assertEqual((source, len(dumps), nodes[0]["text"]), ("maestro", 1, "Добро пожаловать"))
+
+    def test_slow_animations_sets_all_three_scales(self):
+        run, shells = fake_adb({})
+        with mock.patch.object(fe_common, "run", run):
+            devices.apply_setting(self.OWN, "slow-animations")
+        line = [s for s in shells if "settings put" in s][0]
+        for key in ("window_animation_scale 5", "transition_animation_scale 5", "animator_duration_scale 5"):
+            self.assertIn(key, line)
+
+    def test_a_drag_never_starts_where_the_system_takes_it(self):
+        run, shells = fake_adb({"wm size": "Physical size: 1080x2400\n"})
+        with mock.patch.object(fe_common, "run", run):
+            for x, y in ((1040, 1200), (40, 1200), (500, 2380), (500, 20)):
+                with self.assertRaisesRegex(FEError, "within 48 px", msg=(x, y)):
+                    devices.swipe(self.OWN, x, y, 100, 1200)
+            with self.assertRaises(FEError):
+                devices.swipe_then_tap(self.OWN, 1040, 1200, 100, 1200, 540, 300)
+            with self.assertRaises(FEError):
+                devices.drag_then_back(self.OWN, 1050, 1200, 100, 1200)
+            self.assertFalse([s for s in shells if "input" in s])
+            devices.swipe(self.OWN, 900, 1200, 100, 1200)
+        self.assertIn("input swipe 900 1200 100 1200 300", shells)
+
+    def test_frames_as_wide_as_a_recheck_asks(self):
+        from fe_common import image_size, run as real_run
+        from motion import extract_frames
+        with tmpdir() as d:
+            video = os.path.join(d, "v.mkv")
+            real_run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=white:s=90x200:d=0.2:r=10",
+                      "-c:v", "ffv1", video])
+            self.assertEqual(image_size(extract_frames(video, os.path.join(d, "a"))[0]), (136, 300))
+            self.assertEqual(image_size(extract_frames(video, os.path.join(d, "b"), width=540)[0]), (540, 1200))
+            seen = []
+            with mock.patch.object(capture, "analyze", lambda *a: seen.append(a[-1]) or {"flags": [], "peak_change": 0}), \
+                    mock.patch.object(devices, "start_recording", lambda dev, dst, limit_s=60: mock.Mock(started=0)), \
+                    mock.patch.object(devices, "stop_recording", lambda rec: None), \
+                    mock.patch.object(capture.time, "sleep", lambda s: None):
+                capture.around("android", "e", os.path.join(d, "p"), ["true"], settle=0, frame_width=540)
+            self.assertEqual(seen, [540])
+        out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "capture.py"), "around", "--help"],
+                             stdout=subprocess.PIPE).stdout
+        self.assertIn(b"--frame-width", out)
+
+    def test_sharp_corners_come_from_the_panel_not_its_inner_scroll_view(self):
+        from pixels import corner_candidates
+        nodes = [node(0, "", 0, cls="android.widget.FrameLayout", clickable=False),
+                 node(1, "", 0, rid="profile-drawer-panel", cls="android.view.ViewGroup", clickable=False, parent="n0"),
+                 node(2, "", 40, cls="android.widget.ScrollView", clickable=False, parent="n1")]
+        for n, b in zip(nodes, ([0, 0, 360, 800], [0, 0, 266, 800], [0, 40, 266, 725])):
+            n["bounds"] = b
+        with tmpdir() as d:
+            shot = make_png(os.path.join(d, "s.png"), 360, 800, bg=(60, 60, 60),
+                            rects=[(0, 0, 266, 800, (250, 250, 250), 14)])
+            self.assertEqual(corner_candidates(shot, nodes, [360, 800]), [])
+            square = make_png(os.path.join(d, "q.png"), 360, 800, bg=(60, 60, 60),
+                              rects=[(0, 0, 266, 800, (250, 250, 250), 0)])
+            self.assertEqual([c["node_ids"] for c in corner_candidates(square, nodes, [360, 800])], [["n1"]])
+
+
 if __name__ == "__main__":
     unittest.main()
