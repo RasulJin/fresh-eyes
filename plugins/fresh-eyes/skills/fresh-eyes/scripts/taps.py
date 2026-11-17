@@ -16,6 +16,11 @@ CLI:
                   --pack to PACK/tap-<k>, k being the row this tap appends to PACK/taps.json: label, changed (nodes
                   or pixels before vs after), result: what appeared, went, took focus). --record: the tap and
                   2 s after the screen settled are recorded there too (capture.py around), for a toast)
+  taps.py all     --platform P --device ID --pack PACK [--skip RE] [--limit 20] --coverage C --cell ID
+                  (tap-everything in one call: `tap --som N` on each clickable mark of PACK/som.json without a
+                  row yet, inputs first; labels that write data (delete, send, pay, log out…) and --skip are left
+                  out; Back after a tap that left the screen. Prints tapped, skipped, left, stopped: run again
+                  while left > 0; exit 2 when the cell's screen was lost)
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
   taps.py tap-back --platform P --device ID --x X --y Y [--delay-ms 100] --coverage C --cell ID
@@ -203,6 +208,69 @@ def tap(a, dev, after, som_pack, marker=()):
     return code, rec
 
 
+def tap_row(a, dev, cell):
+    """taps.py tap: with --pack the row goes to PACK/taps.json and the result to PACK/tap-<row>.
+    Returns (snap exit, row, the result's folder)."""
+    rows_path = os.path.join(a.pack or "", "taps.json")
+    rows = read_json(rows_path) if a.pack and os.path.isfile(rows_path) else []
+    k = next_row(a.pack, rows) if a.pack else None
+    after = os.path.join(a.pack, "tap-%d" % k) if a.pack else a.after
+    code, rec = tap(a, dev, after, a.pack or os.path.dirname(os.path.normpath(a.after)), cell.get("marker"))
+    row = dict({"n": k, "label": nav._name(rec["node"]), "by": rec["by"]},
+               **({"som": a.som} if a.som is not None else {}),
+               pack=os.path.basename(after), changed=rec["changed"], result=rec["result"])
+    if a.pack:  # the folder is the row's number, the navigator writes no row (0.5.12: tap-7/8/9 were rows 4-6)
+        write_json(rows_path, rows + [row])
+    return code, row, after
+
+
+# a tap that writes data or leaves the account: tap-everything never presses these (probes.md)
+DESTRUCTIVE = re.compile(r"delete|remove|log ?out|sign ?out|\bpay\b|\bsend\b|\bbuy\b|publish|удал|выйти|выход|"
+                         r"оплат|отправ|купить|опубликова", re.I)
+SAME_SCREEN = 0.1  # changed share under which the result is still the cell's screen (a like, a toggle): no Back
+
+
+def tap_all(a, dev, cell):
+    """tap-everything in one call: each clickable mark of PACK/som.json not yet in taps.json (inputs first), the
+    destructive ones and --skip left out, a Back after each tap that left the screen. Stops when the cell's screen
+    is lost (a Back did not bring it back) or after --limit taps; run it again to go on."""
+    marks = read_json(os.path.join(a.pack, "som.json"))
+    nodes = {n["id"]: n for n in read_json(os.path.join(a.pack, "nodes.json"))}
+    rows_path = os.path.join(a.pack, "taps.json")
+    done = {r.get("som") for r in (read_json(rows_path) if os.path.isfile(rows_path) else [])}
+    todo, skipped = [], []
+    for m in marks:
+        node = nodes.get(m["node_ids"][0])
+        if node is None or not node["clickable"] or m["n"] in done:
+            continue
+        name = nav._name(node) or ""
+        if DESTRUCTIVE.search(name) or (a.skip and re.search(a.skip, name, re.I)):
+            skipped.append({"som": m["n"], "label": name, "why": "skipped: writes data (probes.md)"
+                            if DESTRUCTIVE.search(name) else "skipped: --skip"})
+        else:
+            todo.append((not nav.is_input(node), m["n"], name))
+    tapped, stopped, tried = [], None, 0
+    for _, n, name in sorted(todo)[:a.limit]:
+        ns = argparse.Namespace(**dict(vars(a), som=n, x=None, y=None, expect_id=None, index=0, text=None,
+                                       label=None, id=None, record=False, after=None))
+        try:
+            code, row, after = tap_row(ns, dev, cell)
+        except FEError as e:
+            if str(e).startswith("not this screen"):
+                stopped = str(e)
+                break
+            tried += 1
+            skipped.append({"som": n, "label": name, "why": str(e)})  # gone, off screen, under the keyboard
+            continue
+        tried += 1
+        tapped.append({k: row[k] for k in ("n", "som", "label", "changed", "result")})
+        shot = os.path.join(after, "screen.png")
+        if row["changed"] and (code or changed_fraction(shot, os.path.join(a.pack, "screen.png")) >= SAME_SCREEN):
+            devices.back(dev)
+            time.sleep(nav.SETTLE_S)
+    return {"tapped": tapped, "skipped": skipped, "left": len(todo) - tried, "stopped": stopped}
+
+
 RECORD_AFTER_S = 2.0  # --record: the recording runs on this long after the screen settled (a 2 s toast leaves)
 GESTURE_SETTLE_S = 1.5  # after a drag-interrupt gesture: the snap shows where it came to rest
 
@@ -257,13 +325,13 @@ def _part(src, to, f):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("rapid", "tap", "outside", "back", "tap-back", "slow", "drag-back", "swipe-tap", "edge"):
+    for name in ("rapid", "tap", "all", "outside", "back", "tap-back", "slow", "drag-back", "swipe-tap", "edge"):
         p = sub.add_parser(name)
         p.add_argument("--platform", required=True, choices=["android", "ios"])
         p.add_argument("--device", required=True)
         p.add_argument("--coverage", required=True)
         p.add_argument("--cell", required=True)
-        if name not in ("back", "slow", "drag-back", "edge"):
+        if name not in ("back", "slow", "drag-back", "edge", "all"):
             p.add_argument("--x", type=int, required=name not in ("tap", "swipe-tap"))
             p.add_argument("--y", type=int, required=name not in ("tap", "swipe-tap"))
         if name == "swipe-tap":
@@ -293,6 +361,10 @@ def main():
             p.add_argument("--pack", required=True, help="the drag-interrupt pack: snaps go to PACK/%s" % name)
         if name == "drag-back":
             p.add_argument("--back-at-ms", type=int, default=700)
+        if name == "all":
+            p.add_argument("--pack", required=True, help="the tap-everything pack (its som.json and screen.png)")
+            p.add_argument("--skip", metavar="RE", help="labels not to tap besides the destructive ones")
+            p.add_argument("--limit", type=int, default=20, help="taps in this call (Bash's 10 minutes)")
         if name == "edge":
             p.add_argument("--pack", required=True, help="the pack whose nodes.json holds the node")
             p.add_argument("--node", required=True, help="node id from that nodes.json, e.g. n12")
@@ -318,18 +390,13 @@ def main():
         devices.rapid_taps(dev, a.x, a.y, a.count, a.interval_ms)
         time.sleep(max(0.0, a.hold_ms / 1000.0 - (time.time() - t0)))
     elif a.cmd == "tap":
-        rows_path = os.path.join(a.pack or "", "taps.json")
-        rows = read_json(rows_path) if a.pack and os.path.isfile(rows_path) else []
-        k = next_row(a.pack, rows) if a.pack else None
-        after = os.path.join(a.pack, "tap-%d" % k) if a.pack else a.after
-        code, rec = tap(a, dev, after, a.pack or os.path.dirname(os.path.normpath(a.after)), cell.get("marker"))
-        row = dict({"n": k, "label": nav._name(rec["node"]), "by": rec["by"]},
-                   **({"som": a.som} if a.som is not None else {}),
-                   pack=os.path.basename(after), changed=rec["changed"], result=rec["result"])
-        if a.pack:  # the folder is the row's number, the navigator writes no row (0.5.12: tap-7/8/9 were rows 4-6)
-            write_json(rows_path, rows + [row])
+        code, row, after = tap_row(a, dev, cell)
         print(json.dumps(dict(row, cell=a.cell, after=after, snap_exit=code), ensure_ascii=False))
         return code
+    elif a.cmd == "all":
+        out = tap_all(a, dev, cell)
+        print(json.dumps(dict(out, probe="all", cell=a.cell, pack=a.pack), ensure_ascii=False))
+        return 2 if out["stopped"] else 0
     elif a.cmd == "edge":
         node = next((n for n in read_json(os.path.join(a.pack, "nodes.json")) if n["id"] == a.node), None)
         if node is None:

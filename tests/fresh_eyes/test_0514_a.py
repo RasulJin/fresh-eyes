@@ -375,5 +375,66 @@ class ConditionsTest(unittest.TestCase):
         self.assertFalse(REAL_SLOW(Device("ios", "AAA", "fresh-eyes iPhone 17")))
 
 
+class TapAllTest(unittest.TestCase):
+    """П-43: tap-everything in one call instead of a model turn per tap."""
+    NODES = [node(0, "Лента", 100, clickable=False), node(1, "Row A", 400), node(2, "Удалить пост", 600),
+             node(3, "", 800, rid="app:id/comment", cls="android.widget.EditText"), node(4, "Отправить", 1000),
+             node(5, "Row B", 1200), node(6, "подпись", 1400, clickable=False)]
+
+    def run_all(self, extra=(), lost_after=None):
+        events, dumps = [], [0]
+
+        def hierarchy(dev):
+            dumps[0] += 1
+            nodes = self.NODES if lost_after is None or dumps[0] <= lost_after else self.NODES[1:]
+            return nodes, "uiautomator"
+
+        def snap(platform, dev, out, **kw):
+            focused = "comment" in events[-1][1]
+            write_json(os.path.join(out, "nodes.json"), self.NODES)
+            write_json(os.path.join(out, "meta.json"), {"keyboard_up": focused})
+            make_png(os.path.join(out, "screen.png"), 108, 240, bg=(30, 30, 30) if focused else (255, 255, 255))
+            return 0
+
+        def tap(dev, x, y):
+            hit = next(n for n in self.NODES if n["bounds"][1] <= y < n["bounds"][1] + 120)
+            events.append(("tap", nav._name(hit)))
+        with tmpdir() as d, contextlib.ExitStack() as stack:
+            cov = run_folder(d)
+            pack = os.path.join(d, "android", "feed", "default-tap-everything")
+            write_json(os.path.join(pack, "nodes.json"), self.NODES)
+            write_json(os.path.join(pack, "som.json"), [{"n": k + 1, "node_ids": [n["id"]], "bbox": n["bounds"]}
+                                                        for k, n in enumerate(self.NODES)])
+            make_png(os.path.join(pack, "screen.png"), 108, 240)
+            write_json(os.path.join(pack, "taps.json"), [{"n": 1, "som": 6, "label": "Row B"}])
+            full = make_png(os.path.join(d, "full.png"), 1080, 2400)
+            for p in tap_patches([]) + [mock.patch.object(taps.nav, "hierarchy", hierarchy),
+                                        mock.patch.object(devices, "screenshot", lambda dev, dst: full),
+                                        mock.patch.object(devices, "tap", tap),
+                                        mock.patch.object(devices, "back", lambda dev: events.append(("back",))),
+                                        mock.patch.object(taps.time, "sleep", lambda s: None),
+                                        mock.patch.object(taps.capture, "snap", snap)]:
+                stack.enter_context(p)
+            out, code = run_cli(taps.main, ["taps.py", "all", "--platform", "android", "--device", "e", "--pack",
+                                            pack, "--coverage", cov, "--cell", TAP_CELL["id"]] + list(extra))
+            return json.loads(out), code, events, read_json(os.path.join(pack, "taps.json"))
+
+    def test_every_clickable_mark_once_inputs_first_destructive_left_out_back_only_when_it_left(self):
+        out, code, events, rows = self.run_all()
+        self.assertEqual(code, 0)
+        self.assertEqual(events, [("tap", "app:id/comment"), ("back",), ("tap", "Row A")])
+        self.assertEqual([(r["n"], r.get("som")) for r in rows], [(1, 6), (2, 4), (3, 2)])
+        self.assertEqual(sorted(s["label"] for s in out["skipped"]), ["Отправить", "Удалить пост"])
+        self.assertEqual((out["left"], out["stopped"]), (0, None))
+        out, code, events, rows = self.run_all(["--limit", "1", "--skip", "comment"])
+        self.assertEqual((events, out["left"]), ([("tap", "Row A")], 0))
+
+    def test_it_stops_where_the_cells_screen_is_lost(self):
+        out, code, events, rows = self.run_all(lost_after=1)
+        self.assertEqual(code, 2)
+        self.assertIn("not this screen", out["stopped"])
+        self.assertEqual((len(out["tapped"]), out["left"]), (1, 1))
+
+
 if __name__ == "__main__":
     unittest.main()
