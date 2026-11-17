@@ -12,8 +12,9 @@ import unittest
 from tests.fresh_eyes.helpers import FIXTURES, SCRIPTS
 from tests.fresh_eyes.test_coverage import BOTH_OK_MUT_ON, ONE_SCREEN, make_pack
 from fe_common import FEError, read_json, write_json
-from coverage import plan, set_status, verdict
+from coverage import _load_findings, plan, set_status, verdict
 import backlog
+import findings
 import stats
 
 F0514 = os.path.join(FIXTURES, "0514")
@@ -261,6 +262,36 @@ class BacklogExtraTest(unittest.TestCase):
         out = backlog.match(["BUG-1 · Старый баг - thread", "#547 · " + self.KDD], [path])
         self.assertEqual(out["bugs"], 1)
         self.assertEqual([f.get("backlog_id") for f in read_json(path)["findings"]], ["#547", None])
+
+
+class ConsequenceTest(unittest.TestCase):
+    """П-46: a finding that only follows from another one (same_as, a bare id in its own file) counts once."""
+
+    def test_a_consequence_takes_its_causes_ruling_and_the_verdict_merges_it(self):
+        run = _root(self)
+        path = os.path.join(run, "android", "vio-guide", "findings-2.json")
+        write_json(path, {"findings": [  # 0.5.13 full: «Подробности» picked by the answer's language (f1)
+            {"id": "f1", "kind": "BUG", "severity": "medium", "verdict": "confirmed", "platform": "android",
+             "screen": "vio-guide", "title": "Vio отвечает не на языке вопроса", "verify_note": "2 of 3 repeats"},
+            {"id": "f2", "kind": "BUG", "severity": "low", "platform": "android", "screen": "vio-guide",
+             "title": "«Подробности» в английском ответе", "same_as": "f1"}]})
+        out = findings.same(run, [path])
+        self.assertEqual((out["settled"], out["links"]), (1, [["android/vio-guide/findings-2.json#f2",
+                                                                "android/vio-guide/findings-2.json#f1"]]))
+        f2 = read_json(path)["findings"][1]
+        self.assertEqual((f2["verdict"], f2["severity"], f2["verify_note"]),
+                         ("confirmed", "medium", "2 of 3 repeats (same case: android/vio-guide/findings-2.json#f1)"))
+        loaded, _ = _load_findings([path], run)
+        v = verdict({"cells": [], "unchecked": []}, loaded, "en")
+        self.assertIn("1 confirmed medium", v["reasons"])
+        self.assertIn("1 duplicate findings merged", v["reasons"])
+
+    def test_a_bare_same_as_ruled_the_other_way_is_a_conflict(self):
+        f1 = {"id": "f1", "kind": "BUG", "verdict": "rejected", "_file": "android/a/findings.json", "title": "a"}
+        f2 = {"id": "f2", "kind": "BUG", "verdict": "confirmed", "_file": "android/a/findings.json", "title": "b",
+              "same_as": "f1", "severity": "low"}
+        self.assertEqual(verdict({"cells": [], "unchecked": []}, [f1, f2], "en")["conflicts"],
+                         [["android/a/findings.json#f2", "android/a/findings.json#f1"]])
 
 
 if __name__ == "__main__":

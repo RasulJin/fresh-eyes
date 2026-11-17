@@ -6,7 +6,9 @@ same:  before each verifier's first pass, and once more before the verdict. A pe
        reports the case of a BUG in another screen folder (same platform; at least 3 word stems of the titles shared
        and half of the shorter title's; when both titles quote on-screen text, a quote in common) gets `same_as` to
        it and `same_as_auto`: only that one is verified. A linked finding whose target is ruled (or became an IMP)
-       takes its kind, verdict and severity, again whenever the target's ruling changes. Only --findings files are written: never a file a verifier holds.
+       takes its kind, verdict and severity, again whenever the target's ruling changes; so does a pending one a
+       reviewer marked same_as (a consequence of another finding; a bare id is one of its own file). Only --findings
+       files are written: never a file a verifier holds.
        Prints `verify`: the --findings files that still need a verifier (a pending BUG not linked, or requests),
        and `links`: every [copy, target] of those files, for run-log.md (a wrong link hides a bug: a human checks).
 known: appends to OUT the run's `known` questions and the BUGs rejected as `test data:`, each text once.
@@ -76,19 +78,28 @@ def same(run, paths):
             anchors.append((folder, ref, f))
     changed, links = set(), []
     for p, data, writable in files:
+        rel = os.path.relpath(p, run)
         for f in data.get("findings", []):
-            if not writable or not f.get("same_as_auto"):
+            auto = f.get("same_as_auto")
+            # a reviewer's same_as (a consequence of another finding) still pending takes that one's ruling too
+            if not writable or not f.get("same_as") or not (auto or f.get("verdict", "pending") == "pending"):
                 continue
-            changed.add(p)  # a link made above or earlier
-            links.append(["%s#%s" % (os.path.relpath(p, run), f.get("id")), f["same_as"]])
-            t = refs.get(f["same_as"])
+            ref = f["same_as"] if "#" in f["same_as"] else "%s#%s" % (rel, f["same_as"])
+            link = ["%s#%s" % (rel, f.get("id")), ref]
+            if auto:
+                changed.add(p)  # a link made above or earlier
+                links.append(link)
+            t = refs.get(ref)
             if t is None or (t.get("kind", "BUG") == "BUG" and t.get("verdict", "pending") == "pending"):
                 continue
             ruling = {k: t[k] for k in ("kind", "verdict", "severity", "backlog_id") if k in t}
-            ruling["verify_note"] = "%s (same case: %s)" % (t.get("verify_note", ""), f["same_as"])
+            ruling["verify_note"] = "%s (same case: %s)" % (t.get("verify_note", ""), ref)
             if any(f.get(k) != v for k, v in ruling.items()):  # a target ruled again (CONFLICT) moves its copies
                 f.update(ruling)
                 settled += 1
+                if not auto:
+                    changed.add(p)
+                    links.append(link)
     for p, data, writable in files:
         if p in changed:
             write_json(p, data)

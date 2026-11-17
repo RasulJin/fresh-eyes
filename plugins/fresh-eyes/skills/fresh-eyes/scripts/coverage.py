@@ -610,7 +610,7 @@ def _conflicts(findings):
             pairs.append((a, b))
     first = defaultdict(list)
     for f in ruled:
-        t = by_ref.get(os.path.normpath(f["same_as"])) if f.get("same_as") else None
+        t = by_ref.get(_same_ref(f)) if f.get("same_as") else None
         if t is not None and t is not f:
             add(f, t)
         words = re.findall(r"\w+", re.sub(r"\d+", "#", (f.get("title") or "").casefold()))
@@ -622,15 +622,19 @@ def _conflicts(findings):
     return pairs
 
 
+def _same_ref(f):
+    """f's same_as as a normalized `<file>#<id>`; a bare id ("f1", a consequence in the same file) is f's own file."""
+    file, _, fid = f["same_as"].rpartition("#")
+    return os.path.normpath("%s#%s" % (file or f.get("_file", ""), fid))
+
+
 def _merged(f, findings):
     """A finding marked same_as another is left out of the counts only when that one already counts at least as
     much: confirmed, same kind, not lower severity, not itself a duplicate. Otherwise it counts on its own."""
-    ref = f.get("same_as")
-    if not ref or f.get("verdict", "pending") == "pending":  # never verified: it still keeps CLEAN away
+    if not f.get("same_as") or f.get("verdict", "pending") == "pending":  # never verified: it keeps CLEAN away
         return False
-    file, _, fid = ref.partition("#")
     for t in findings:
-        if t is not f and t.get("id") == fid and os.path.normpath(t.get("_file", "")) == os.path.normpath(file):
+        if t is not f and os.path.normpath(_ref(t)) == _same_ref(f):
             return (not t.get("same_as") and t.get("verdict") == "confirmed"
                     and t.get("kind", "BUG") == f.get("kind", "BUG")
                     and _RANK.get(t.get("severity"), 0) >= _RANK.get(f.get("severity"), 0))
