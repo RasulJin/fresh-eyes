@@ -137,7 +137,9 @@ Second pass: a cell id ending in `#2` belongs to an independent second pass. Its
 
 Scenario cells: follow `scenario` in probes.md with the screen's `task` from `config.json`; `PKG` there is
 your `package`. Look first, touch second: snap after each action before you tap anything, so the frame shows
-what the app did by itself (a field it should have focused, a sheet it opened).
+what the app did by itself (a field it should have focused, a sheet it opened). A `"mutating": true` cell
+writes for real: its `steps.json` names what it `wrote`, where the `check` step `found_in` it, and what it
+`cleaned` (probes.md); one that cannot write is `blocked` with why, never a read-only walk marked done.
 
 For `tap-everything`, `taps.py tap --pack <pack>` writes each row of `<pack>/taps.json` itself (label, `changed`,
 `result`) and snaps the result into `<pack>/tap-<row>`: never write or edit `taps.json` by hand.
@@ -147,7 +149,7 @@ Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exa
 2. For each `pages` entry k of the cell: open it by its tab, wait 1.5 s, back by this screen's tab, swipe to the
    end, snap `--out $P/page-<k>/before`, swipe once more, snap `--out $P/page-<k> --before $P/page-<k>/before`.
 3. `coverage.py set ... --evidence $P`. No other folders for this cell, no renaming. The swipe moved nothing
-   because the list is too short (one result): `--status na` or `blocked` with note "not enough items".
+   because the list is too short (one result): `--status na` with note "not enough items".
 
 ## Requests mode (for the verifier)
 

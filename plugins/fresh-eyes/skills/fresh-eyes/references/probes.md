@@ -103,34 +103,34 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
      each primary action the screen offers on the way (the buttons on a result or card), not one path only;
      wait for each result. Go through every form the screen opens itself (config `forms`: a header button's
      sheet, a picker, an edit mode), one `task` step each, naming it in `via`.
-  2. `change`: after the result, change one input and run again (another value, an edited item, a new
-     question).
-  3. `invalid`: one invalid or edge input (the same value in two fields that must differ, empty, letters in a
-     number, very long).
+  2. `change`: after the result, change one input and run again (another value, an edited item, a new question).
+  3. `invalid`: one invalid or edge input (equal values in fields that must differ, empty, letters in a number,
+     too long).
   4. `interrupt`, twice (a tab switch is not one): `how: "stop"`: stop a running action with the screen's own
-     Stop or Cancel (Back only when it has none), then retry it; `how: "offline"` (Android):
-     `devices.py set --what offline`, run the action, snap what the app says, `devices.py set --what online`,
-     then retry.
+     Stop or Cancel (Back only when it has none), then retry it; `how: "offline"` (Android): `devices.py set
+     --what offline`, run the action, snap what the app says, `devices.py set --what online`, then retry.
   5. `check`: leave and come back, then open where the result should live (the `task` says where): is it there,
      and is nothing there that was not asked for?
 - Look first, touch second: after each action snap before you touch anything. Never tap the field the app
   should have focused, never close what the app opened: the snap must show what the app did by itself.
 - After: `capture.py logs --platform android --device ID --out PACK --package PKG` (writes `logcat.txt`).
 - Data: the cell is `"mutating": true` exactly when preflight allowed mutation. Then really send, edit and
-  delete test data (a comment, a message, a saved item) so the edit and delete forms run, and clean up what you
-  created; never send anything to real people. Otherwise do the read-only part and say so in `steps.json`.
-- `coverage.py set` refuses the cell unless `steps.json` has all five kinds, both interruptions (iOS: stop), a
-  `task` step for each form that has its own snap in `<pack>/step-<n>/` (a step that did not run does not
-  count), and, on Android, `logcat.txt`.
+  delete test data (a comment, a message, a saved item) so the edit and delete forms run; never send anything
+  to real people. `steps.json` says so: the step that writes gets `"wrote": "<what was created or changed>"`,
+  the `check` step `"check": "<what was compared>"` and `"found_in": "<where it was found>"`, the clean-up step
+  `"cleaned": "<what was deleted>"`. A read-only walk is for `"mutating": false` only; a mutating cell that
+  cannot write is `blocked` with why, never done.
+- `coverage.py set` refuses the cell unless `steps.json` has all five kinds (a mutating one also `wrote`,
+  `found_in` and `cleaned`), both interruptions (iOS: stop), a `task` step for each form that has its own snap
+  in `<pack>/step-<n>/` (a step that did not run does not count), and, on Android, `logcat.txt`.
 
 ### swipe-inside
 - Reveals: content clipped by its container (a grid that cannot scroll to its last row), pagers that snap back,
   jumps when releasing halfway.
 - Steps: snap into `<pack>/before` → `nav.py swipe` inside the container's bounds → snap the pack itself with
-  `--before <pack>/before` (exact paths: navigator.md);
-  `geometry.still_clipped` flags rows still cut. `coverage.py set` refuses a pack snapped without `--before`,
-  and one where the swipe moved nothing, note or not: swipe inside the list itself; too few items to scroll is
-  `--status na` or `blocked` with note "not enough items", never done.
+  `--before <pack>/before` (exact paths: navigator.md); `geometry.still_clipped` flags rows still cut.
+  `coverage.py set` refuses a pack snapped without `--before`, and one where the swipe moved nothing: swipe
+  inside the list itself; too few items to scroll is `--status na` with note "not enough items", never done.
 - On a page of a pager or tab set, for each config `pages` entry k: open that page by its tab, wait 1.5 s, come
   back by this screen's tab, swipe the content up to its end, snap into `<pack>/page-<k>/before`, swipe once more
   and snap into `<pack>/page-<k>` with `--before` that. A page laid out while a shorter one was open can stay
