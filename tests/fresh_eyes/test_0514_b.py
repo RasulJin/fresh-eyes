@@ -101,5 +101,64 @@ class ThemeBothWaysTest(unittest.TestCase):
         set_status(self.cov, dark["id"], "done", evidence=[pack])
 
 
+class ProbeOnItsScreenTest(unittest.TestCase):
+    """П-38: tap-everything over something left open, keyboard-open that never left, rapid-tap with no control."""
+
+    def setUp(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(marker=["guide-composer-wrap"], probes=["tap-everything", "keyboard-open",
+                                                                          "rapid-tap"])
+        self.cov = plan(cfg, BOTH_OK_MUT_ON, "full")
+        self.cells = {c["probe"]: c for c in self.cov["cells"] if c["platform"] == "android"}
+        self.root = _root(self)
+
+    def test_ten_taps_that_change_nothing_in_a_row_are_not_done(self):
+        cell = self.cells["tap-everything"]
+        pack = make_pack(self.root, cell)
+        rows = read_json(os.path.join(F0514, "profile-trips-taps.json"))  # quick: a photo viewer left open
+        write_json(os.path.join(pack, "taps.json"), rows)
+        with self.assertRaisesRegex(FEError, "rows 2-11 changed nothing, 10 in a row"):
+            set_status(self.cov, cell["id"], "done", evidence=[pack])
+        retapped = [dict(r, n=r["n"] + 11, changed=True) for r in rows[1:]]  # closed it, tapped them again
+        write_json(os.path.join(pack, "taps.json"), rows + retapped)
+        set_status(self.cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "taps.json"), rows[:3] + [dict(rows[3], changed=True)] + rows[4:6])
+        set_status(self.cov, cell["id"], "done", evidence=[pack])  # two in a row, then two: no run of three
+        write_json(os.path.join(pack, "taps.json"), rows)
+        set_status(self.cov, cell["id"], "done", evidence=[pack], note="counters are labels, no links")
+
+    def test_keyboard_open_proves_it_left_the_screen(self):
+        cell = self.cells["keyboard-open"]
+        pack = make_pack(self.root, cell)
+        shutil.rmtree(os.path.join(pack, "left"))  # quick vio-guide: return snapped without leaving
+        with self.assertRaisesRegex(FEError, "needs the snap <pack>/left"):
+            set_status(self.cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "left", "meta.json"), {"platform": "android", "source": "uiautomator",
+                                                             "time": "2026-11-15T10:00:00"})
+        write_json(os.path.join(pack, "left", "nodes.json"), [{"rid": "guide-composer-wrap", "text": "", "label": ""}])
+        with self.assertRaisesRegex(FEError, "<pack>/left still shows"):
+            set_status(self.cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "left", "nodes.json"), [{"rid": "profile-scroll", "text": "", "label": ""}])
+        set_status(self.cov, cell["id"], "done", evidence=[pack])
+
+    def test_rapid_tap_needs_its_single_tap_control_in_any_order(self):
+        cell = self.cells["rapid-tap"]
+        pack = make_pack(self.root, cell)
+        shutil.rmtree(os.path.join(pack, "single"))
+        with self.assertRaisesRegex(FEError, "needs the snap <pack>/single"):
+            set_status(self.cov, cell["id"], "done", evidence=[pack])
+        write_json(os.path.join(pack, "single", "meta.json"), {"platform": "android", "time": "2026-11-15T09:00:00"})
+        write_json(os.path.join(pack, "afterback", "meta.json"), {"platform": "android", "time": "2026-11-15T10:00:00"})
+        set_status(self.cov, cell["id"], "done", evidence=[pack])  # the control first is fine
+
+    def test_steps_out_of_turn_are_renumbered_never_deleted(self):
+        cell = self.cells["keyboard-open"]
+        pack = make_pack(self.root, cell)
+        write_json(os.path.join(pack, "return", "meta.json"), {"platform": "android", "time": "2026-11-15T10:00:01"})
+        write_json(os.path.join(pack, "left", "meta.json"), {"platform": "android", "time": "2026-11-15T10:00:09"})
+        with self.assertRaisesRegex(FEError, r"capture.py step --renumber <pack>, never delete a step folder"):
+            set_status(self.cov, cell["id"], "done", evidence=[pack])
+
+
 if __name__ == "__main__":
     unittest.main()

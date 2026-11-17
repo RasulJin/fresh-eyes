@@ -53,8 +53,10 @@ PROBES = {
     "double-submit": {"mutating": True, "platforms": PLATFORMS},
 }
 # snaps inside the pack a done cell needs: a navigator skips a probe's extra steps unless the cell depends on them
-REQUIRED_SUBPACKS = {"rapid-tap": ("afterback",), "keyboard-open": ("return",), "search": ("typed",),
+REQUIRED_SUBPACKS = {"rapid-tap": ("afterback", "single"), "keyboard-open": ("left", "return"), "search": ("typed",),
                      "drag-interrupt": ("slow", "drag-back", "swipe-tap")}
+UNORDERED = {"single"}  # the control tap may come before or after the rapid one
+NO_CHANGE_RUN = 3  # tap-everything rows changing nothing in a row: the screen under them was another one
 # a scenario does the task, changes an input after the result, tries an invalid input, interrupts an action,
 # and checks what was kept
 SCENARIO_KINDS = {"task", "change", "invalid", "interrupt", "check"}
@@ -299,7 +301,8 @@ def _order(pack, names):
         late = next((what % hh(t) for what, t in events(step) if ta and t and ta > t), None)
         if late:
             found.append("%s is snapped at %s, after %s" % (names[k - 1], hh(ta), late))
-    return ["%s: snap each step right after its action, never again later" % p for p in found]
+    return ["%s: snap each step right after its action, never again later; steps snapped in another order than "
+            "numbered: capture.py step --renumber <pack>, never delete a step folder" % p for p in found]
 
 
 def shows_marker(pack, markers):
@@ -355,6 +358,23 @@ def _probe_problems(c, packs, note):
     if c["probe"] == "keyboard-open" and packs and not os.path.isfile(os.path.join(packs[0], "keyboard.json")):
         problems.append("no <pack>/keyboard.json: the focus tap recorded into <pack>/kb-show (and on Android Back "
                         "into <pack>/kb-hide) with capture.py around, then motion.py --keyboard <pack>")
+    left = os.path.join(packs[0], "left") if packs else ""
+    if c["probe"] == "keyboard-open" and c.get("marker") and os.path.isfile(os.path.join(left, "meta.json")) \
+            and shows_marker(left, c["marker"]):  # 0.5.13 quick: vio-guide's return was snapped without leaving
+        problems.append("<pack>/left still shows %s's markers %s, so the screen was never left: leave it by a link, "
+                        "avatar or tab, snap <pack>/left there, come back and snap <pack>/return"
+                        % (c["screen"], c["marker"]))
+    rows = read_json(os.path.join(packs[0], "taps.json")) \
+        if c["probe"] == "tap-everything" and packs and os.path.isfile(os.path.join(packs[0], "taps.json")) else []
+    last = {r.get("label"): r for r in rows}  # a label tapped again later counts by its last row
+    run_, worst = [], []
+    for r in (r for r in rows if last[r.get("label")] is r):
+        run_ = run_ + [r] if r.get("changed") is False else []
+        worst = run_ if len(run_) > len(worst) else worst
+    if len(worst) >= NO_CHANGE_RUN and not note:  # 0.5.13 quick: tap-2…11 under a photo viewer left open
+        problems.append("taps.json rows %s-%s changed nothing, %d in a row: something left open covered the screen "
+                        "(a viewer, a sheet) or it was another screen; close it and tap them again (new rows), or "
+                        "pass --note why they change nothing" % (worst[0].get("n"), worst[-1].get("n"), len(worst)))
     swiped = read_json(os.path.join(packs[0], "meta.json")) \
         if c["probe"] == "swipe-inside" and packs and os.path.isfile(os.path.join(packs[0], "meta.json")) else None
     if swiped is not None and "before" not in swiped:
@@ -429,7 +449,8 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         problems += _copies(packs)
         for e in [e for e in packs if os.path.isdir(e)]:
             steps = sorted((d for d in os.listdir(e) if STEP.fullmatch(d)), key=_natural)
-            problems += _order(e, steps) + _order(e, REQUIRED_SUBPACKS.get(c["probe"], ()))
+            problems += _order(e, steps) + _order(e, [s for s in REQUIRED_SUBPACKS.get(c["probe"], ())
+                                                      if s not in UNORDERED])
         # a dead app cannot do the probe's later steps: its pack and the note are the cell (reviewed as a crash)
         meta0 = os.path.join(packs[0], "meta.json") if packs else ""
         crashed = bool(note) and os.path.isfile(meta0) and read_json(meta0).get("app_running") is False
