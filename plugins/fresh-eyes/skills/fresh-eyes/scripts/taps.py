@@ -9,12 +9,19 @@ CLI:
                   | --x X --y Y --expect-id SUFFIX) [--index N] (--pack PACK | --after DIR) [--record]
                   --coverage C --cell ID
                   (one tap on the node where a dump taken right before shows it: refused when it is not there, off
-                  screen or under the keyboard; --x --y must lie in that node. --som N: mark N of PACK (or of DIR's
-                  parent), found again by its class, id, text and label. Once the screen settled, the snap of where
+                  screen or under the keyboard, or when that dump lacks the cell's marker ("not this screen");
+                  --x --y must lie in that node. --som N: mark N of PACK (or of DIR's parent), found again by its
+                  class, id, text and label. Once the screen settled, the snap of where
                   the tap led and tap.json (the point, the node and its bounds at the tap) go to DIR, or with
                   --pack to PACK/tap-<k>, k being the row this tap appends to PACK/taps.json: label, changed (nodes
                   or pixels before vs after), result: what appeared, went, took focus). --record: the tap and
                   2 s after the screen settled are recorded there too (capture.py around), for a toast)
+  taps.py all     --platform P --device ID --pack PACK [--skip RE] [--limit 20] --coverage C --cell ID
+                  (tap-everything in one call: `tap --som N` on each clickable mark of PACK/som.json without a
+                  row yet, inputs first; labels that write data (delete, send, pay, log out…), the screen's config
+                  `skip_tap` labels (chips that send a message) and --skip are left out; Back after a tap that
+                  left the screen. Prints tapped, skipped, left, stopped: run again
+                  while left > 0; exit 2 when the cell's screen was lost)
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
   taps.py tap-back --platform P --device ID --x X --y Y [--delay-ms 100] --coverage C --cell ID
@@ -22,17 +29,22 @@ CLI:
                     (--to: where a drag across the whole surface ends; drags 40 % of it, 1.5 s later 60 %)
   taps.py drag-back --platform android --device ID --from X,Y --to X,Y [--ms 2000] [--back-at-ms 700]
                     --pack PACK --coverage C --cell ID
-  taps.py swipe-tap --platform android --device ID --from X,Y --to X,Y [--ms 250] [--delay-ms MS] --x X --y Y
-                    --pack PACK --coverage C --cell ID   (--delay-ms: the run's motion_ceiling_ms unless given)
+  taps.py swipe-tap --platform android --device ID --from X,Y --to X,Y [--ms 250] [--delay-ms MS]
+                    (--id SUFFIX | --label RE | --x X --y Y) --pack PACK --coverage C --cell ID
+                    (--delay-ms: the run's motion_ceiling_ms unless given; the target is found in the snap before
+                    the swipe, and PACK/swipe-tap/tap.json gets the point, node, bounds and delay)
                     (slow, drag-back, swipe-tap: a drag-interrupt step in one call: PACK/<step>/before snapped on
                     the cell's screen (its marker; refused elsewhere), the gesture recorded into PACK/<step>, and
                     1.5 s later the snap of where it left, into PACK/<step> itself)
   taps.py edge    --platform P --device ID --pack P --node nN --side top|bottom|left|right [--dp 2]
                   --coverage C --cell ID      (a tap just outside the node's visible edge, from the pack's nodes)
+--queue Q on any of them: also refreshes <run>/<platform>/heartbeat-Q (nav.py idle --queue Q).
 """
 import argparse
 import json
 import os
+import re
+import sys
 import tempfile
 import time
 
@@ -40,7 +52,8 @@ import capture
 import devices
 import nav
 from devices import Device
-from fe_common import FEError, cli, heartbeat, image_size, read_json, write_json
+from fe_common import (FEError, cli, config_path, heartbeat, image_size, load_secrets, queue_name, read_json,
+                       write_json)
 from motion import run_ceiling_ms
 from nav import _xy
 from pixels import changed_fraction
@@ -155,10 +168,21 @@ def what_changed(before, after, kb_before, kb_after, pixels):
     return bool(parts) or pixels, "; ".join(parts) or ("pixels only" if pixels else "no change")
 
 
-def tap(a, dev, after, som_pack):
-    """One tap on a node from a fresh dump, the settled result snapped into `after` with tap.json beside it.
-    Returns (snap exit, tap.json)."""
+def on_screen(nodes, marker):
+    """Refuse a probe off its cell's screen: none of the screen's marker words (config) in the dump. 0.5.13
+    profile-trips: a photo viewer stayed open, ten taps "no change" landed on it and the cell was done."""
+    want = [m.casefold() for m in marker or ()]
+    if want and not any(w in (n.get(k) or "").casefold() for n in nodes for k in ("text", "label", "rid")
+                        for w in want):
+        raise FEError("not this screen: %s missing: go back to the cell's screen, then tap again"
+                      % " / ".join(marker))
+
+
+def tap(a, dev, after, som_pack, marker=()):
+    """One tap on a node from a fresh dump (on the cell's screen: its marker), the settled result snapped into
+    `after` with tap.json beside it. Returns (snap exit, tap.json)."""
     nodes, source = nav.hierarchy(dev)
+    on_screen(nodes, marker)
     kb_top = devices.keyboard_top(dev, nodes)
     with tempfile.TemporaryDirectory() as d:
         before = devices.screenshot(dev, os.path.join(d, "before.png"))
@@ -187,20 +211,128 @@ def tap(a, dev, after, som_pack):
     return code, rec
 
 
+def tap_row(a, dev, cell):
+    """taps.py tap: with --pack the row goes to PACK/taps.json and the result to PACK/tap-<row>.
+    Returns (snap exit, row, the result's folder)."""
+    rows_path = os.path.join(a.pack or "", "taps.json")
+    rows = read_json(rows_path) if a.pack and os.path.isfile(rows_path) else []
+    k = next_row(a.pack, rows) if a.pack else None
+    after = os.path.join(a.pack, "tap-%d" % k) if a.pack else a.after
+    code, rec = tap(a, dev, after, a.pack or os.path.dirname(os.path.normpath(a.after)), cell.get("marker"))
+    row = dict({"n": k, "label": nav._name(rec["node"]), "by": rec["by"]},
+               **({"som": a.som} if a.som is not None else {}),
+               pack=os.path.basename(after), changed=rec["changed"], result=rec["result"])
+    if a.pack:  # the folder is the row's number, the navigator writes no row (0.5.12: tap-7/8/9 were rows 4-6)
+        write_json(rows_path, rows + [row])
+    return code, row, after
+
+
+# a tap that writes data or leaves the account: tap-everything never presses these (probes.md)
+DESTRUCTIVE = re.compile(r"delete|remove|log ?out|sign ?out|\bpay\b|\bsend\b|\bbuy\b|publish|удал|выйти|выход|"
+                         r"оплат|отправ|купить|опубликова", re.I)
+SAME_SCREEN = 0.1  # changed share under which the result is still the cell's screen (a like, a toggle): no Back
+
+
+def skip_taps(coverage, screen):
+    """The screen's config `skip_tap`: labels tap-everything never presses (chips that send a message to a chat)."""
+    path = config_path(os.path.dirname(os.path.abspath(coverage)))
+    try:
+        screens = read_json(path).get("screens") or [] if path else []
+    except (OSError, ValueError):
+        return []
+    return next((s.get("skip_tap") or [] for s in screens if s.get("id") == screen), [])
+
+
+def tap_all(a, dev, cell):
+    """tap-everything in one call: each clickable mark of PACK/som.json not yet in taps.json (inputs first), the
+    destructive ones, the screen's config skip_tap and --skip left out, a Back after each tap that left the screen.
+    Stops when the cell's screen is lost (a Back did not bring it back) or after --limit taps; run it again."""
+    marks = read_json(os.path.join(a.pack, "som.json"))
+    config_skip = [s.casefold() for s in skip_taps(a.coverage, cell.get("screen"))]
+    nodes = {n["id"]: n for n in read_json(os.path.join(a.pack, "nodes.json"))}
+    rows_path = os.path.join(a.pack, "taps.json")
+    done = {r.get("som") for r in (read_json(rows_path) if os.path.isfile(rows_path) else [])}
+    todo, skipped = [], []
+    for m in marks:
+        node = nodes.get(m["node_ids"][0])
+        if node is None or not node["clickable"] or m["n"] in done:
+            continue
+        name = nav._name(node) or ""
+        said = " ".join((node["text"], node["label"], node["rid"])).casefold()
+        why = "skipped: writes data (probes.md)" if DESTRUCTIVE.search(name) else \
+            "skipped: config skip_tap" if any(s in said for s in config_skip) else \
+            "skipped: --skip" if a.skip and re.search(a.skip, name, re.I) else None
+        if why:
+            skipped.append({"som": m["n"], "label": name, "why": why})
+        else:
+            todo.append((not nav.is_input(node), m["n"], name))
+    tapped, stopped, tried = [], None, 0
+    for _, n, name in sorted(todo)[:a.limit]:
+        ns = argparse.Namespace(**dict(vars(a), som=n, x=None, y=None, expect_id=None, index=0, text=None,
+                                       label=None, id=None, record=False, after=None))
+        try:
+            code, row, after = tap_row(ns, dev, cell)
+        except FEError as e:
+            if str(e).startswith("not this screen"):
+                stopped = str(e)
+                break
+            tried += 1
+            skipped.append({"som": n, "label": name, "why": str(e)})  # gone, off screen, under the keyboard
+            continue
+        tried += 1
+        tapped.append({k: row[k] for k in ("n", "som", "label", "changed", "result")})
+        shot = os.path.join(after, "screen.png")
+        if row["changed"] and (code or changed_fraction(shot, os.path.join(a.pack, "screen.png")) >= SAME_SCREEN):
+            devices.back(dev)
+            time.sleep(nav.SETTLE_S)
+    return {"tapped": tapped, "skipped": skipped, "left": len(todo) - tried, "stopped": stopped}
+
+
 RECORD_AFTER_S = 2.0  # --record: the recording runs on this long after the screen settled (a 2 s toast leaves)
 GESTURE_SETTLE_S = 1.5  # after a drag-interrupt gesture: the snap shows where it came to rest
 
 
 def gesture(a, dev, cell, call):
-    """Snap PACK/<step>/before, record call() into PACK/<step>, snap PACK/<step>: all in one call, so no step is
-    snapped again after the next one ran (0.5.12 profile-trips: three sub-snaps retaken after all gestures)."""
+    """Snap PACK/<step>/before, record call(before) into PACK/<step>, snap PACK/<step>: all in one call, so no step
+    is snapped again after the next one ran (0.5.12 profile-trips: three sub-snaps retaken after all gestures)."""
     sub = os.path.join(a.pack, a.cmd)
-    code = capture.snap(a.platform, a.device, os.path.join(sub, "before"), marker=tuple(cell.get("marker") or ()))
+    before = os.path.join(sub, "before")
+    code = capture.snap(a.platform, a.device, before, marker=tuple(cell.get("marker") or ()))
     if code:
         raise FEError("%s/before: snap exit %d (see its meta.json): the gesture did not run; bring the screen back "
                       "to rest and run it again" % (sub, code))
-    capture.around(a.platform, a.device, sub, ["taps.py", a.cmd], settle=GESTURE_SETTLE_S, call=call)
+    capture.around(a.platform, a.device, sub, ["taps.py"] + sys.argv[1:], settle=GESTURE_SETTLE_S,
+                   call=lambda: call(before))
     return capture.snap(a.platform, a.device, sub)
+
+
+def swipe_target(a, before):
+    """((x, y), tap.json) of swipe-tap's tap: --id/--label found in the before snap (the dump before the swipe),
+    or --x --y with the innermost clickable node there under it."""
+    path = os.path.join(before, "nodes.json")
+    nodes = read_json(path) if os.path.isfile(path) else []
+    if a.x is None:
+        node, by = nav.find_node(nodes, label=a.label, rid=a.id), "id" if a.id else "label"
+        x, y = nav.center({"bounds": nav.visible_box(node, None, read_json(os.path.join(before, "meta.json"))
+                                                     .get("screen_wh"))})
+    else:
+        (x, y), by = (a.x, a.y), "point"
+        under = [n for n in nodes if n["clickable"] and n["bounds"][0] <= x < n["bounds"][0] + n["bounds"][2]
+                 and n["bounds"][1] <= y < n["bounds"][1] + n["bounds"][3]]
+        node = max(under, key=lambda n: n["depth"], default=None)
+    return (x, y), {"point": [x, y], "by": by, "node": node and {k: node[k] for k in ("cls", "rid", "text", "label")},
+                    "bounds": node and node["bounds"], "delay_ms": a.delay_ms}
+
+
+TAP_DIR = re.compile(r"tap-(\d+)")
+
+
+def next_row(pack, rows):
+    """The number of the next row of PACK/taps.json: after its last row and after any tap-<k> folder (a tap that
+    failed before its row, or rows from before a restart), so a row never takes an older folder."""
+    folders = [int(m.group(1)) for d in (os.listdir(pack) if os.path.isdir(pack) else ())
+               for m in [TAP_DIR.fullmatch(d)] if m]
+    return 1 + max([r.get("n", 0) for r in rows] + folders, default=0)
 
 
 def _part(src, to, f):
@@ -210,15 +342,18 @@ def _part(src, to, f):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("rapid", "tap", "outside", "back", "tap-back", "slow", "drag-back", "swipe-tap", "edge"):
+    for name in ("rapid", "tap", "all", "outside", "back", "tap-back", "slow", "drag-back", "swipe-tap", "edge"):
         p = sub.add_parser(name)
         p.add_argument("--platform", required=True, choices=["android", "ios"])
         p.add_argument("--device", required=True)
         p.add_argument("--coverage", required=True)
         p.add_argument("--cell", required=True)
-        if name not in ("back", "slow", "drag-back", "edge"):
-            p.add_argument("--x", type=int, required=name != "tap")
-            p.add_argument("--y", type=int, required=name != "tap")
+        p.add_argument("--queue", type=queue_name, help="also <run>/<platform>/heartbeat-<queue>")
+        if name not in ("back", "slow", "drag-back", "edge", "all"):
+            p.add_argument("--x", type=int, required=name not in ("tap", "swipe-tap"))
+            p.add_argument("--y", type=int, required=name not in ("tap", "swipe-tap"))
+        if name == "swipe-tap":
+            p.add_argument("--id"); p.add_argument("--label")
         if name == "tap":
             for flag in ("--id", "--label", "--text", "--expect-id"):
                 p.add_argument(flag)
@@ -244,6 +379,10 @@ def main():
             p.add_argument("--pack", required=True, help="the drag-interrupt pack: snaps go to PACK/%s" % name)
         if name == "drag-back":
             p.add_argument("--back-at-ms", type=int, default=700)
+        if name == "all":
+            p.add_argument("--pack", required=True, help="the tap-everything pack (its som.json and screen.png)")
+            p.add_argument("--skip", metavar="RE", help="labels not to tap besides the destructive ones")
+            p.add_argument("--limit", type=int, default=20, help="taps in this call (Bash's 10 minutes)")
         if name == "edge":
             p.add_argument("--pack", required=True, help="the pack whose nodes.json holds the node")
             p.add_argument("--node", required=True, help="node id from that nodes.json, e.g. n12")
@@ -257,25 +396,25 @@ def main():
             ap.error("tap needs one target: --id, --label, --text, --som, or --x --y with --expect-id")
         if a.x is not None and not a.expect_id:
             ap.error("--x --y only with --expect-id: a point from an older screen lands on whatever moved there")
+    if a.cmd == "swipe-tap" and len([v for v in (a.id, a.label, a.x) if v not in (None, "")]) != 1 \
+            or a.cmd == "swipe-tap" and (a.x is None) != (a.y is None):
+        ap.error("swipe-tap needs one target: --id, --label, or --x --y")
     cell = guard(a.coverage, a.cell, a.platform)
-    heartbeat(a.coverage, a.platform, "taps.py %s %s" % (a.cmd, a.cell))
+    load_secrets(a.coverage)  # nodes, rows and tap.json never carry a credential (nav.hierarchy cuts them)
+    heartbeat(a.coverage, a.platform, "taps.py %s %s" % (a.cmd, a.cell), a.queue)
     dev = Device(a.platform, a.device, "")
     if a.cmd == "rapid":
         t0 = time.time()
         devices.rapid_taps(dev, a.x, a.y, a.count, a.interval_ms)
         time.sleep(max(0.0, a.hold_ms / 1000.0 - (time.time() - t0)))
     elif a.cmd == "tap":
-        rows_path = os.path.join(a.pack or "", "taps.json")
-        rows = read_json(rows_path) if a.pack and os.path.isfile(rows_path) else []
-        after = os.path.join(a.pack, "tap-%d" % (len(rows) + 1)) if a.pack else a.after
-        code, rec = tap(a, dev, after, a.pack or os.path.dirname(os.path.normpath(a.after)))
-        row = dict({"n": len(rows) + 1, "label": nav._name(rec["node"]), "by": rec["by"]},
-                   **({"som": a.som} if a.som is not None else {}),
-                   pack=os.path.basename(after), changed=rec["changed"], result=rec["result"])
-        if a.pack:  # the folder is the row's number, the navigator writes no row (0.5.12: tap-7/8/9 were rows 4-6)
-            write_json(rows_path, rows + [row])
+        code, row, after = tap_row(a, dev, cell)
         print(json.dumps(dict(row, cell=a.cell, after=after, snap_exit=code), ensure_ascii=False))
         return code
+    elif a.cmd == "all":
+        out = tap_all(a, dev, cell)
+        print(json.dumps(dict(out, probe="all", cell=a.cell, pack=a.pack), ensure_ascii=False))
+        return 2 if out["stopped"] else 0
     elif a.cmd == "edge":
         node = next((n for n in read_json(os.path.join(a.pack, "nodes.json")) if n["id"] == a.node), None)
         if node is None:
@@ -291,18 +430,21 @@ def main():
         devices.tap_then_back(dev, a.x, a.y, a.delay_ms)
     elif a.cmd in ("slow", "drag-back", "swipe-tap"):
         if a.cmd == "slow":  # under half it springs back, over half it moves on
-            def call():
+            def call(before):
                 devices.swipe(dev, *a.src, *_part(a.src, a.to, 0.4), a.ms)
                 time.sleep(GESTURE_SETTLE_S)
                 devices.swipe(dev, *a.src, *_part(a.src, a.to, 0.6), a.ms)
         elif a.cmd == "drag-back":
-            def call():
+            def call(before):
                 devices.drag_then_back(dev, *a.src, *a.to, ms=a.ms, back_at_ms=a.back_at_ms)
         else:
-            delay = a.delay_ms if a.delay_ms is not None else run_ceiling_ms(os.path.dirname(a.coverage))
+            if a.delay_ms is None:
+                a.delay_ms = run_ceiling_ms(os.path.dirname(a.coverage))
 
-            def call():
-                devices.swipe_then_tap(dev, *a.src, *a.to, a.x, a.y, ms=a.ms, delay_ms=delay)
+            def call(before):
+                (x, y), rec = swipe_target(a, before)
+                write_json(os.path.join(a.pack, a.cmd, "tap.json"), rec)  # the verifier's tap.json (П-23)
+                devices.swipe_then_tap(dev, *a.src, *a.to, x, y, ms=a.ms, delay_ms=a.delay_ms)
         code = gesture(a, dev, cell, call)
         print(json.dumps({"probe": a.cmd, "cell": a.cell, "pack": os.path.join(a.pack, a.cmd), "snap_exit": code}))
         return code

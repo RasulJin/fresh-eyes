@@ -128,9 +128,10 @@ def flags(d1, d2, times, ceiling_ms=DEFAULT_CEILING_MS, record_s=None, t0_s=0.0)
     return sorted(found, key=lambda f: f["t"])
 
 
-def extract_frames(video, out_dir, start=None, end=None, height=300, max_frames=8):
+def extract_frames(video, out_dir, start=None, end=None, height=300, max_frames=8, width=None):
+    """PNG frames 300 px tall, or `width` px wide (a recheck: 136 px wide frames could not be read)."""
     os.makedirs(out_dir, exist_ok=True)
-    vf = "scale=-2:%d" % height
+    vf = "scale=%d:-2" % width if width else "scale=-2:%d" % height
     if start is not None or end is not None:
         vf = "select='between(t,%f,%f)',%s" % (start or 0.0, end if end is not None else 1e9, vf)
     run(FFMPEG + ["-i", video, "-fps_mode", "passthrough", "-vf", vf, os.path.join(out_dir, "f_%04d.png")],
@@ -146,7 +147,7 @@ def extract_frames(video, out_dir, start=None, end=None, height=300, max_frames=
     return files
 
 
-def analyze(video, out_dir, ceiling_ms=DEFAULT_CEILING_MS, record_s=None, t0_s=0.0):
+def analyze(video, out_dir, ceiling_ms=DEFAULT_CEILING_MS, record_s=None, t0_s=0.0, frame_width=None):
     frames, times, _, _ = extract_gray(video)
     d1, d2 = diffs(frames)
     found = flags(d1, d2, times, ceiling_ms, record_s, t0_s)
@@ -155,7 +156,7 @@ def analyze(video, out_dir, ceiling_ms=DEFAULT_CEILING_MS, record_s=None, t0_s=0
     if not windows and len(frames) >= 2:
         windows = [(None, None)]
     for k, (a, b) in enumerate(windows):
-        files = extract_frames(video, os.path.join(out_dir, "frames_%d" % k), a, b)
+        files = extract_frames(video, os.path.join(out_dir, "frames_%d" % k), a, b, width=frame_width)
         if files:
             sheets.append(tile(files, os.path.join(out_dir, "sheet_%d.png" % k)))
     # the most any frame differs from the first: under MOVE_EPS nothing on screen moved (a ripple at most)

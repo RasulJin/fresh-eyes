@@ -22,13 +22,16 @@ def _no_maestro(dev):
 
 
 _MAESTRO = mock.patch.object(nav, "_dump_maestro", _no_maestro)  # a test must never reach a real device
+_SLOW = mock.patch.object(devices, "animations_slow", lambda dev: False)  # nor read its settings
 
 
 def setUpModule():
     _MAESTRO.start()
+    _SLOW.start()
 
 
 def tearDownModule():
+    _SLOW.stop()
     _MAESTRO.stop()
 
 
@@ -94,7 +97,7 @@ class SnapTest(unittest.TestCase):
             self.assertEqual(capture.snap("android", "emulator-5560", pack), 0)  # no --keyboard
             meta = read_json(os.path.join(pack, "meta.json"))
         self.assertTrue(meta["keyboard_up"])
-        self.assertIsNone(meta["keyboard_top"])  # geometry still checks the keyboard only on --keyboard snaps
+        self.assertEqual(meta["keyboard_top"], 1500)  # 0.5.14: every keyboard state gets the keyboard checks
 
     def test_snap_crops_each_candidate(self):
         xml = ('<hierarchy><node bounds="[0,0][1080,2400]" class="F"><node bounds="[0,2300][1080,2700]" '

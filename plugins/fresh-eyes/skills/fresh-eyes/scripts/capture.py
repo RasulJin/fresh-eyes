@@ -2,7 +2,10 @@
 """Build the evidence pack for one coverage cell, so the navigator never has to look at pixels.
 
 snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json, som.png (+som.json),
-        crops/<check>-<k>.png (native resolution), meta.json. Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs,
+        crops/<check>-<k>.png (native resolution), meta.json (lit_top: the mean gray of the frame's top half,
+        or of a sheet when lighter, keyboard aside; app_theme_set: this call's --app-theme, else null;
+        conditions: {slow_animations, app_theme, start_page: the selected tabs/options}, what a recheck repeats).
+        Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs,
         5 = none of the --marker words on screen (another screen: meta.json blocked); a `<pack>-recheck` snap
         checks the screen's marker by itself when <pack> showed it. meta.json source: uiautomator, maestro (the
         Maestro CLI, when the UI never gets idle) or xctest.
@@ -11,7 +14,7 @@ snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json,
         --pages: then scrolls the screen's list half a screen at a time, a pack per page in scroll-<k>/, and back
         to the top (meta.json: scroll_pages, scroll_stop, scroll_restored).
 around: records the screen around an action command, then motion analysis: video.mp4, motion.json,
-        sheet_*.png, around.json (animated: false = no frame moved). The ceiling is the run's motion_ceiling_ms
+        sheet_*.png, around.json (animated: false = no frame moved; conditions.slow_animations). The ceiling is the run's motion_ceiling_ms
         (coverage.json above --out).
 logs:   Android only: the app's warnings and errors since the last `logs --clear`, plus crashes, repeats
         collapsed: logcat.txt.
@@ -20,8 +23,12 @@ CLI:
   capture.py snap --platform P --device ID --out PACK [--before PACK] [--keyboard] [--expect-differs PACK] [--pages]
                   [--package PKG] [--marker WORD ...] [--app-theme LABEL]
                   (a dark-* or theme-mismatch-* pack, or --app-theme: theme-note.json {ui_night_mode, app_theme})
-  capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms MS] -- CMD ...
+  capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms MS] [--frame-width PX]
+                    -- CMD ...
   capture.py logs --platform android --device ID --out PACK --package PKG [--clear]
+  --queue Q on snap, around and logs: also refreshes <run>/<platform>/heartbeat-Q (nav.py idle --queue Q).
+  capture.py step --renumber PACK   (step-N folders 1, 2, … in the order they were snapped, steps.json "n" with
+                  them: the fix for steps out of order, never deleting one)
 """
 import argparse
 import json
@@ -43,7 +50,7 @@ from fe_common import FEError, image_size, read_json, write_json
 from geometry import moved_fraction, run_all
 from hierarchy import compress
 from motion import MOVE_EPS, analyze, extract_frames, keyboard as follow_keyboard, run_ceiling_ms
-from pixels import brightness, changed_fraction, corner_candidates, crop, downscale, som_overlay
+from pixels import brightness, changed_fraction, corner_candidates, crop, downscale, lit_top, som_overlay
 
 MIN_DP = {"android": 48, "ios": 44}
 MAX_CROPS = 12
@@ -137,7 +144,7 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
         if not meta["app_running"]:
             logs(platform, device_id, out, package)
     if hierarchy_error is not None:
-        meta["blocked"] = "hierarchy unavailable: %s" % hierarchy_error
+        meta["blocked"] = fe_common.redact("hierarchy unavailable: %s" % hierarchy_error)  # it may quote the dump
         write_json(os.path.join(out, "meta.json"), meta)
         return 3
     if expect_differs and changed_fraction(shot, os.path.join(expect_differs, "screen.png")) < STATE_MIN_CHANGE:
@@ -152,8 +159,9 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
     with open(os.path.join(out, "hierarchy.txt"), "w", encoding="utf-8") as f:
         f.write(compress(nodes))
     kb_top = devices.keyboard_top(dev, nodes)  # recorded on every snap: a `return` snap must show no keyboard
+    # every snap with the keyboard up gets the keyboard checks (a scenario step, a tap's result), not only --keyboard
     ctx = {"screen_wh": [w, h], "px_per_dp": devices.px_per_dp(dev), "min_dp": MIN_DP.get(platform, 48),
-           "keyboard_top": kb_top if keyboard else None, "keyboard": keyboard}
+           "keyboard_top": kb_top, "keyboard": keyboard}
     before_nodes = read_json(os.path.join(before, "nodes.json")) if before else None
     candidates = run_all(nodes, ctx, before_nodes)
     app_nodes = [n for n in nodes if not n["rid"].startswith("com.android.systemui")]
@@ -187,6 +195,12 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
         meta.update(before=before, moved=moved_fraction(before_nodes, nodes))
     meta.update(source=source, nodes=len(nodes), candidates=len(candidates),
                 keyboard_up=kb_top is not None, **{k: ctx[k] for k in ("px_per_dp", "keyboard_top")})
+    # the theme the frame shows, keyboard and a sheet's dimming aside; app_theme_set: only what this call set
+    meta.update(lit_top=lit_top(shot, [w, h], kb_top, _panels(app_nodes, w, h)), app_theme_set=app_theme)
+    # what a recheck must repeat: the verifier copies these into its request, the recheck's own snap shows them
+    meta["conditions"] = {"slow_animations": devices.animations_slow(dev), "app_theme": app_theme,
+                          "start_page": " · ".join(nav._name(n) for n in app_nodes
+                                                   if n.get("selected") and nav._name(n)) or None}
     write_json(os.path.join(out, "meta.json"), meta)
     key = coverage.pack_key(out)
     if app_theme or (key and key[2] == os.path.basename(os.path.normpath(out)) and key[2].startswith(THEME_STATES)):
@@ -196,6 +210,12 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
         meta["keyboard_json"] = _keyboard_json(out) or "written"
         write_json(os.path.join(out, "meta.json"), meta)
     return 0
+
+
+def _panels(nodes, w, h):
+    """Sheets: app nodes nearly as wide as the screen that start below its top and reach its bottom."""
+    return [n["bounds"] for n in nodes if n["bounds"][2] >= 0.9 * w and 0.1 * h < n["bounds"][1] < 0.9 * h
+            and n["bounds"][1] + n["bounds"][3] >= 0.9 * h]
 
 
 def _keyboard_json(pack):
@@ -282,12 +302,14 @@ def pages(platform, device_id, out, max_pages=PAGES):
     return meta
 
 
-def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=None):
-    """Record the screen around the command `action`, or around `call()` (then `action` only describes it)."""
+def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=None, frame_width=None):
+    """Record the screen around the command `action`, or around `call()` (then `action` only describes it).
+    frame_width: the frames' width in px (default 300 px tall, ~136 px wide on a phone)."""
     dev = Device(platform, device_id, "")
     os.makedirs(out, exist_ok=True)
     if ceiling_ms is None:
         ceiling_ms = run_ceiling_ms(out)
+    slow = devices.animations_slow(dev)  # a recheck of this recording must run at the same speed
     rec = devices.start_recording(dev, os.path.join(out, "video.mp4"))
     try:
         time.sleep(0.5)
@@ -303,18 +325,59 @@ def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=N
         raise
     devices.stop_recording(rec)
     t0 = round(t_action - rec.started, 3) if platform == "android" else 0.0  # Android: first change ~ the action
-    report = analyze(os.path.join(out, "video.mp4"), out, ceiling_ms, record_s, t0)
+    report = analyze(os.path.join(out, "video.mp4"), out, ceiling_ms, record_s, t0, frame_width)
     extra = {}
     if RECHECK.search(out):  # a verifier asked again: every frame, not 8 around each of the first 4 flags
         extra["frames_all"] = len(extract_frames(os.path.join(out, "video.mp4"), os.path.join(out, "frames_all"),
-                                                 max_frames=MAX_ALL_FRAMES))
+                                                 max_frames=MAX_ALL_FRAMES, width=frame_width))
     parent = os.path.dirname(os.path.normpath(out))
     if os.path.basename(os.path.normpath(out)) == "kb-hide" and os.path.isfile(os.path.join(parent, "nodes.json")):
         extra["keyboard_json"] = _keyboard_json(parent) or "written"
     write_json(os.path.join(out, "around.json"), dict({"action": action, "action_exit": code, "record_s": record_s,
                                                        "flags": [f["type"] for f in report["flags"]],
-                                                       "animated": report["peak_change"] >= MOVE_EPS}, **extra))
+                                                       "animated": report["peak_change"] >= MOVE_EPS,
+                                                       "conditions": {"slow_animations": slow}}, **extra))
     return 0 if code == 0 else 2
+
+
+STEP = re.compile(r"step-(\d+)")
+
+
+def _step_time(folder):
+    """When the step was snapped: its meta.json time, else its before/ snap's, else the folder's mtime."""
+    for meta in (os.path.join(folder, "meta.json"), os.path.join(folder, "before", "meta.json")):
+        if os.path.isfile(meta) and read_json(meta).get("time"):
+            return read_json(meta)["time"]
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(os.path.getmtime(folder)))
+
+
+def renumber(pack):
+    """step-N folders numbered 1, 2, … in the order they were snapped, steps.json's "n" moved with them (a step
+    there without a folder stays after the one it followed). Fixes an order coverage.py refuses without deleting
+    a step (0.5.13 quick: the navigator removed step-10 and step-13). Returns {old: new} of what moved."""
+    folders = {int(m.group(1)): d for d in os.listdir(pack) for m in [STEP.fullmatch(d)]
+               if m and os.path.isdir(os.path.join(pack, d))}
+    path = os.path.join(pack, "steps.json")
+    steps = read_json(path) if os.path.isfile(path) else []
+    loose, lead, cur = {}, [], None  # steps.json entries without a folder, after the folder step they followed
+    for n in sorted(set(folders) | {s["n"] for s in steps if isinstance(s.get("n"), int)}):
+        if n in folders:
+            cur = n
+        else:
+            (loose.setdefault(cur, []) if cur is not None else lead).append(n)
+    order = lead + [m for f in sorted(folders, key=lambda f: (_step_time(os.path.join(pack, folders[f])), f))
+                    for m in [f] + loose.get(f, [])]
+    moved = {old: k + 1 for k, old in enumerate(order) if old != k + 1}
+    for old in moved:
+        if old in folders:
+            os.rename(os.path.join(pack, folders[old]), os.path.join(pack, ".renumber-%d" % old))
+    for old, new in moved.items():
+        if old in folders:
+            os.rename(os.path.join(pack, ".renumber-%d" % old), os.path.join(pack, "step-%d" % new))
+    if steps and moved:
+        write_json(path, sorted([dict(s, n=moved.get(s.get("n"), s.get("n"))) for s in steps],
+                                key=lambda s: s["n"] if isinstance(s.get("n"), int) else 0))
+    return moved
 
 
 CRASH_TAGS = ("AndroidRuntime", "DEBUG", "libc")  # a crash is logged by the system, not by the app's own pid
@@ -365,11 +428,14 @@ def main():
         argv, action = argv[:i], argv[i + 1:]
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("step").add_argument("--renumber", metavar="PACK", required=True,
+                                        help="number PACK's step-N folders in snap order, steps.json with them")
     for name in ("snap", "around", "logs"):
         p = sub.add_parser(name)
         p.add_argument("--platform", required=True, choices=["android", "ios"])
         p.add_argument("--device", required=True)
         p.add_argument("--out", required=True)
+        p.add_argument("--queue", type=fe_common.queue_name, help="also <run>/<platform>/heartbeat-<queue>")
     s = sub.choices["snap"]
     s.add_argument("--before"); s.add_argument("--keyboard", action="store_true")
     s.add_argument("--expect-differs", help="pack whose screen must differ (state cells: the default pack)")
@@ -379,13 +445,20 @@ def main():
     s.add_argument("--app-theme", help="dark / theme-mismatch: the app's own theme option now picked (its label, "
                                        "or system): theme-note.json")
     r = sub.choices["around"]
-    r.usage = "capture.py around --platform P --device ID --out PACK [--settle S] [--ceiling-ms MS] -- CMD ..."
+    r.usage = ("capture.py around --platform P --device ID --out PACK [--settle S] [--ceiling-ms MS] "
+               "[--frame-width PX] -- CMD ...")
     r.add_argument("--settle", type=float, default=2.5)
     r.add_argument("--ceiling-ms", type=int, help="overrides the run's motion_ceiling_ms (coverage.json)")
+    r.add_argument("--frame-width", type=int, help="frames this many px wide (a recheck that must read them)")
     g = sub.choices["logs"]
     g.add_argument("--package", required=True); g.add_argument("--clear", action="store_true")
     a = ap.parse_args(argv)
-    fe_common.heartbeat(a.out, a.platform, "capture.py %s %s" % (a.cmd, a.out))
+    if a.cmd == "step":
+        print(json.dumps({"pack": a.renumber, "renumbered": {"step-%d" % k: "step-%d" % v
+                                                             for k, v in renumber(a.renumber).items()}}))
+        return 0
+    fe_common.load_secrets(a.out)  # the config above the run: its credentials never reach a pack
+    fe_common.heartbeat(a.out, a.platform, "capture.py %s %s" % (a.cmd, a.out), a.queue)
     out = {}
     if a.cmd == "snap":
         code = snap(a.platform, a.device, a.out, before=a.before, keyboard=a.keyboard,
@@ -399,7 +472,7 @@ def main():
     else:
         if not action:
             raise FEError("around needs an action command after --")
-        code = around(a.platform, a.device, a.out, action, a.settle, a.ceiling_ms)
+        code = around(a.platform, a.device, a.out, action, a.settle, a.ceiling_ms, frame_width=a.frame_width)
     print(json.dumps(dict({"exit": code, "pack": a.out}, **out)))
     return code
 

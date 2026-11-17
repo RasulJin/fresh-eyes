@@ -1,8 +1,10 @@
 """Shared helpers for fresh-eyes scripts. Python 3.9 stdlib only."""
+import argparse
 import contextlib
 import fcntl
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -59,15 +61,28 @@ def run_dir(path):
     return d
 
 
-def heartbeat(path, platform, did):
-    """Refresh <run>/<platform>/heartbeat, <run> being the folder with coverage.json at or above `path` (nav.py
-    --run, capture.py --out): the orchestrator stops a navigator only when it is 10 minutes old. Never fails the
-    command it marks."""
+def beat_file(queue=None):
+    """The heartbeat's name: one per queue when two navigators share a platform (coverage.py plan queues)."""
+    return "heartbeat-%s" % queue if queue else "heartbeat"
+
+
+def queue_name(value):
+    """argparse type of --queue: a plain word, it names a file."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", value or ""):
+        raise argparse.ArgumentTypeError("--queue takes a plain word such as main or small")
+    return value
+
+
+def heartbeat(path, platform, did, queue=None):
+    """Refresh <run>/<platform>/heartbeat (and heartbeat-<queue> with a queue), <run> being the folder with
+    coverage.json at or above `path` (nav.py --run, capture.py --out): the orchestrator stops a navigator only
+    when it is 10 minutes old. Never fails the command it marks."""
     d = run_dir(path)
     if d is None:
         return
     try:
-        write_json(os.path.join(d, platform, "heartbeat"), {"did": did})
+        for name in {beat_file(), beat_file(queue)}:
+            write_json(os.path.join(d, platform, name), {"did": did})
     except OSError:
         pass
 
@@ -117,11 +132,89 @@ def write_png(path, w, h, rgb):
     return path
 
 
+HIDDEN = "‹secret›"
+_secrets = set()  # values never printed or written: config accounts' credentials and what nav.py typed
+_configs = set()  # config files already read
+_searched = set()
+
+
+def secret_values(config):
+    """Test credentials of config `accounts`: each set `*_env` variable, else the keychain item
+    fresh-eyes-<role>-<field> (what nav.py type would type). A read that fails gives nothing."""
+    found = []
+    for role, acc in sorted((config.get("accounts") or {}).items()):
+        for key, var in sorted((acc or {}).items()):
+            if not key.endswith("_env"):
+                continue
+            value = os.environ.get(var or "")
+            if not value:
+                try:
+                    proc = run(["security", "find-generic-password", "-s", "fresh-eyes-%s-%s" % (role, key[:-4]),
+                                "-w"], timeout=10, check=False)
+                    value = proc.stdout.decode("utf-8", "replace").rstrip("\n") if proc.returncode == 0 else ""
+                except FEError:  # no `security`: not a Mac
+                    value = ""
+            if value:
+                found.append(value)
+    return found
+
+
+def config_path(start):
+    """The project's .fresh-eyes/config.json at or above `start` (a run folder lies under .fresh-eyes/runs), or
+    None."""
+    d = os.path.abspath(start)
+    while not os.path.isfile(os.path.join(d, ".fresh-eyes", "config.json")):
+        if os.path.dirname(d) == d:
+            return None
+        d = os.path.dirname(d)
+    return os.path.join(d, ".fresh-eyes", "config.json")
+
+
+def load_secrets(start):
+    """Read the credentials of the .fresh-eyes/config.json at or above `start` (once per config)."""
+    d = os.path.abspath(start)
+    if d in _searched:
+        return
+    _searched.add(d)
+    path = config_path(d)
+    if path is None or path in _configs:
+        return
+    _configs.add(path)
+    try:
+        _secrets.update(secret_values(read_json(path)))
+    except (OSError, ValueError):
+        pass
+
+
+def add_secret(value):
+    if value:
+        _secrets.add(value)
+
+
+def redact(text):
+    """`text` without any credential (case-insensitive: an app may lowercase an email)."""
+    load_secrets(os.getcwd())
+    for s in sorted(_secrets, key=len, reverse=True):
+        text = re.sub(re.escape(s), HIDDEN, text, flags=re.I)
+    return text
+
+
+def scrub(obj):
+    """redact() on every string of a JSON-like object."""
+    if isinstance(obj, str):
+        return redact(obj)
+    if isinstance(obj, list):
+        return [scrub(v) for v in obj]
+    if isinstance(obj, dict):
+        return {k: scrub(v) for k, v in obj.items()}
+    return obj
+
+
 def cli(fn):
     """Run a CLI main; turn FEError into {"error": ...} on stdout and exit code 2."""
     try:
         code = fn()
     except FEError as e:
-        print(json.dumps({"error": str(e)}, ensure_ascii=False))
+        print(json.dumps({"error": redact(str(e))}, ensure_ascii=False))
         sys.exit(2)
     sys.exit(code or 0)

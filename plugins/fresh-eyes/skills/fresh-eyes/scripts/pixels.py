@@ -11,6 +11,7 @@ import os
 import shutil
 
 from fe_common import FEError, FFMPEG, cli, image_size, read_gray, read_rgb, run, write_png
+from geometry import _ancestors
 
 DIFF_TOL = 24  # max per-channel difference still counted as "background"
 
@@ -35,6 +36,25 @@ def brightness(path, w=90, h=200):
     """Mean gray level 0-255 of a screenshot: dark themes sit near 60, light ones near 190."""
     g = read_gray(path, w, h)
     return round(sum(g) / float(len(g)))
+
+
+def lit_top(path, screen_wh, kb_top=None, panels=(), w=90, h=200):
+    """Mean gray 0-255 of the frame's top half (under the status bar, above an open keyboard), or of a panel's
+    visible part when that is lighter (a sheet over a dimmed screen): a light state snapped in the dark theme
+    reads near 20 (0.5.13 import: 17-18 against 243)."""
+    g = read_gray(path, w, h)
+    sw, sh = screen_wh
+    bottom = min(sh // 2, kb_top) if kb_top is not None else sh // 2
+
+    def mean(box):
+        x, y, bw, bh = box
+        r0, r1 = int(y * h / sh), int(min(y + bh, kb_top if kb_top is not None else sh) * h / sh)
+        c0, c1 = int(max(x, 0) * w / sw), int(min(x + bw, sw) * w / sw)
+        vals = [g[r * w + c] for r in range(r0, r1) for c in range(c0, c1)]
+        return sum(vals) / float(len(vals)) if vals else None
+    found = [m for m in map(mean, [[0, int(sh * 0.06), sw, bottom - int(sh * 0.06)]] + list(panels))
+             if m is not None]
+    return round(max(found)) if found else None
 
 
 def downscale(src, dst, long_side=1000):
@@ -109,6 +129,19 @@ SURFACE_MIN_SHARE = 0.12  # panels, sheets, dialogs, big cards
 SHARP_PX = 4
 
 
+def _on_edge(box, corner, panel):
+    """The corner lies on a straight edge of an enclosing panel that goes on past it: no corner is drawn there
+    (0.5.13 feed-trips: an inner ScrollView's corners in the middle of the menu panel's right edge)."""
+    x, y, w, h = box
+    ax, ay, aw, ah = panel
+    px, py = (x if corner[1] == "l" else x + w), (y if corner[0] == "t" else y + h)
+    on_side = abs(px - (ax if corner[1] == "l" else ax + aw)) <= 2 and \
+        (ay < py - 2 if corner[0] == "t" else ay + ah > py + 2)
+    on_top = abs(py - (ay if corner[0] == "t" else ay + ah)) <= 2 and \
+        (ax < px - 2 if corner[1] == "l" else ax + aw > px + 2)
+    return on_side or on_top
+
+
 def corner_candidates(src, nodes, screen_wh, max_surfaces=5):
     """Big surfaces with visibly sharp corners. Corners on the left/right screen edge are skipped:
     edge-to-edge surfaces show no corner there."""
@@ -117,6 +150,7 @@ def corner_candidates(src, nodes, screen_wh, max_surfaces=5):
     surfaces = [n for n in nodes if n["bounds"][2] * n["bounds"][3] >= SURFACE_MIN_SHARE * sw * sh
                 and not (n["bounds"][2] >= sw - 2 and n["bounds"][3] >= sh - 2)
                 and not n.get("rid", "").startswith("com.android.systemui")]
+    by_id, every = {n["id"]: n for n in surfaces}, {n["id"]: n for n in nodes}
     out, seen = [], set()
     for n in sorted(surfaces, key=lambda n: -n["bounds"][2] * n["bounds"][3]):
         box = tuple(n["bounds"])
@@ -124,10 +158,11 @@ def corner_candidates(src, nodes, screen_wh, max_surfaces=5):
             continue
         seen.add(box)
         x, y, bw, bh = box
+        panels = [by_id[p]["bounds"] for p in _ancestors(n, every) if p in by_id]
         sharp = []
         for corner in ("tl", "tr", "bl", "br"):
             cx = x if corner[1] == "l" else x + bw
-            if cx <= 1 or cx >= sw - 1:
+            if cx <= 1 or cx >= sw - 1 or any(_on_edge(box, corner, p) for p in panels):
                 continue
             if _radius_in(w, h, data, list(box), corner) < SHARP_PX:
                 sharp.append(corner)
