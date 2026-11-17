@@ -20,7 +20,7 @@ nobody answers in a night run.
 ## Input (from the orchestrator)
 
 - `run`: the run folder (has `coverage.json`, `preflight.json`), `config`: `.fresh-eyes/config.json`.
-- `platform`, `device` (id) and `name` (from `preflight.json` → `platforms.<p>`), the list of cell ids,
+- `platform`, `device` (id) and `name` of your queue's device (`preflight.json` → `platforms.<p>`), the cell ids,
   or `requests`: one or more `requests.json` files (one per screen folder) to fulfil for the verifier.
 - `package`: the app's Android package (`app.android_id`); every `capture.py snap` gets it.
 - `app language` (config `app.locale`), when set: the app must show it before your first cell (rule below).
@@ -95,7 +95,8 @@ nobody answers in a night run.
    Three failed attempts → `coverage.py set ... --status blocked --note "<why>"` and move on.
 2. **Set the state** on the device (owned devices only):
    `python3 $S/devices.py set --platform P --device ID --name NAME --what dark|font-xl|offline|...`.
-   `keyboard`: focus the screen's main input. `small-screen`: use `platforms.<p>.small_device_id`. `font-xl`:
+   `keyboard`: focus the screen's main input. `small-screen`: these cells come with the small device as yours
+   (`platforms.<p>.small_device_id`); another navigator may drive the other device at the same time. `font-xl`:
    then `devices.py app --do terminate` and `--do launch`, and reach the screen again (an app open across the
    change keeps its old layouts).
    `empty`/`long-text`/`long-list`: the seeded data. `long-list`: snap the top, swipe inside the list until the

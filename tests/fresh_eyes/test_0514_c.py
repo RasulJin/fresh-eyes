@@ -81,6 +81,14 @@ class Text0514Test(unittest.TestCase):
         self.assertIn("findings.py requests --run $RUN", body)
         self.assertIn("≤15 open entries per call", body)
 
+    def test_p41_two_navigators_one_per_queue(self):
+        # 0.5.13 run: navigation took 5.3 h on one device while the small one idled (M9)
+        body = skill()
+        for word in ("two `fresh-eyes:navigator`s at once, one per queue", "--queue main|small",
+                     "`small` on its `small_device_id`", "in one blocking call each, in one message"):
+            self.assertIn(word, body, word)
+        self.assertIn("these cells come with the small device as yours", agent("navigator"))
+
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):
