@@ -8,11 +8,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
+from unittest import mock
 
 from tests.fresh_eyes.helpers import FIXTURES, SCRIPTS
 from tests.fresh_eyes.test_coverage import BOTH_OK_MUT_ON, ONE_SCREEN, make_pack
 from fe_common import FEError, read_json, write_json
-from coverage import _load_findings, plan, set_status, verdict
+from coverage import NOTES_MARK, _load_findings, plan, set_status, verdict
 import backlog
 import findings
 import stats
@@ -330,6 +332,50 @@ class RequestsMergeTest(unittest.TestCase):
         findings.requests(run)
         loaded, _ = _load_findings([os.path.join(folder, "findings.json")], run)
         self.assertEqual([f["_requested"] for f in loaded], [True, True])
+
+
+class OrchestratorContextTest(unittest.TestCase):
+    """П-42: subagents' notes gathered by a script; the card says how long the orchestrator ran and how full."""
+
+    def test_notes_gather_under_the_orchestrators_own_lines(self):
+        run = _root(self)
+        with open(os.path.join(run, "orchestrator-notes.md"), "w", encoding="utf-8") as f:
+            f.write("# Заметки оркестратора\n\n- preflight: сборка уже стояла\n")
+        for screen, text in (("post-detail", "- scenario: reply sent and deleted\n"), ("import", "- dark: Тёмная\n")):
+            os.makedirs(os.path.join(run, "notes"), exist_ok=True)
+            with open(os.path.join(run, "notes", screen + ".md"), "w", encoding="utf-8") as f:
+                f.write(text)
+        for _ in range(2):  # a second gathering rebuilds, never repeats
+            out = _cli("coverage.py", "notes", "--run", run)
+        self.assertEqual(out["notes"], 2)
+        with open(out["out"], encoding="utf-8") as f:
+            self.assertEqual(f.read(), "# Заметки оркестратора\n\n- preflight: сборка уже стояла\n\n%s\n\n"
+                                       "## import\n\n- dark: Тёмная\n\n## post-detail\n\n- scenario: reply sent "
+                                       "and deleted\n" % NOTES_MARK)
+
+    def test_the_card_counts_the_orchestrators_turns_and_context(self):
+        root = _root(self)
+        run = os.path.join(root, "run")
+        shutil.copytree(os.path.join(FIXTURES, "score-run"), run)
+        t0 = 1700000000  # the run's first file; report.md an hour later
+        for name in os.listdir(run):
+            os.utime(os.path.join(run, name), (t0, t0) if name != "report.md" else (t0 + 3600,) * 2)
+
+        def turn(dt, mid, fresh, read, wrote):
+            return {"type": "assistant", "timestamp": datetime.fromtimestamp(t0 + dt, timezone.utc).isoformat(),
+                    "message": {"id": mid, "content": [], "usage": {
+                        "input_tokens": fresh, "cache_read_input_tokens": read, "cache_creation_input_tokens": wrote}}}
+        os.makedirs(os.path.join(root, "projects", "-repo"))
+        with open(os.path.join(root, "projects", "-repo", "s1.jsonl"), "w") as f:
+            for rec in (turn(-60, "m0", 1, 90000, 0), turn(5, "m1", 3, 114000, 2000), turn(6, "m1", 3, 114000, 2000),
+                        turn(50, "m2", 2, 240000, 9000)):
+                f.write(json.dumps(rec) + "\n")
+        with mock.patch.object(stats, "PROJECTS", os.path.join(root, "projects")):
+            out = stats.score(run, "s1")
+        expect = {"turns": 2, "context_start": 116003, "context_end": 249002}  # m0 is before the run
+        self.assertEqual(out["orchestrator"], expect)
+        self.assertEqual(read_json(out["out"])["orchestrator"], expect)
+        self.assertIsNone(stats.score(run)["orchestrator"])  # no session id: not known
 
 
 if __name__ == "__main__":

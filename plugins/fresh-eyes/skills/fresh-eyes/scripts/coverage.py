@@ -15,6 +15,7 @@ CLI:
   coverage.py packs --dir <run>/<platform>/<screen> [--max 15]
   coverage.py prune --runs .fresh-eyes/runs [--keep 3]
   coverage.py score --run RUN [--session ID] [--out RUN/score.json]   (stats.py: the run's M1-M12 card)
+  coverage.py notes --run RUN   (the subagents' RUN/notes/<screen>.md into RUN/orchestrator-notes.md)
 """
 import argparse
 import glob
@@ -822,6 +823,26 @@ def _asks_for(request, f):
         or any(_asks_for(m, f) for m in request.get("merged") or () if isinstance(m, dict))
 
 
+NOTES_MARK = "<!-- coverage.py notes: rebuilt from notes/*.md below this line -->"
+
+
+def notes(run):
+    """The subagents' details (RUN/notes/<screen>.md, one section each) under the orchestrator's own lines of
+    orchestrator-notes.md: the text above NOTES_MARK stays, everything below it is rebuilt."""
+    out = os.path.join(run, "orchestrator-notes.md")
+    head = ""
+    if os.path.isfile(out):
+        with open(out, encoding="utf-8") as f:
+            head = f.read().split(NOTES_MARK)[0].rstrip()
+    parts = []
+    for path in sorted(glob.glob(os.path.join(run, "notes", "*.md"))):
+        with open(path, encoding="utf-8") as f:
+            parts.append("## %s\n\n%s\n" % (os.path.splitext(os.path.basename(path))[0], f.read().strip()))
+    with open(out, "w", encoding="utf-8") as f:
+        f.write((head + "\n\n" if head else "") + NOTES_MARK + "\n\n" + "\n".join(parts))
+    return {"notes": len(parts), "out": out}
+
+
 BULKY = (".png", ".jpg", ".mp4")  # ~97% of a run (a full one is ~0.5 GB); the json, txt and report stay
 
 
@@ -873,6 +894,8 @@ def main():
     p = sub.add_parser("prune"); p.add_argument("--runs", required=True); p.add_argument("--keep", type=int, default=3)
     p = sub.add_parser("score"); p.add_argument("--run", required=True); p.add_argument("--out")
     p.add_argument("--session", help="the orchestrator's session id: its transcripts give M9, M10 and M12")
+    p = sub.add_parser("notes", help="gather RUN/notes/*.md into RUN/orchestrator-notes.md")
+    p.add_argument("--run", required=True)
     a = ap.parse_args()
     if a.cmd == "plan":
         cov = plan(read_json(a.config), read_json(a.preflight), a.mode, a.screens.split(",") if a.screens else None,
@@ -918,6 +941,8 @@ def main():
     elif a.cmd == "score":
         import stats
         print(json.dumps(stats.score(a.run, a.session, a.out), ensure_ascii=False))
+    elif a.cmd == "notes":
+        print(json.dumps(notes(a.run), ensure_ascii=False))
     else:
         print(json.dumps(screens_from_diff(a.repo, a.base, read_json(a.config)), ensure_ascii=False))
     return 0
