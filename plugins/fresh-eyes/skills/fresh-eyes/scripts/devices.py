@@ -641,6 +641,14 @@ def animations_enabled(dev):
     return True
 
 
+def animations_slow(dev):
+    """True when an animation scale is above 1 (devices.py set --what slow-animations), for a pack's conditions."""
+    if dev.platform != "android":
+        return False
+    vals = _shell(dev, "; ".join("settings get global %s" % k for k in _SCALES), check=False).split()
+    return any(re.fullmatch(r"\d+(\.\d+)?", v) and float(v) > 1 for v in vals)
+
+
 def enable_animations(dev):
     _require_owned(dev, "change animation settings")
     _shell(dev, "; ".join("settings put global %s 1" % k for k in _SCALES))

@@ -1,8 +1,8 @@
 """Normalize a view hierarchy (uiautomator XML, Maestro iOS driver JSON, `maestro hierarchy` JSON) into flat
 nodes, and compress them to text. Bounds are multiplied by `scale` (iOS sources are in points, screenshots in pixels).
 
-Node: {id, parent, depth, cls, text, label, rid, bounds:[x,y,w,h], clickable, focused, enabled, password}
-(password: the field hides what is typed; the Maestro tree never says so)
+Node: {id, parent, depth, cls, text, label, rid, bounds:[x,y,w,h], clickable, focused, enabled, password, selected}
+(password: the field hides what is typed, the Maestro tree never says so; selected: a chosen tab or option)
 """
 import json
 import re
@@ -39,11 +39,12 @@ class _Builder:
         self.nodes, self.scale = [], scale
 
     def add(self, parent, depth, bounds, cls="", text="", label="", rid="", clickable=False, focused=False,
-            enabled=True, password=False):
+            enabled=True, password=False, selected=False):
         bounds = [int(round(v * self.scale)) for v in bounds]
         node = {"id": "n%d" % len(self.nodes), "parent": parent, "depth": depth, "cls": cls or "",
                 "text": text or "", "label": label or "", "rid": rid or "", "bounds": bounds,
-                "clickable": clickable, "focused": focused, "enabled": enabled, "password": password}
+                "clickable": clickable, "focused": focused, "enabled": enabled, "password": password,
+                "selected": selected}
         self.nodes.append(node)
         return node["id"]
 
@@ -67,7 +68,8 @@ def _from_uiautomator(raw, scale):
                 text = "" if password else child.get("text")  # never print a typed secret
                 pid = b.add(parent, depth, bounds, child.get("class"), text, child.get("content-desc"),
                             child.get("resource-id"), _truthy(child.get("clickable")),
-                            _truthy(child.get("focused")), _truthy(child.get("enabled"), True), password)
+                            _truthy(child.get("focused")), _truthy(child.get("enabled"), True), password,
+                            _truthy(child.get("selected")))
             walk(child, pid, depth + 1)
 
     walk(root, None, 0)
@@ -121,7 +123,7 @@ def _from_xctest(raw, scale):
                 (value or el.get("placeholderValue")) if cls in XCUI_TEXT_INPUTS else ""
             pid = b.add(parent, depth, bounds, cls, text, el.get("label"), el.get("identifier"),
                         cls in XCUI_TAPPABLE, bool(el.get("hasFocus")), el.get("enabled", True),
-                        cls == "SecureTextField")
+                        cls == "SecureTextField", bool(el.get("selected")))
         if cls == "Keyboard":  # keep its frame (keyboard top), drop the keys: Android dumps no IME either
             return
         for child in el.get("children") or []:
@@ -148,7 +150,8 @@ def _from_maestro(raw, scale):
                 pid = b.add(parent, depth, bounds, a.get("class"), a.get("text"), a.get("accessibilityText"),
                             a.get("resource-id"), _truthy(child.get("clickable", a.get("clickable"))),
                             _truthy(child.get("focused", a.get("focused"))),
-                            _truthy(child.get("enabled", a.get("enabled")), True))
+                            _truthy(child.get("enabled", a.get("enabled")), True), False,
+                            _truthy(child.get("selected", a.get("selected"))))
             walk(child, pid, depth + 1)
 
     walk(data, None, 0)

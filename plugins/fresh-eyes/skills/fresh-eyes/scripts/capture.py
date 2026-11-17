@@ -3,7 +3,8 @@
 
 snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json, som.png (+som.json),
         crops/<check>-<k>.png (native resolution), meta.json (lit_top: the mean gray of the frame's top half,
-        or of a sheet when lighter, keyboard aside; app_theme_set: this call's --app-theme, else null).
+        or of a sheet when lighter, keyboard aside; app_theme_set: this call's --app-theme, else null;
+        conditions: {slow_animations, app_theme, start_page: the selected tabs/options}, what a recheck repeats).
         Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs,
         5 = none of the --marker words on screen (another screen: meta.json blocked); a `<pack>-recheck` snap
         checks the screen's marker by itself when <pack> showed it. meta.json source: uiautomator, maestro (the
@@ -13,7 +14,7 @@ snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json,
         --pages: then scrolls the screen's list half a screen at a time, a pack per page in scroll-<k>/, and back
         to the top (meta.json: scroll_pages, scroll_stop, scroll_restored).
 around: records the screen around an action command, then motion analysis: video.mp4, motion.json,
-        sheet_*.png, around.json (animated: false = no frame moved). The ceiling is the run's motion_ceiling_ms
+        sheet_*.png, around.json (animated: false = no frame moved; conditions.slow_animations). The ceiling is the run's motion_ceiling_ms
         (coverage.json above --out).
 logs:   Android only: the app's warnings and errors since the last `logs --clear`, plus crashes, repeats
         collapsed: logcat.txt.
@@ -193,6 +194,10 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
                 keyboard_up=kb_top is not None, **{k: ctx[k] for k in ("px_per_dp", "keyboard_top")})
     # the theme the frame shows, keyboard and a sheet's dimming aside; app_theme_set: only what this call set
     meta.update(lit_top=lit_top(shot, [w, h], kb_top, _panels(app_nodes, w, h)), app_theme_set=app_theme)
+    # what a recheck must repeat: the verifier copies these into its request, the recheck's own snap shows them
+    meta["conditions"] = {"slow_animations": devices.animations_slow(dev), "app_theme": app_theme,
+                          "start_page": " · ".join(nav._name(n) for n in app_nodes
+                                                   if n.get("selected") and nav._name(n)) or None}
     write_json(os.path.join(out, "meta.json"), meta)
     key = coverage.pack_key(out)
     if app_theme or (key and key[2] == os.path.basename(os.path.normpath(out)) and key[2].startswith(THEME_STATES)):
@@ -300,6 +305,7 @@ def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=N
     os.makedirs(out, exist_ok=True)
     if ceiling_ms is None:
         ceiling_ms = run_ceiling_ms(out)
+    slow = devices.animations_slow(dev)  # a recheck of this recording must run at the same speed
     rec = devices.start_recording(dev, os.path.join(out, "video.mp4"))
     try:
         time.sleep(0.5)
@@ -325,7 +331,8 @@ def around(platform, device_id, out, action, settle=2.5, ceiling_ms=None, call=N
         extra["keyboard_json"] = _keyboard_json(parent) or "written"
     write_json(os.path.join(out, "around.json"), dict({"action": action, "action_exit": code, "record_s": record_s,
                                                        "flags": [f["type"] for f in report["flags"]],
-                                                       "animated": report["peak_change"] >= MOVE_EPS}, **extra))
+                                                       "animated": report["peak_change"] >= MOVE_EPS,
+                                                       "conditions": {"slow_animations": slow}}, **extra))
     return 0 if code == 0 else 2
 
 

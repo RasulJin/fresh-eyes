@@ -22,13 +22,16 @@ def _no_maestro(dev):
 
 
 _MAESTRO = mock.patch.object(nav, "_dump_maestro", _no_maestro)  # a test must never reach a real device
+_SLOW = mock.patch.object(devices, "animations_slow", lambda dev: False)  # nor read its settings
 
 
 def setUpModule():
     _MAESTRO.start()
+    _SLOW.start()
 
 
 def tearDownModule():
+    _SLOW.stop()
     _MAESTRO.stop()
 
 

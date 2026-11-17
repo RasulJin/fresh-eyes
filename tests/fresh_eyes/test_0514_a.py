@@ -18,6 +18,19 @@ from devices import Device
 from fe_common import FEError, read_json, write_json
 
 EMAIL, PASSWORD = "qa.fake@example.test", "Fake.Pass-4821"
+REAL_SLOW = devices.animations_slow
+_DEVICE = [mock.patch.object(devices, "animations_slow", lambda dev: False),  # a test never reads a real device
+           mock.patch.object(nav, "_dump_maestro", lambda dev: (_ for _ in ()).throw(FEError("no Maestro in tests")))]
+
+
+def setUpModule():
+    for p in _DEVICE:
+        p.start()
+
+
+def tearDownModule():
+    for p in reversed(_DEVICE):
+        p.stop()
 ROOT = ('<?xml version="1.0" encoding="UTF-8"?><hierarchy rotation="0">'
         '<node class="android.widget.FrameLayout" text="" content-desc="" resource-id="" bounds="[0,0][1080,2400]">%s'
         '</node></hierarchy>')
@@ -327,6 +340,39 @@ class SwipeTapTest(unittest.TestCase):
             os.makedirs(os.path.join(pack, "tap-4"))  # a tap that failed before its row
             self.assertEqual(taps.next_row(pack, rows), 5)
             self.assertEqual(taps.next_row(os.path.join(pack, "new"), []), 1)
+
+
+class ConditionsTest(unittest.TestCase):
+    """П-40: rechecks ran from another pager page (quick profile-trips) and at normal speed (trip-map)."""
+    def test_snap_and_recording_carry_the_conditions_a_recheck_repeats(self):
+        tab = ('<node class="android.widget.Button" text="" content-desc="Поездки" resource-id="" selected="true" '
+               'clickable="true" bounds="[540,250][1080,370]"/>')
+        xml = ROOT % (field("title", "Профиль", 100, cls="android.widget.TextView") + tab)
+        with tmpdir() as d, mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml), \
+                mock.patch.object(devices, "screenshot", lambda dev, dst: make_png(dst, 108, 240)), \
+                mock.patch.object(devices, "px_per_dp", lambda dev: 2.625), \
+                mock.patch.object(devices, "keyboard_top", lambda dev, nodes=(): None), \
+                mock.patch.object(devices, "night_mode", lambda dev: "Night mode: yes"), \
+                mock.patch.object(devices, "animations_slow", lambda dev: True), \
+                mock.patch.object(capture, "analyze", lambda *a, **kw: {"flags": [], "peak_change": 0.1}), \
+                mock.patch.object(devices, "start_recording", lambda dev, dst, limit_s=60: mock.Mock(started=0)), \
+                mock.patch.object(devices, "stop_recording", lambda rec: None), \
+                mock.patch.object(capture.time, "sleep", lambda s: None):
+            pack = os.path.join(d, "android", "profile-trips", "default-drag-interrupt-recheck")
+            capture.snap("android", "e", pack, app_theme="Тёмная")
+            self.assertEqual(read_json(os.path.join(pack, "meta.json"))["conditions"],
+                             {"slow_animations": True, "app_theme": "Тёмная", "start_page": "Поездки"})
+            rec = os.path.join(d, "android", "trip-map", "default-back-during-animation", "d100")
+            capture.around("android", "e", rec, ["true"], settle=0)
+            self.assertEqual(read_json(os.path.join(rec, "around.json"))["conditions"], {"slow_animations": True})
+
+    def test_slow_means_any_scale_above_one(self):
+        own = Device("android", "emulator-5560", "fresh-eyes-pixel")
+        for out, slow in (("1.0\n5\n1.0\n", True), ("1.0\n1.0\n1\n", False), ("null\nnull\nnull\n", False),
+                          ("0.0\n0.0\n0.0\n", False)):
+            with mock.patch.object(devices, "_shell", lambda dev, cmd, check=True, timeout=60: out):
+                self.assertEqual(REAL_SLOW(own), slow, out)
+        self.assertFalse(REAL_SLOW(Device("ios", "AAA", "fresh-eyes iPhone 17")))
 
 
 if __name__ == "__main__":
