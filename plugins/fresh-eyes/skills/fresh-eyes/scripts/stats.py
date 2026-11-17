@@ -2,7 +2,7 @@
 """Score card of a finished run (`coverage.py score`): the metrics of the 9.5 plan a script can count, from the run
 folder and, with the session id, the session's transcripts. The judge writes M4, M7 and M11 into score.json
 (`"M4": {"value": 0.04}`) and may correct a counted one (`"M1": {"value": 1, "by": "judge"}`: not every numbered
-step of run-log.md is a hand move); a rerun keeps them.
+step of run-log.md is a hand move); a rerun keeps them, and every metric's `note` and `by`.
 """
 import glob
 import json
@@ -159,8 +159,7 @@ def score(run, sid=None, out=None):
         v = m[k]
         known = v is not None and not (isinstance(v, dict) and None in v.values())
         card[k] = {"value": v, "ok": LIMITS[k][1](v) if known else None, "what": LIMITS[k][0]}
-    for k in corrected:
-        card[k]["by"] = "judge"
+        card[k].update((f, old[k][f]) for f in ("by", "note") if f in (old.get(k) or {}))  # the judge's words stay
     card["M6"]["of"] = n["confirmed"]
     card["M2"]["flaky"] = flaky
     card["passed"] = sum(1 for k in LIMITS if card[k]["ok"])

@@ -10,6 +10,7 @@ from tests.fresh_eyes.helpers import FIXTURES
 from tests.fresh_eyes.test_coverage import BOTH_OK_MUT_ON, ONE_SCREEN, make_pack
 from fe_common import FEError, read_json, write_json
 from coverage import plan, set_status
+import stats
 
 F0514 = os.path.join(FIXTURES, "0514")
 
@@ -158,6 +159,26 @@ class ProbeOnItsScreenTest(unittest.TestCase):
         write_json(os.path.join(pack, "left", "meta.json"), {"platform": "android", "time": "2026-11-15T10:00:09"})
         with self.assertRaisesRegex(FEError, r"capture.py step --renumber <pack>, never delete a step folder"):
             set_status(self.cov, cell["id"], "done", evidence=[pack])
+
+
+class ScoreKeepsTheJudgeTest(unittest.TestCase):
+    """П-47: a rerun of coverage.py score keeps every note and by the judge wrote."""
+
+    def test_notes_and_by_survive_a_second_score(self):
+        run = os.path.join(_root(self), "run")
+        shutil.copytree(os.path.join(FIXTURES, "score-run"), run)
+        card = read_json(stats.score(run)["out"])
+        card["M7"] = {"value": 4, "by": "judge", "note": "post-detail scenario read-only; import left dark"}
+        card["M2"]["note"] = "3 disproved by a frame"  # a counted metric annotated, not corrected
+        card["M9"].update(value={"hours": 6.8, "idle_gaps": 0}, by="judge", note="owner's pause 17:56-21:51")
+        write_json(os.path.join(run, "score.json"), card)
+        again = read_json(stats.score(run)["out"])
+        self.assertEqual((again["M7"]["value"], again["M7"]["by"], again["M7"]["note"]),
+                         (4, "judge", "post-detail scenario read-only; import left dark"))
+        self.assertEqual((again["M2"]["value"], again["M2"]["note"]), (card["M2"]["value"], "3 disproved by a frame"))
+        self.assertNotIn("by", again["M2"])
+        self.assertEqual((again["M9"]["value"], again["M9"]["by"], again["M9"]["note"]),
+                         ({"hours": 6.8, "idle_gaps": 0}, "judge", "owner's pause 17:56-21:51"))
 
 
 if __name__ == "__main__":
