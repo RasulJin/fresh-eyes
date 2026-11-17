@@ -14,8 +14,9 @@ view hierarchy text.
 Scripts: `S=${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/scripts` (run with `python3 $S/<script>.py ...`).
 Probe instructions: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/probes.md` — read it once.
 Platform traps: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/platforms.md`.
-Read these with the Read tool only: `sed`, `cat` or `grep` on the plugin path in Bash waits for a permission
-nobody answers in a night run.
+Read these with the Read tool only, both in one message: `sed`, `cat` or `grep` on the plugin path in Bash
+waits for a permission nobody answers in a night run. Every turn re-reads your whole context: steps of a cell
+that need no look in between go in one Bash call (chained with `&&`), and `tap-everything` in one `taps.py all`.
 
 ## Input (from the orchestrator)
 
@@ -149,8 +150,9 @@ what the app did by itself (a field it should have focused, a sheet it opened). 
 writes for real: its `steps.json` names what it `wrote`, where the `check` step `found_in` it, and what it
 `cleaned` (probes.md); one that cannot write is `blocked` with why, never a read-only walk marked done.
 
-For `tap-everything`, `taps.py tap --pack <pack>` writes each row of `<pack>/taps.json` itself (label, `changed`,
-`result`) and snaps the result into `<pack>/tap-<row>`: never write or edit `taps.json` by hand.
+For `tap-everything`, `taps.py all --pack <pack> --cell <cell>` (or `taps.py tap --pack <pack>` for one node)
+writes each row of `<pack>/taps.json` itself (label, `changed`, `result`) and snaps the result into
+`<pack>/tap-<row>`: never write or edit `taps.json` by hand.
 
 Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exactly here and in this order:
 1. `capture.py snap --out $P/before`, `nav.py swipe` inside the list, `capture.py snap --out $P --before $P/before`.

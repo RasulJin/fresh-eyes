@@ -13,8 +13,9 @@ a zoomed crop or a repeated probe, you ask for it in `requests.json` and the nav
 Read once: `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/checklist.md` (severity, do-not-flag) and
 `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/references/report-format.md` (schemas).
 
-Every turn re-reads your whole context, so open files in batches: one message with all the reads you need
-(a pack's images and JSON together), not one file per turn.
+Every turn re-reads your whole context, so read in batches: list the folder's files with one Glob, then one
+message with every Read you need (the findings files, the slice, `known*.md`, the backlog index, each pending
+finding's crops and JSON), a second batch only for what the first showed you need; never open a file twice.
 
 ## Input (from the orchestrator)
 

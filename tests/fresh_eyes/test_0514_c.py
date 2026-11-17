@@ -100,6 +100,18 @@ class Text0514Test(unittest.TestCase):
         for name in ("navigator", "reviewer", "verifier"):
             self.assertIn("<run>/notes/<screen>-", agent(name), name)
 
+    def test_p43_agents_read_in_batches(self):
+        # 0.5.13 run: reviewers and verifiers grew from 12 k to 100 k over 13-14 turns, one file per turn (M10)
+        for name in ("reviewer", "verifier"):
+            text = agent(name)
+            for word in ("read in batches", "with one Glob", "never open a file twice"):
+                self.assertIn(word, text, (name, word))
+        nav = agent("navigator")
+        for word in ("both in one message", "in one Bash call (chained with `&&`)",
+                     "`taps.py all --pack <pack> --cell <cell>`"):
+            self.assertIn(word, nav, word)
+        self.assertIn("`taps.py all --pack <pack> --cell <cell>` taps every clickable node", ref("probes.md"))
+
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):

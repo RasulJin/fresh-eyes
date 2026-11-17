@@ -161,12 +161,13 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
 ### tap-everything
 - Reveals: dead taps, wrong destinations, labels that lie ("Follow" opening the profile), disabled controls
   that look enabled.
-- Steps: for each clickable node in `nodes.json` (skip destructive labels: delete, remove, log out, pay, send),
-  `taps.py tap --pack <pack> --som N` (its mark in the pack's `som.json`, or `--id`/`--label`; `--x --y` only
-  with `--expect-id`): it finds the node in a dump taken just before the tap (refused: gone, off screen, under
-  the keyboard), waits until the screen settles (≤3 s), snaps the result with `tap.json` into `<pack>/tap-<k>`
-  and appends row k of `taps.json` (label, `changed`, `result`) itself. Go back. `--record` on a label that
-  promises a short reply (Copy, Like, Save): a 2 s toast is gone by the snap, the video keeps it.
+- Steps: `taps.py all --pack <pack> --cell <cell>` taps every clickable node of the pack's `som.json` in one
+  call, skipping destructive labels (delete, remove, log out, pay, send). One node, a skipped one or a recheck:
+  `taps.py tap --pack <pack> --som N` (or `--id`/`--label`; `--x --y` only with `--expect-id`), then go back.
+  Each tap finds its node in a dump taken just before the tap (refused: gone, off screen, under the keyboard),
+  waits until the screen settles (≤3 s), snaps the result with `tap.json` into `<pack>/tap-<k>` and appends row k
+  of `taps.json` (label, `changed`, `result`) itself. `--record` on a label that promises a short reply (Copy,
+  Like, Save): a 2 s toast is gone by the snap, the video keeps it.
 - Three `"changed": false` in a row: something covers the screen (a photo viewer, a sheet left open). Close it,
   reach the screen, tap those again; `coverage.py set` refuses such a run of three unless `--note` says why.
 - Reply/comment buttons and inputs only focus a field, they change no data: tap them too, and first, so the
