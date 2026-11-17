@@ -42,6 +42,8 @@ the script copies that ruling. Another defect → delete `same_as` and `same_as_
 
 For each BUG with `verdict: "pending"`:
 1. Open its evidence crop(s); open the pack's `som.png` only when the crop lacks context. Read the spec rule.
+   Compare two frames (the original and its recheck) on `screen.png`, never `screen_1000.png`: the downscale
+   hides a 1-2 px cut or seam.
    A BUG at confidence ≤ 0.4, or whose `actual` says its evidence is missing ("needs a frame", "not checked",
    "seems"), is a guess: request the evidence that decides it (step 4), or set `kind` to `IMP` when none can.
 2. Try to disprove it:

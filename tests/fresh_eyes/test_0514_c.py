@@ -141,6 +141,12 @@ class Text0514Test(unittest.TestCase):
                      "running out of its control here is a BUG (low or higher), never an IMP"):
             self.assertIn(word, checklist, word)
 
+    def test_p50_full_size_frames_and_message_chips(self):
+        # 0.5.13 run: a reject compared screen_1000.png; quick and full treated Vio's prompt chips differently
+        self.assertIn("on `screen.png`, never `screen_1000.png`", agent("verifier"))
+        self.assertIn("Chips that send a message (a chat's suggested prompts) are sending: skip them here; "
+                      "`scenario` presses them", ref("probes.md"))
+
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):

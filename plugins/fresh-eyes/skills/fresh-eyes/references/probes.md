@@ -168,6 +168,7 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
   waits until the screen settles (≤3 s), snaps the result with `tap.json` into `<pack>/tap-<k>` and appends row k
   of `taps.json` (label, `changed`, `result`) itself. `--record` on a label that promises a short reply (Copy,
   Like, Save): a 2 s toast is gone by the snap, the video keeps it.
+- Chips that send a message (a chat's suggested prompts) are sending: skip them here; `scenario` presses them.
 - Three `"changed": false` in a row: something covers the screen (a photo viewer, a sheet left open). Close it,
   reach the screen, tap those again; `coverage.py set` refuses such a run of three unless `--note` says why.
 - Reply/comment buttons and inputs only focus a field, they change no data: tap them too, and first, so the
