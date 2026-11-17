@@ -111,6 +111,8 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
         near = [n for s in chosen for n in by_id[s].get("neighbors", []) if n in by_id and n not in screens]
         unchecked += [{"what": "%s: all states" % n, "why": "neighbor of a checked screen; quick checks it when named"}
                       for n in dict.fromkeys(near)]
+    # screens without an account first: a full run starts from cleared data, signed out (0.5.13: by hand)
+    chosen.sort(key=lambda s: not by_id[s].get("signed_out"))
     plats = preflight.get("platforms", {})
     targets = config.get("platforms", PLATFORMS)
     ok = [p for p in targets if plats.get(p, {}).get("ok")]
@@ -382,8 +384,8 @@ def _probe_problems(c, packs, note):
                         "snapped before it>, so the scripts can tell what moved")
     elif swiped is not None and swiped.get("moved") == 0:  # nothing scrolled is nothing checked, note or not
         problems.append("the swipe moved nothing on screen: swipe inside the list or grid itself, not on a "
-                        "header, and longer; if it really does not scroll (too few items), mark the cell na or "
-                        "blocked with --note \"not enough items\"")
+                        "header, and longer; if it really does not scroll (too few items), the cell is not "
+                        "applicable: --status na --note \"not enough items\"")
     # A page laid out while a shorter one was open can stay cut to its height (a grid with blank under it).
     for k, page in enumerate(c.get("pages", []), 1):
         meta = os.path.join(packs[0], "page-%d" % k, "meta.json") if packs else ""
@@ -518,8 +520,9 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_st
     # an intermittent bug the repeat missed ends unsure: a human has to look before anyone says CLEAN
     doubtful = [f for f in findings if f.get("verdict") == "unsure" and f.get("kind", "BUG") == "BUG"
                 and f.get("severity") in ("high", "medium")]
-    # "na" (not applicable) is reported, never counted as checked: the config should drop that probe instead
-    open_cells = [c for c in cov["cells"] if c["status"] != "done"]
+    # "na" (not applicable: a list too short to swipe) is reported, not counted as a cell left undone
+    na = [c for c in cov["cells"] if c["status"] == "na"]
+    open_cells = [c for c in cov["cells"] if c["status"] not in ("done", "na")]
     seen = {pack_key(p) for p in reviewed}
     seen.discard(None)
     unreviewed = [c for c in cov["cells"] if c["status"] == "done"
@@ -532,9 +535,10 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_st
     if not cov["cells"]:
         reasons.append("no cells planned")
     if open_cells:
-        na = [c for c in open_cells if c["status"] == "na"]
-        reasons.append("%d cells not done%s" % (len(open_cells), " (%d marked not applicable)" % len(na) if na
-                                                else ""))
+        reasons.append("%d cells not done" % len(open_cells))
+    if na:
+        reasons.append("%d cells not applicable: %s" % (len(na), "; ".join("%s (%s)" % (c["id"], c["note"])
+                                                                          for c in na[:5])))
     if unreviewed:
         reasons.append("%d done cells whose evidence no reviewer looked at: %s"
                        % (len(unreviewed), ", ".join(c["id"] for c in unreviewed[:5])))

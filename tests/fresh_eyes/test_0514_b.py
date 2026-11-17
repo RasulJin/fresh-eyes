@@ -9,7 +9,7 @@ import unittest
 from tests.fresh_eyes.helpers import FIXTURES
 from tests.fresh_eyes.test_coverage import BOTH_OK_MUT_ON, ONE_SCREEN, make_pack
 from fe_common import FEError, read_json, write_json
-from coverage import plan, set_status
+from coverage import plan, set_status, verdict
 import stats
 
 F0514 = os.path.join(FIXTURES, "0514")
@@ -179,6 +179,40 @@ class ScoreKeepsTheJudgeTest(unittest.TestCase):
         self.assertNotIn("by", again["M2"])
         self.assertEqual((again["M9"]["value"], again["M9"]["by"], again["M9"]["note"]),
                          ({"hours": 6.8, "idle_gaps": 0}, "judge", "owner's pause 17:56-21:51"))
+
+
+class NotApplicableTest(unittest.TestCase):
+    """П-48: a list too short to swipe is na, which no verdict calls not done; signed-out screens go first."""
+
+    def test_a_swipe_that_moved_nothing_is_na_and_na_is_not_undone(self):
+        cfg = copy.deepcopy(ONE_SCREEN)
+        cfg["screens"][0].update(states=["default"], probes=["swipe-inside"])
+        cov = plan(cfg, BOTH_OK_MUT_ON, "full")
+        cov["cells"] = [c for c in cov["cells"] if c["platform"] == "android"]
+        none, swipe = cov["cells"]
+        root = _root(self)
+        pack = make_pack(root, swipe, moved=0)  # flight-search: the form fits one screen
+        with self.assertRaisesRegex(FEError, 'the cell is not applicable: --status na --note "not enough items"'):
+            set_status(cov, swipe["id"], "done", evidence=[pack])
+        set_status(cov, swipe["id"], "na", note="not enough items: form fits one screen")
+        packs = [make_pack(root, none)]
+        set_status(cov, none["id"], "done", evidence=packs)
+        v = verdict(cov, [], "en", packs)
+        self.assertEqual(v["code"], "CLEAN")
+        self.assertFalse([r for r in v["reasons"] if "not done" in r])
+        self.assertIn("1 cells not applicable: android/profile-trips/default/swipe-inside (not enough items: form "
+                      "fits one screen)", v["reasons"])
+
+    def test_signed_out_screens_come_first_in_the_plan(self):
+        screens = [{"id": s, "route": "x.tsx", "states": ["default"], "probes": [], "marker": [s]}
+                   for s in ("feed", "welcome", "trips", "consent-doc")]
+        screens[1]["signed_out"] = screens[3]["signed_out"] = True
+        cfg = dict(ONE_SCREEN, screens=screens)
+        for mode, chosen in (("full", None), ("quick", ["feed", "consent-doc"])):
+            cov = plan(cfg, BOTH_OK_MUT_ON, mode, chosen)
+            order = list(dict.fromkeys(c["screen"] for c in cov["cells"] if c["platform"] == "android"))
+            self.assertEqual(order, ["welcome", "consent-doc", "feed", "trips"] if mode == "full"
+                             else ["consent-doc", "feed"])
 
 
 if __name__ == "__main__":
