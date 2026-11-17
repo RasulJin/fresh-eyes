@@ -124,14 +124,14 @@ words / nothing (= the current diff).
 7. Navigation: per platform two `fresh-eyes:navigator`s at once, one per queue, ≤15 cells per call, until
    `coverage.py next --cov $RUN/coverage.json --queue main|small` is empty: `main` on preflight's `device`,
    `small` on its `small_device_id` (none: the small queue after main, on `device`). Prompt: run folder, config
-   path, platform, that device's id and name, the cell ids, `package: <app.android_id>` (every `capture.py snap
-   --package` saves the crash log when the app died), and `app language: <app.locale>` when config sets it. A
-   navigator that finds the app signed out signs in with `accounts` itself; cells blocked with "signed out:
-   <variable> not set" mean the user has to export that variable or add its keychain item (`$R/config-format.md`)
-   before the next run; cells blocked with "consent: <text>" need the user's yes for that dialog in config
-   `consents` (ask after the report, never let an agent accept it). A reply line `reach: <screen>: <how>`: write
-   `<how>` into that screen's `reach` in `.fresh-eyes/config.json`. Liveness: every `capture.py` call and every
-   `nav.py` call with `--run $RUN` refreshes `$RUN/<platform>/heartbeat`. Right after starting navigators, wait
+   path, platform, that device's id and name, the cell ids, `package: <app.android_id>` (`capture.py snap
+   --package` keeps the crash log), and `app language: <app.locale>` when config sets it. A navigator that finds
+   the app signed out signs in with `accounts` itself; cells blocked with "signed out: <variable> not set" mean
+   the user has to export that variable or add its keychain item (`$R/config-format.md`) before the next run;
+   cells blocked with "consent: <text>" need the user's yes for that dialog in config `consents` (ask after the
+   report, never let an agent accept it). A reply line `reach: <screen>: <how>`: write `<how>` into that
+   screen's `reach` in `.fresh-eyes/config.json`. Liveness: every `capture.py` call and every `nav.py` call
+   with `--run $RUN` refreshes `$RUN/<platform>/heartbeat`. Right after starting navigators, wait
    in one blocking call each, in one message (Bash timeout 600000), never by polling: `python3 $S/nav.py idle
    --run $RUN --platform <p> --until 540 --cells <its cell ids>` (requests mode: `--requests <its requests.json
    paths>`). `"state"`: `done` = its cells are recorded; `running` = call again; `stuck` = no heartbeat for 9
@@ -211,14 +211,13 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
 
 ## Checkpoints and resume
 
-Checkpoints: after navigation (`coverage.py next` empty on every queue) and after the first verifier pass, write
-`$RUN/RESUME.md`: the step reached; what is left (todo cells, packs no reviewer listed, open requests, pending
-findings files); the verifiers' agent ids; steps taken by hand. In `full`, then stop with one line: "continue:
-`/fresh-eyes resume <run>` in a new session" (a fresh context costs far less than carrying this one).
-`resume [<run>]` (default: the newest run; `full --resume`: the newest full one): read its `RESUME.md`, run step
-3 into it again (same mode and `--source`), then go on from the first unfinished step: `coverage.py next` cells,
-done cells no reviewer listed, verifiers (a second pass goes to a fresh verifier when the first one is gone),
-steps 10-12. Never redo a done cell or a finished step.
+Checkpoints: after navigation (`coverage.py next` empty on every queue) and after every first verifier pass,
+once each agent you started is back, write `$RUN/RESUME.md`: the step reached; what is left (todo cells, packs
+no reviewer listed, folders without a first pass, open requests); the verifiers' agent ids; steps taken by hand.
+In `full`, then stop with one line: "continue: `/fresh-eyes resume <run>` in a new session" (a fresh context
+costs far less than carrying this one). `resume [<run>]` (default: the newest run; `full --resume`: the newest
+full one): read its `RESUME.md`, run step 3 into it again (same mode and `--source`), then go on from the first
+unfinished step (a second pass goes to a fresh verifier when the first one is gone). Never redo a done cell.
 
 ## twice
 
