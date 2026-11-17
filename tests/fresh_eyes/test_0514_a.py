@@ -139,6 +139,25 @@ class SecretLeakTest(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(pack, "tap-1", "hierarchy.txt")))
             self.assertEqual(s.files_leaking(), [])
 
+    def test_logcat_never_carries_the_secret(self):
+        # acceptance 0.5.14: an app's own log line with the typed credentials went into logcat.txt in clear
+        logcat = "\n".join(["W/ReactNativeJS( 4242): login failed for %s pw=%s" % (EMAIL.upper(), PASSWORD),
+                            "E/AndroidRuntime( 5001): Process: com.example.app, PID: 5001",
+                            "E/AndroidRuntime( 5001): at signIn(%s)" % PASSWORD])
+
+        def adb(dev_id, *args, **kw):
+            return "4242\n" if args[:2] == ("shell", "pidof") else logcat
+        with Secrets() as s, mock.patch.object(devices, "_adb", adb):
+            pack = os.path.join(s.run, "android", "login", "default-none")
+            out, code = run_cli(capture.main, ["capture.py", "logs", "--platform", "android", "--device", "e",
+                                               "--out", pack, "--package", "com.example.app"])
+            self.assertEqual(code, 0)
+            with open(os.path.join(pack, "logcat.txt"), encoding="utf-8") as f:
+                text = f.read()
+            self.assertEqual(s.leaks(text), [])
+            self.assertEqual(text.count(fe_common.HIDDEN), 3)
+            self.assertEqual(s.files_leaking(), [])
+
     def test_the_keychain_is_read_when_the_variable_is_unset(self):
         def run(cmd, timeout=60, input=None, check=True, redact=()):
             value = {"fresh-eyes-viewer-password": PASSWORD}.get(cmd[cmd.index("-s") + 1], "")

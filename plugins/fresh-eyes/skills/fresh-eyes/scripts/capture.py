@@ -395,7 +395,8 @@ def logs(platform, device_id, out, package, clear=False):
     seen, first, crashes = Counter(), {}, defaultdict(list)
 
     def add(level, tag, msg):
-        key = "%s/%s: %s" % (level, tag, re.sub(r"\d+", "#", msg)[:300])
+        msg = fe_common.redact(msg)  # an app may log what was typed into the sign-in form
+        key ="%s/%s: %s" % (level, tag, re.sub(r"\d+", "#", msg)[:300])
         seen[key] += 1  # a warning flood (thousands of the same line with other ids) is one line
         first.setdefault(key, "%s/%s: %s" % (level, tag, msg[:300]))
     for line in devices._adb(device_id, "logcat", *BUFFERS, "-d", "-v", "brief", "*:W", timeout=60).splitlines():
