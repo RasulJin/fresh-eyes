@@ -400,7 +400,7 @@ class TapAllTest(unittest.TestCase):
              node(3, "", 800, rid="app:id/comment", cls="android.widget.EditText"), node(4, "Отправить", 1000),
              node(5, "Row B", 1200), node(6, "подпись", 1400, clickable=False)]
 
-    def run_all(self, extra=(), lost_after=None, config=None):
+    def run_all(self, extra=(), lost_after=None, config=None, marks=()):
         events, dumps = [], [0]
 
         def hierarchy(dev):
@@ -425,7 +425,7 @@ class TapAllTest(unittest.TestCase):
             pack = os.path.join(d, "android", "feed", "default-tap-everything")
             write_json(os.path.join(pack, "nodes.json"), self.NODES)
             write_json(os.path.join(pack, "som.json"), [{"n": k + 1, "node_ids": [n["id"]], "bbox": n["bounds"]}
-                                                        for k, n in enumerate(self.NODES)])
+                                                        for k, n in enumerate(self.NODES)] + list(marks))
             make_png(os.path.join(pack, "screen.png"), 108, 240)
             write_json(os.path.join(pack, "taps.json"), [{"n": 1, "som": 6, "label": "Row B"}])
             full = make_png(os.path.join(d, "full.png"), 1080, 2400)
@@ -456,6 +456,15 @@ class TapAllTest(unittest.TestCase):
                                                                    {"id": "other", "skip_tap": ["comment"]}]})
         self.assertEqual(events, [("tap", "app:id/comment"), ("back",)])
         self.assertIn({"som": 2, "label": "Row A", "why": "skipped: config skip_tap"}, out["skipped"])
+
+    def test_a_mark_without_a_node_is_passed_over(self):
+        # acceptance 0.5.14: a geometry candidate's mark with no node raised IndexError before any tap
+        out, code, events, rows = self.run_all(marks=[{"n": 9, "node_ids": [], "bbox": [0, 0, 10, 10]}])
+        self.assertEqual((code, events), (0, [("tap", "app:id/comment"), ("back",), ("tap", "Row A")]))
+        with tmpdir() as d:
+            write_json(os.path.join(d, "som.json"), [{"n": 9, "node_ids": [], "bbox": [0, 0, 10, 10]}])
+            with self.assertRaisesRegex(FEError, "stands for no node"):
+                taps.som_node(d, 9, [])
 
     def test_it_stops_where_the_cells_screen_is_lost(self):
         out, code, events, rows = self.run_all(lost_after=1)

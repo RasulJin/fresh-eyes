@@ -114,7 +114,9 @@ def som_node(pack, n, nodes):
     mark = next((m for m in read_json(os.path.join(pack, "som.json")) if m["n"] == n), None)
     if mark is None:
         raise FEError("no mark %d in %s/som.json" % (n, pack))
-    old = next(o for o in read_json(os.path.join(pack, "nodes.json")) if o["id"] == mark["node_ids"][0])
+    if not mark.get("node_ids"):
+        raise FEError("mark %d of %s/som.json stands for no node: tap by --id/--label" % (n, pack))
+    old =next(o for o in read_json(os.path.join(pack, "nodes.json")) if o["id"] == mark["node_ids"][0])
     key = ("cls", "rid", "text", "label")
     same = [o for o in nodes if all(o[k] == old[k] for k in key)
             and (old["rid"] or old["text"] or old["label"] or o["bounds"] == old["bounds"])]
@@ -254,7 +256,7 @@ def tap_all(a, dev, cell):
     done = {r.get("som") for r in (read_json(rows_path) if os.path.isfile(rows_path) else [])}
     todo, skipped = [], []
     for m in marks:
-        node = nodes.get(m["node_ids"][0])
+        node = nodes.get((m.get("node_ids") or [None])[0])  # a mark without a node has nothing to tap
         if node is None or not node["clickable"] or m["n"] in done:
             continue
         name = nav._name(node) or ""
