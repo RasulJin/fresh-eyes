@@ -122,6 +122,11 @@ class Text0514Test(unittest.TestCase):
         self.assertIn("then the `backlog.extra` lines", report)
         self.assertIn("an id from `backlog.extra` is only named in the report", skill())
 
+    def test_p46_a_consequence_is_same_as_its_cause(self):
+        # 0.5.13 run: vio-guide#2f2 («Подробности» in an English answer) only followed from f1 (M4)
+        self.assertIn("A defect that follows wholly from another finding of the same pack", agent("reviewer"))
+        self.assertIn("a finding whose defect follows wholly from another one's", agent("verifier"))
+
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):

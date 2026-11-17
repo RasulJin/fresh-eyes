@@ -85,7 +85,9 @@ what the first showed you need; never open a file twice. About 7 turns in all.
    plain action per item (system settings too, like "set the system font to the largest"), buttons named by
    their on-screen text, the last item saying what to look at. No cell ids, pack names, step numbers, script
    commands or coordinates there: those go to `found_by` (cell id, probe, pack or scenario step). `confidence` reflects how
-   sure the evidence makes you; `taste` findings are capped at 0.6.
+   sure the evidence makes you; `taste` findings are capped at 0.6. A defect that follows wholly from another
+   finding of the same pack (one cause, two symptoms: a label in the answer's language when the answer is in
+   the wrong one) gets `"same_as": "<that findings file>#<id>"`, not a case of its own.
 7. A guess is not a BUG. What you suspect but no frame shows well enough (needs a zoom, another frame, the end
    of a list, a repeat): no finding, an entry in the output's `requests`: `{"pack": "<pack>", "do":
    "resnap|crop|repeat-probe", "probe": "<probe id>", "bbox": [x, y, w, h] (crop only), "why": "<what the new

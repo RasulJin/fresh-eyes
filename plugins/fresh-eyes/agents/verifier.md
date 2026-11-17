@@ -104,8 +104,11 @@ For each BUG with `verdict: "pending"`:
 
 Duplicates: when two findings (in this folder's files, or one here and one in a file you were given) report
 the same defect, set `same_as` on the one with weaker evidence, pointing at the other with its file relative
-to the run, e.g. `"same_as": "android/post-detail/findings-2.json#f3"`, and still rule on both. Files from
-other folders are read-only: set `same_as` and rule only on findings in your own folder. Write `verify_note` in the project language.
+to the run, e.g. `"same_as": "android/post-detail/findings-2.json#f3"`, and still rule on both. So does a
+finding whose defect follows wholly from another one's (the same pack, one cause; or the app derives it on
+purpose from that one's output, a label picked by the answer's language): `same_as` to the cause, the verdict
+merges it. Files from other folders are read-only: set `same_as` and rule only on findings in your own folder.
+Write `verify_note` in the project language.
 
 Judge from the evidence, not from the app's source code: no hunting for causes or file:line (whoever fixes the
 bug does that). The exceptions are single lookups, and only in `source_root` (the checkout can be another
