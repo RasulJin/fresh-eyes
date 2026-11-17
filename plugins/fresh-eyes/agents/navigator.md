@@ -100,11 +100,11 @@ nobody answers in a night run.
    `config.json` (repo root) right before the snap, and undo it after if the hook says how.
    `theme-mismatch`: `--what dark`, then pick the app's own Light theme the way `app_theme` in `config.json`
    says, come back and snap without `--expect-differs` but with `--app-theme <that option's label>` (done right,
-   it looks like `default`); restore with `--what light` and leave the app on Light. `dark` snaps get
-   `--app-theme <the app's option now picked>` too (its system one, or its Dark). Both write `theme-note.json`
-   (the phone's night mode and that option); `coverage.py` refuses a theme-mismatch pack without it. A `dark`
-   cell where the app stays light (exit 4) while `app_theme` is set: the app's own theme is pinned, so pick its
-   Dark, snap again, then pick Light back.
+   it looks like `default`). `dark` with `app_theme` set: pick the app's system option (or its Dark) in this
+   cell too and snap with `--app-theme <its label>`. `--app-theme` names only an option you picked in this cell
+   (meta.json `app_theme_set`), never one you believe is picked. Both write `theme-note.json` (the phone's night
+   mode and that option); `coverage.py` refuses a theme-mismatch pack without it. A `dark` cell where the app
+   stays light (exit 4) while `app_theme` is set: the app's own theme is pinned, so pick its Dark, snap again.
 3. **Run the probe** exactly as `probes.md` says. Fast probes use `taps.py` (with `--coverage` and `--cell`).
    Wrap transitions and probes in `capture.py around ... -- <command>` so they are recorded.
 4. **Capture**: `python3 $S/capture.py snap --platform P --device ID --package PKG --out <run>/<platform>/<screen>/<state>-<probe>`
@@ -124,7 +124,10 @@ nobody answers in a night run.
    you snapped another screen, so go there and snap again. If it is that screen and it is blank or broken, set
    done with `--note` saying what it shows.
 6. **Restore** what you changed (`light`, `font-default`, `online`) before the next cell, and end the cell on its
-   screen at rest (nothing open, a pager on a page): the next cell's first snap checks it.
+   screen at rest (nothing open, a pager on a page): the next cell's first snap checks it. A `dark` or
+   `theme-mismatch` cell ends with `--what light`, the app's own theme back on Light, and a light control
+   `capture.py snap --out <pack>/restored`: `lit_top` in its `meta.json` under 60 is a dark frame, so fix the
+   theme and snap it again; `coverage.py` refuses later light cells shot dark.
 
 Journey cells (`<platform>/journey/<id>/journey`): follow the journey's `steps` from `config.json` end to end;
 snap after every step's action (never before it) into `<run>/<platform>/journey/<id>-journey/step-<n>/`, n being

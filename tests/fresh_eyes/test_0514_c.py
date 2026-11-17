@@ -42,6 +42,15 @@ class Text0514Test(unittest.TestCase):
         self.assertNotIn("Otherwise do the read-only part", probes)
         self.assertIn("never a read-only walk marked done", agent("navigator"))
 
+    def test_p37_a_dark_cell_puts_the_theme_back_and_proves_it(self):
+        # 0.5.13 run: after dark-none the app stayed on its Dark theme, three light import cells were shot dark
+        nav = agent("navigator")
+        for word in ("capture.py snap --out <pack>/restored", "`lit_top` in its `meta.json` under 60",
+                     "`--app-theme` names only an option you picked in this cell", "`app_theme_set`"):
+            self.assertIn(word, nav, word)
+        self.assertNotIn("the app's option now picked", nav)
+        self.assertIn("`restored/` only proves the light theme came back", agent("reviewer"))
+
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):
