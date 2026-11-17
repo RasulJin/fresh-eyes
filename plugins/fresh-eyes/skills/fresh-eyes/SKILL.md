@@ -207,7 +207,7 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
   config sets it, then launch. Sign-in: the navigator types `nav.py type --env <accounts.<role>.email_env>
   --keychain fresh-eyes-<role>-email`, the same for the password (the values live in the user's environment or
   keychain, never in prompts or files). No `accounts` in config → keep the installed state, and say so.
-- The navigator gets one journey or one screen per call.
+- A `main` navigator gets one journey or one screen per call; the `small` queue goes to one call, all its cells.
 - Before step 6: `bench seeded` (it needs no device) with `--run $RUN` on its `bench.py score`, which writes
   `bench` into score.json; fewer than 4 of 5 caught → stop and tell the user (verdict INCOMPLETE).
 

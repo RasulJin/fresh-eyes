@@ -173,6 +173,12 @@ class Text0514Test(unittest.TestCase):
                      '--session "<RESUME.md\'s sessions>,${CLAUDE_SESSION_ID}"'):
             self.assertIn(word, body, word)
 
+    def test_acceptance_the_small_queue_goes_to_one_navigator_call(self):
+        # acceptance 0.5.14: «one screen per call» made the 7 small-screen cells 7 navigator starts
+        body = skill()
+        self.assertIn("the `small` queue goes to one call, all its cells", body)
+        self.assertNotIn("The navigator gets one journey or one screen per call", body)
+
 
 if __name__ == "__main__":
     unittest.main()
