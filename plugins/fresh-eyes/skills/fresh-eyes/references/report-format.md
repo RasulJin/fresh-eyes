@@ -91,10 +91,10 @@ Computed only by `coverage.py verdict` (never by a model); the first that applie
   its `reasons` still say what the code would be without the conflict;
 - any confirmed BUG of severity high → `BLOCK` (НЕ ВЫПУСКАТЬ);
 - any confirmed BUG of severity medium → `ISSUES` (ЕСТЬ ПРОБЛЕМЫ), even when something was not checked;
-- any cell not done (`na` too: drop that probe from the config), any done cell whose packs no reviewer listed,
-  any BUG still `pending`, any `unsure` BUG of severity high or medium (intermittent, asked, stale spec), a build
-  that changed during the run, any unchecked item of this run (quick's screen limit, skipped neighbors) →
-  `INCOMPLETE` (НЕ ПРОВЕРЕНО ДО КОНЦА);
+- any cell not done (`na` is not counted: its reason lists it as not applicable, with its note), any done cell
+  whose packs no reviewer listed, any BUG still `pending`, any `unsure` BUG of severity high or medium
+  (intermittent, asked, stale spec), a build that changed during the run, any unchecked item of this run (quick's
+  screen limit, skipped neighbors) → `INCOMPLETE` (НЕ ПРОВЕРЕНО ДО КОНЦА);
 - otherwise `CLEAN` (ЧИСТО).
 
 Permanent gaps never block: plan items with `"gap": true`, which no run of this project as configured can

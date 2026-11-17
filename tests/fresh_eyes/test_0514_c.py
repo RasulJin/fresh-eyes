@@ -151,6 +151,9 @@ class Text0514Test(unittest.TestCase):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):
             self.assertIn('`--status na` with note "not enough items"', text)
+        self.assertIn("`na` is not counted", ref("report-format.md"))
+        self.assertNotIn("`na` too: drop that probe", ref("report-format.md"))
+        self.assertIn("`signed_out` (optional, `true`)", ref("config-format.md"))
 
 
 if __name__ == "__main__":
