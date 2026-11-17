@@ -61,10 +61,10 @@ then returns it in `merged`, and the report lists it under that finding.
   `candidates.json`), and only those. A done cell whose packs no reviewer listed keeps the verdict INCOMPLETE.
 - `invariants` (when the slice has a `### Invariants`): `[{"id", "pack", "result": "ok|broken|not shown"}]`, each
   `inv` line the reviewer recomputed (reviewer.md step 4); a `broken` one is also a BUG with the arithmetic.
-- `backlog_id` (`BUG-N` or `IMP-N`): the verifier sets it on a confirmed BUG or an IMP that an open entry of
-  `backlog-index.md` already describes, with `verify_note` "already open: <id>". A BUG still counts as
-  confirmed; the report lists it under "still reproduces" and the backlog gets a recheck line instead of a new
-  entry. An IMP with it gets no new entry.
+- `backlog_id` (`BUG-N`, `IMP-N`, or an id of config `backlog.extra`): the verifier sets it on a confirmed BUG or
+  an IMP that an open entry of `backlog-index.md` already describes, with `verify_note` "already open: <id>". A
+  BUG still counts as confirmed and the report lists it under "still reproduces"; the backlog gets a recheck
+  line instead of a new entry (an `extra` id: nothing). An IMP with it gets no new entry.
 - `rule: taste` (no spec rule behind it) caps `confidence` at 0.6.
 - The verifier sets `verdict` and `verify_note`. No BUG reaches the backlog while `pending`; IMPs are proposals
   and go in when the owner picks them. The verifier only rejects an IMP the spec slice or `known.md`
@@ -146,7 +146,7 @@ Evidence: <crop path> · found by <found_by>
 Also: <title of a finding merged into it> (<file>#<id>)
 
 ## Still reproduces
-- **<title>** (BUG-N), <platform>, <screen>, severity <s> · <crop path>
+- **<title>** (BUG-N or the `extra` id), <platform>, <screen>, severity <s> · <crop path>
 
 ## Improvements: <new> new, <known> already in the backlog (imp.md)
 | screen | new | already open | the new ones (imp.md numbers) |
@@ -193,8 +193,8 @@ Also: <title of a finding merged into it> (<file>#<id>)
 
 ## Backlog templates
 
-`backlog.py` templates: `ru-backlog` (Где / Шаги / Ожидание / Факт / Заметки) and `en-backlog`
-(Where / Steps / Expected / Actual / Notes). New entries get the next free number and status `open`;
-`quick BUG-N` rechecks set `verified` or back to `open` with a recheck line under the heading; a confirmed
-finding with `backlog_id` gets a recheck line and status `open` instead of a new entry. `backlog.py index` lists
-the entries whose heading status is `open`, `in-progress`, `planned` or empty, one line each, for the verifier.
+`backlog.py` templates: `ru-backlog` (Где / Шаги / Ожидание / Факт / Заметки) and `en-backlog` (Where / Steps /
+Expected / Actual / Notes). New entries get the next free number and status `open`; `quick BUG-N` rechecks set
+`verified` or back to `open` with a recheck line under the heading; a confirmed finding with `backlog_id` gets a
+recheck line and status `open` instead of a new entry. `backlog.py index` lists the entries whose heading status
+is `open`, `in-progress`, `planned` or empty, then the `backlog.extra` lines, one line each, for the verifier.

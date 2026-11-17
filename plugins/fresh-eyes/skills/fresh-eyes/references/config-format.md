@@ -31,7 +31,8 @@ noted. Example (generic values):
     }
   },
   "hooks": {"seed": null, "cleanup": null, "new_account": null},
-  "backlog": {"path": "docs/qa-backlog.md", "template": "en-backlog", "images_dir": "docs/qa-backlog"},
+  "backlog": {"path": "docs/qa-backlog.md", "template": "en-backlog", "images_dir": "docs/qa-backlog",
+              "extra": {"cmd": "board list --open --format tsv"}},
   "maestro_dir": "apps/mobile/.maestro",
   "references": ["Threads", "Instagram"],
   "motion_ceiling_ms": 300,
@@ -82,6 +83,9 @@ noted. Example (generic values):
   navigator right before snapping those cells; `new_account` creates a fresh test account. A state without its
   hook is reported as not checked.
 - `backlog`: where confirmed findings go; `template` is `ru-backlog` or `en-backlog`; `images_dir` gets crops.
+  `extra` (optional): open tasks kept outside the backlog file (a task board), as a file path or `{"cmd":
+  "<command>"}` run from the repo root; each line `<id>\t<title>`. `backlog.py index` adds them to the index, so
+  a confirmed BUG one of them holds gets that id as `backlog_id` ("already open: <id>") instead of a new entry.
 - `maestro_dir`: existing flows (reused as setup steps) and where regression flows are written.
 - `references`: apps the user compares against; the UX rubric uses them.
 - `motion_ceiling_ms`: transition duration ceiling from the design system (default 300). `coverage.py plan`

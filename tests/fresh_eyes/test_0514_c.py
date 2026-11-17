@@ -112,6 +112,16 @@ class Text0514Test(unittest.TestCase):
             self.assertIn(word, nav, word)
         self.assertIn("`taps.py all --pack <pack> --cell <cell>` taps every clickable node", ref("probes.md"))
 
+    def test_p45_open_tasks_outside_the_backlog_reach_the_index(self):
+        # 0.5.13 run: thread#1f1 repeated an open board task (KDD #547) and reached the report without its id (M4)
+        config = ref("config-format.md")
+        for word in ('"extra": {"cmd":', "`extra` (optional)", "each line `<id>\\t<title>`"):
+            self.assertIn(word, config, word)
+        report = ref("report-format.md")
+        self.assertIn("or an id of config `backlog.extra`", report)
+        self.assertIn("then the `backlog.extra` lines", report)
+        self.assertIn("an id from `backlog.extra` is only named in the report", skill())
+
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):

@@ -279,7 +279,8 @@ stop throws away a build or a sign-in someone put on it.
 2. New real bugs and taken improvements → backlog: write the finding to `$RUN/backlog-<k>.json`, then `python3
    $S/backlog.py append --file <backlog.path> --finding $RUN/backlog-<k>.json --template <template> --attach
    $RUN/<its main crop> --images-dir <backlog.images_dir>` (assigns the BUG or IMP id, copies the crop next to
-   the backlog, since run folders are git-ignored, and links it). A real bug with `backlog_id` gets no new entry (an improvement with one neither):
+   the backlog, since run folders are git-ignored, and links it). A real bug with `backlog_id` gets no new entry
+   (an improvement with one neither; an id from `backlog.extra` is only named in the report); the others get
    `python3 $S/backlog.py set-status --file <backlog.path> --id <backlog_id> --status open --note "<date>,
    <device>, <build>: still reproduces, <evidence>"`. For `quick BUG-N`: the same `set-status` with `--status
    verified|open` and `<result>` in the note.
