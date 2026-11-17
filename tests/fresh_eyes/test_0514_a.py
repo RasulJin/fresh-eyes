@@ -400,32 +400,33 @@ class TapAllTest(unittest.TestCase):
              node(3, "", 800, rid="app:id/comment", cls="android.widget.EditText"), node(4, "Отправить", 1000),
              node(5, "Row B", 1200), node(6, "подпись", 1400, clickable=False)]
 
-    def run_all(self, extra=(), lost_after=None, config=None, marks=()):
+    def run_all(self, extra=(), lost_after=None, config=None, marks=(), nodes=None, leaves=()):
+        all_nodes = nodes or self.NODES
         events, dumps = [], [0]
 
         def hierarchy(dev):
             dumps[0] += 1
-            nodes = self.NODES if lost_after is None or dumps[0] <= lost_after else self.NODES[1:]
+            nodes = all_nodes if lost_after is None or dumps[0] <= lost_after else all_nodes[1:]
             return nodes, "uiautomator"
 
         def snap(platform, dev, out, **kw):
-            focused = "comment" in events[-1][1]
-            write_json(os.path.join(out, "nodes.json"), self.NODES)
+            focused, last = "comment" in events[-1][1], events[-1][1]
+            write_json(os.path.join(out, "nodes.json"), all_nodes)
             write_json(os.path.join(out, "meta.json"), {"keyboard_up": focused})
-            make_png(os.path.join(out, "screen.png"), 108, 240, bg=(30, 30, 30) if focused else (255, 255, 255))
+            make_png(os.path.join(out, "screen.png"), 108, 240, bg=(30, 30, 30) if focused or last in leaves else (255, 255, 255))
             return 0
 
         def tap(dev, x, y):
-            hit = next(n for n in self.NODES if n["bounds"][1] <= y < n["bounds"][1] + 120)
+            hit = next(n for n in all_nodes if n["bounds"][1] <= y < n["bounds"][1] + 120)
             events.append(("tap", nav._name(hit)))
         with tmpdir() as d, contextlib.ExitStack() as stack:
             cov = run_folder(d)
             if config:
                 write_json(os.path.join(d, ".fresh-eyes", "config.json"), config)
             pack = os.path.join(d, "android", "feed", "default-tap-everything")
-            write_json(os.path.join(pack, "nodes.json"), self.NODES)
+            write_json(os.path.join(pack, "nodes.json"), all_nodes)
             write_json(os.path.join(pack, "som.json"), [{"n": k + 1, "node_ids": [n["id"]], "bbox": n["bounds"]}
-                                                        for k, n in enumerate(self.NODES)] + list(marks))
+                                                        for k, n in enumerate(all_nodes)] + list(marks))
             make_png(os.path.join(pack, "screen.png"), 108, 240)
             write_json(os.path.join(pack, "taps.json"), [{"n": 1, "som": 6, "label": "Row B"}])
             full = make_png(os.path.join(d, "full.png"), 1080, 2400)
@@ -456,6 +457,16 @@ class TapAllTest(unittest.TestCase):
                                                                    {"id": "other", "skip_tap": ["comment"]}]})
         self.assertEqual(events, [("tap", "app:id/comment"), ("back",)])
         self.assertIn({"som": 2, "label": "Row A", "why": "skipped: config skip_tap"}, out["skipped"])
+
+    def test_back_labels_go_last_and_no_back_follows_them(self):
+        # acceptance 0.5.14: «Назад» came first, then taps.py sent one more Back: two screens away, code 2
+        nodes = [self.NODES[0], node(9, "Назад", 1600)] + self.NODES[1:] + [node(10, "", 1800, label="Navigate up")]
+        out, code, events, rows = self.run_all(nodes=nodes, leaves=("Назад", "Navigate up"))
+        self.assertEqual(events, [("tap", "app:id/comment"), ("back",), ("tap", "Row A"), ("tap", "Row B"),
+                                  ("tap", "Назад")])
+        self.assertEqual((code, out["left"], out["stopped"]), (0, 0, None))
+        self.assertIn({"som": 9, "label": "Navigate up", "why": "skipped: 'Назад' left the screen already"},
+                      out["skipped"])
 
     def test_a_mark_without_a_node_is_passed_over(self):
         # acceptance 0.5.14: a geometry candidate's mark with no node raised IndexError before any tap

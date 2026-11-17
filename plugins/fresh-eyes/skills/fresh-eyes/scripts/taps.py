@@ -20,7 +20,8 @@ CLI:
                   (tap-everything in one call: `tap --som N` on each clickable mark of PACK/som.json without a
                   row yet, inputs first; labels that write data (delete, send, pay, log out…), the screen's config
                   `skip_tap` labels (chips that send a message) and --skip are left out; Back after a tap that
-                  left the screen. Prints tapped, skipped, left, stopped: run again
+                  left the screen, but back/close labels go last with no Back after them (the device ends on the
+                  screen they lead to). Prints tapped, skipped, left, stopped: run again
                   while left > 0; exit 2 when the cell's screen was lost)
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
@@ -232,6 +233,8 @@ def tap_row(a, dev, cell):
 # a tap that writes data or leaves the account: tap-everything never presses these (probes.md)
 DESTRUCTIVE = re.compile(r"delete|remove|log ?out|sign ?out|\bpay\b|\bsend\b|\bbuy\b|publish|удал|выйти|выход|"
                          r"оплат|отправ|купить|опубликова", re.I)
+# a tap that leaves the screen by itself: tap-everything presses these last and sends no Back after them
+BACK_LABEL = re.compile(r"назад|закрыть|\b(?:go )?back\b|\bclose\b|navigate up", re.I)
 SAME_SCREEN = 0.1  # changed share under which the result is still the cell's screen (a like, a toggle): no Back
 
 
@@ -246,8 +249,9 @@ def skip_taps(coverage, screen):
 
 
 def tap_all(a, dev, cell):
-    """tap-everything in one call: each clickable mark of PACK/som.json not yet in taps.json (inputs first), the
-    destructive ones, the screen's config skip_tap and --skip left out, a Back after each tap that left the screen.
+    """tap-everything in one call: each clickable mark of PACK/som.json not yet in taps.json (inputs first, back and
+    close labels last), the destructive ones, the screen's config skip_tap and --skip left out, a Back after each
+    tap that left the screen (none after a back label: the rest of them are skipped).
     Stops when the cell's screen is lost (a Back did not bring it back) or after --limit taps; run it again."""
     marks = read_json(os.path.join(a.pack, "som.json"))
     config_skip = [s.casefold() for s in skip_taps(a.coverage, cell.get("screen"))]
@@ -267,9 +271,10 @@ def tap_all(a, dev, cell):
         if why:
             skipped.append({"som": m["n"], "label": name, "why": why})
         else:
-            todo.append((not nav.is_input(node), m["n"], name))
-    tapped, stopped, tried = [], None, 0
-    for _, n, name in sorted(todo)[:a.limit]:
+            todo.append((bool(BACK_LABEL.search(name)), not nav.is_input(node), m["n"], name))
+    tapped, stopped, tried, gone = [], None, 0, None
+    queue = sorted(todo)
+    for back, _, n, name in queue[:a.limit]:
         ns = argparse.Namespace(**dict(vars(a), som=n, x=None, y=None, expect_id=None, index=0, text=None,
                                        label=None, id=None, record=False, after=None))
         try:
@@ -285,8 +290,15 @@ def tap_all(a, dev, cell):
         tapped.append({k: row[k] for k in ("n", "som", "label", "changed", "result")})
         shot = os.path.join(after, "screen.png")
         if row["changed"] and (code or changed_fraction(shot, os.path.join(a.pack, "screen.png")) >= SAME_SCREEN):
+            if back:  # it went back itself: one more Back would leave the screen before it too
+                gone = name
+                break
             devices.back(dev)
             time.sleep(nav.SETTLE_S)
+    if gone:  # only back labels are left (they sort last): each would just leave the screen again
+        skipped += [{"som": n, "label": name, "why": "skipped: %r left the screen already" % gone}
+                    for _, _, n, name in queue[tried:]]
+        tried = len(queue)
     return {"tapped": tapped, "skipped": skipped, "left": len(todo) - tried, "stopped": stopped}
 
 
