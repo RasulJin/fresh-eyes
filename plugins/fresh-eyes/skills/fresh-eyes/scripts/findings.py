@@ -2,7 +2,8 @@
 """One case, one check in a run: findings of different screens that report the same case are linked, and what the
 verifiers settled as test data or deliberate goes to known-proposed.md, so the next run's reviewers skip it.
 
-same:  before each verifier's first pass, and once more before the verdict. A pending BUG of a --findings file that
+same:  before each verifier's first pass, and once more before the verdict. An IMP that repeats an earlier one (the
+       same test, any screen or folder) gets same_as to that one's case and `same_as_auto`. A pending BUG of a --findings file that
        reports the case of a BUG in another screen folder (same platform; at least 3 word stems of the titles shared
        and half of the shorter title's; when both titles quote on-screen text, a quote in common) gets `same_as` to
        it and `same_as_auto`: only that one is verified. A linked finding whose target is ruled (or became an IMP)
@@ -25,6 +26,7 @@ import glob
 import json
 import os
 import re
+from collections import defaultdict
 
 from backlog import _stems
 from fe_common import cli, read_json, write_json
@@ -51,11 +53,23 @@ def shared(a, b):
     return n
 
 
+def imp_shared(a, b):
+    """shared() for two IMPs; when only one title quotes on-screen text, it names an element the other may not
+    mean: 5 stems (0.5.13 full: «⋯» hard to see on a photo met the big card on a small screen at 4)."""
+    n = shared(a, b)
+    return n if n >= 5 or bool(_quotes(a.get("title", ""))) == bool(_quotes(b.get("title", ""))) else 0
+
+
 def _files(run, paths):
     """(path, data, the path as given when it is one of `paths`) of every findings file of the run and `paths`."""
     mine = {os.path.abspath(p): p for p in paths}
     every = sorted({os.path.abspath(p) for p in glob.glob(os.path.join(run, "*", "*", "findings*.json"))} | set(mine))
     return [(p, read_json(p), mine.get(p)) for p in every]
+
+
+def _full(ref, rel):
+    """A same_as as `<file relative to the run>#<id>`: a bare id is one of the file `rel`."""
+    return ref if "#" in ref else "%s#%s" % (rel, ref)
 
 
 def same(run, paths):
@@ -80,15 +94,43 @@ def same(run, paths):
             linked += 1
         else:
             anchors.append((folder, ref, f))
+    # IMPs get no verifier: one case's IMPs, in one folder too, join the case's first one (0.5.13 full: the theme
+    # toggle four times, three in side-menu's own files); a verifier's same_as joins too; imp.md gives one number
+    imps = [("%s#%s" % (os.path.relpath(p, run), f.get("id")), f, writable) for p, data, writable in files
+            for f in data.get("findings", []) if f.get("kind") == "IMP" and f.get("verdict") != "rejected"]
+    first = list(range(len(imps)))
+
+    def head(i):
+        while first[i] != i:
+            i = first[i]
+        return i
+    at = {ref: i for i, (ref, _, _) in enumerate(imps)}
+    for i, (ref, f, _) in enumerate(imps):
+        joins = [j for j in range(i) if imp_shared(f, imps[j][1])]
+        joins += [at[t] for t in [_full(f.get("same_as") or "", ref.rpartition("#")[0])] if t in at]
+        for j in joins:
+            a, b = sorted((head(i), head(j)))
+            first[b] = a
+    groups = defaultdict(list)
+    for i, (_, f, _) in enumerate(imps):
+        if not f.get("same_as"):  # the group's own chains end at one of these; the first takes the others
+            groups[head(i)].append(i)
+    for i in (i for g in groups.values() for i in g[1:] if imps[i][2]):
+        imps[i][1]["same_as"], imps[i][1]["same_as_auto"] = imps[groups[head(i)][0]][0], True
+        linked += 1
     changed, links = set(), []
     for p, data, writable in files:
         rel = os.path.relpath(p, run)
         for f in data.get("findings", []):
             auto = f.get("same_as_auto")
+            ref = _full(f.get("same_as") or "", rel)
+            if f.get("kind") == "IMP" and (refs.get(ref) or {}).get("kind") == "IMP":
+                if writable and auto:
+                    changed.add(p)  # an IMP's copy: no ruling to take, imp.md lists it under its first
+                continue
             # a reviewer's same_as (a consequence of another finding) still pending takes that one's ruling too
             if not writable or not f.get("same_as") or not (auto or f.get("verdict", "pending") == "pending"):
                 continue
-            ref = f["same_as"] if "#" in f["same_as"] else "%s#%s" % (rel, f["same_as"])
             link = ["%s#%s" % (rel, f.get("id")), ref]
             if auto:
                 changed.add(p)  # a link made above or earlier

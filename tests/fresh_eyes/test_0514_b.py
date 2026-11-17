@@ -378,5 +378,84 @@ class OrchestratorContextTest(unittest.TestCase):
         self.assertIsNone(stats.score(run)["orchestrator"])  # no session id: not known
 
 
+def _imp(fid, screen, title, **kw):
+    return dict(dict(id=fid, kind="IMP", screen=screen, platform="android", severity="low", title=title,
+                     verdict="pending"), **kw)
+
+
+class ImpCopiesTest(unittest.TestCase):
+    """П-44: one case's IMPs get one number in imp.md, and a rephrased copy of an open entry is known."""
+    TOGGLE = ["Переключатель темы в боковом меню — одинокая луна без подписи и без вида переключателя",
+              "Переключатель темы — одинокая иконка луны/солнца без подписи «Тёмная тема» внизу пустой панели",
+              "Переключатель темы внизу меню — одинокая луна без подписи «Тёмная тема»",
+              "Переключатель темы — одинокая луна без подписи и без вида переключателя, далеко под списком"]
+
+    def _run(self):  # titles from the 0.5.13 full run
+        run = _root(self)
+        files = {
+            "feed/findings-2.json": [_imp("f3", "side-menu", self.TOGGLE[0])],  # the side menu seen from the feed
+            "side-menu/findings-1.json": [_imp("f3", "side-menu", self.TOGGLE[1])],
+            "side-menu/findings-2.json": [_imp("f1", "side-menu", self.TOGGLE[2],
+                                               same_as="android/side-menu/findings-1.json#f3")],  # the verifier's
+            "side-menu/findings-3.json": [_imp("f2", "side-menu", self.TOGGLE[3])],
+            "trips/findings-1.json": [_imp("f1", "trips", "«⋯» на большой карточке почти не видна на светлом фото"),
+                                      _imp("f2", "trips", "На маленьком экране большая карточка с кнопками занимает "
+                                                          "почти весь экран, под ней видна одна строка")],
+            "trip-detail/findings-1.json": [_imp("f6", "trip-detail", "«Маршрут по дням» — голый список между двумя "
+                                                                       "карточками",
+                                                 same_as="android/trip-detail/findings-2.json#f2")],
+            "trip-detail/findings-2.json": [_imp("f2", "trip-detail", "«Маршрут по дням» — единственный раздел без "
+                                                                       "карточки")],
+            "vio-guide/findings-1.json": [_imp("f2", "vio-guide", "Карточка «Дешёвые рейсы на следующий месяц» "
+                                                                   "переносит одно слово «месяц» и выше соседних")],
+            "vio-guide/findings-3.json": [_imp("f6", "vio-guide", "Карточка быстрого старта «Дешёвые рейсы на "
+                                                                   "следующий месяц» в две строки — выше трёх соседних")]}
+        paths = []
+        for rel, items in files.items():
+            paths.append(os.path.join(run, "android", rel))
+            write_json(paths[-1], {"findings": items})
+        return run, paths
+
+    def test_same_links_one_cases_imps_in_any_folder_to_its_first(self):
+        run, paths = self._run()
+        out = findings.same(run, paths)
+        self.assertEqual((out["links"], out["settled"]), ([], 0))  # IMP copies take no ruling, run-log skips them
+        same_as = {"%s#%s" % (os.path.relpath(p, run), f["id"]): f.get("same_as") for p in paths
+                   for f in read_json(p)["findings"]}
+        self.assertEqual(same_as, {
+            "android/feed/findings-2.json#f3": None,
+            "android/side-menu/findings-1.json#f3": "android/feed/findings-2.json#f3",
+            "android/side-menu/findings-2.json#f1": "android/side-menu/findings-1.json#f3",
+            "android/side-menu/findings-3.json#f2": "android/feed/findings-2.json#f3",
+            "android/trips/findings-1.json#f1": None,  # «⋯» names an element the small-screen card does not
+            "android/trips/findings-1.json#f2": None,
+            "android/trip-detail/findings-1.json#f6": "android/trip-detail/findings-2.json#f2",
+            "android/trip-detail/findings-2.json#f2": None,  # the verifier's link stays, no loop back
+            "android/vio-guide/findings-1.json#f2": None,
+            "android/vio-guide/findings-3.json#f6": "android/vio-guide/findings-1.json#f2"})
+        self.assertEqual(findings.same(run, paths)["linked"], 0)
+
+    def test_imp_md_gives_a_group_one_number_and_its_open_entry(self):
+        run, paths = self._run()
+        findings.same(run, paths)
+        index = ["IMP-312 · Вторая карточка быстрого старта переносится на две строки и выше соседних - vio-guide"]
+        out = backlog.match(index, paths, os.path.join(run, "imp.md"), "ru")
+        self.assertEqual((out["new"], out["known"], out["matched"]), (4, 1, 2))  # 95 joins its twin's IMP-312
+        self.assertEqual([f["backlog_id"] for f in read_json(paths[-2])["findings"]], ["IMP-312"])
+        with open(out["out"], encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn("## 1. %s\nside-menu · android · low · `android/feed/findings-2.json#f3`\n"
+                      "+ side-menu · `android/side-menu/findings-1.json#f3`\n"
+                      "+ side-menu · `android/side-menu/findings-2.json#f1`\n"
+                      "+ side-menu · `android/side-menu/findings-3.json#f2`\n" % self.TOGGLE[0], text)
+        self.assertIn("## 4. «Маршрут по дням» — единственный раздел без карточки\n"
+                      "trip-detail · android · low · `android/trip-detail/findings-2.json#f2`\n"
+                      "+ trip-detail · `android/trip-detail/findings-1.json#f6`\n", text)
+        self.assertIn("# Уже в бэклоге: 1\n\n- Карточка «Дешёвые рейсы на следующий месяц» переносит одно слово "
+                      "«месяц» и выше соседних — IMP-312 «Вторая карточка быстрого старта переносится на две строки и "
+                      "выше соседних» · `android/vio-guide/findings-1.json#f2` `android/vio-guide/findings-3.json#f6`",
+                      text)
+
+
 if __name__ == "__main__":
     unittest.main()
