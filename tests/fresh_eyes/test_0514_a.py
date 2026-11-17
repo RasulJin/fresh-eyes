@@ -178,5 +178,38 @@ class SecretLeakTest(unittest.TestCase):
         nav.secret_field([node], password=True)
 
 
+class LitTopTest(unittest.TestCase):
+    """П-37: three light-state import cells were snapped in the app's dark theme (top half 17-18, not 243)."""
+    def frame(self, d, bg, rects=()):
+        return make_png(os.path.join(d, "f.png"), 360, 800, bg=bg, rects=rects)
+
+    def test_dark_light_keyboard_and_a_sheet_over_a_dimmed_screen(self):
+        from pixels import lit_top
+        with tmpdir() as d:
+            self.assertLess(lit_top(self.frame(d, (18, 18, 20)), [360, 800]), 60)
+            light = self.frame(d, (243, 243, 243), [(0, 300, 360, 500, (20, 20, 20), 0)])  # dark keyboard area
+            self.assertGreater(lit_top(light, [360, 800], kb_top=300), 200)
+            self.assertLess(lit_top(light, [360, 800]), 200)  # without knowing the keyboard it counts
+            dimmed = self.frame(d, (40, 40, 40), [(0, 500, 360, 300, (250, 250, 250), 0)])
+            self.assertLess(lit_top(dimmed, [360, 800]), 60)
+            self.assertGreater(lit_top(dimmed, [360, 800], panels=[[0, 500, 360, 300]]), 200)
+
+    def test_snap_writes_lit_top_and_only_the_theme_this_call_set(self):
+        xml = ROOT % (field("title", "Импорт", 300, cls="android.widget.TextView") +
+                      ('<node class="android.view.ViewGroup" text="" content-desc="" resource-id="" '
+                       'bounds="[0,1500][1080,2400]"/>'))
+        with tmpdir() as d, mock.patch.object(nav, "_dump_uiautomator", lambda dev: xml), \
+                mock.patch.object(devices, "screenshot", lambda dev, dst: make_png(dst, 1080, 2400, bg=(17, 17, 18))), \
+                mock.patch.object(devices, "px_per_dp", lambda dev: 2.625), \
+                mock.patch.object(devices, "keyboard_top", lambda dev, nodes=(): None), \
+                mock.patch.object(devices, "night_mode", lambda dev: "Night mode: no"):
+            pack = os.path.join(d, "android", "import", "default-none")
+            capture.snap("android", "e", pack)
+            meta = read_json(os.path.join(pack, "meta.json"))
+            self.assertEqual((meta["app_theme_set"], meta["lit_top"] < 60), (None, True))
+            capture.snap("android", "e", pack, app_theme="Тёмная")
+            self.assertEqual(read_json(os.path.join(pack, "meta.json"))["app_theme_set"], "Тёмная")
+
+
 if __name__ == "__main__":
     unittest.main()

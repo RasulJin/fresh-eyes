@@ -2,7 +2,9 @@
 """Build the evidence pack for one coverage cell, so the navigator never has to look at pixels.
 
 snap:   screen.png, screen_1000.png, nodes.json, hierarchy.txt, candidates.json, som.png (+som.json),
-        crops/<check>-<k>.png (native resolution), meta.json. Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs,
+        crops/<check>-<k>.png (native resolution), meta.json (lit_top: the mean gray of the frame's top half,
+        or of a sheet when lighter, keyboard aside; app_theme_set: this call's --app-theme, else null).
+        Exit 3 = blocked (no hierarchy), 4 = screen identical to --expect-differs,
         5 = none of the --marker words on screen (another screen: meta.json blocked); a `<pack>-recheck` snap
         checks the screen's marker by itself when <pack> showed it. meta.json source: uiautomator, maestro (the
         Maestro CLI, when the UI never gets idle) or xctest.
@@ -43,7 +45,7 @@ from fe_common import FEError, image_size, read_json, write_json
 from geometry import moved_fraction, run_all
 from hierarchy import compress
 from motion import MOVE_EPS, analyze, extract_frames, keyboard as follow_keyboard, run_ceiling_ms
-from pixels import brightness, changed_fraction, corner_candidates, crop, downscale, som_overlay
+from pixels import brightness, changed_fraction, corner_candidates, crop, downscale, lit_top, som_overlay
 
 MIN_DP = {"android": 48, "ios": 44}
 MAX_CROPS = 12
@@ -187,6 +189,8 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
         meta.update(before=before, moved=moved_fraction(before_nodes, nodes))
     meta.update(source=source, nodes=len(nodes), candidates=len(candidates),
                 keyboard_up=kb_top is not None, **{k: ctx[k] for k in ("px_per_dp", "keyboard_top")})
+    # the theme the frame shows, keyboard and a sheet's dimming aside; app_theme_set: only what this call set
+    meta.update(lit_top=lit_top(shot, [w, h], kb_top, _panels(app_nodes, w, h)), app_theme_set=app_theme)
     write_json(os.path.join(out, "meta.json"), meta)
     key = coverage.pack_key(out)
     if app_theme or (key and key[2] == os.path.basename(os.path.normpath(out)) and key[2].startswith(THEME_STATES)):
@@ -196,6 +200,12 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
         meta["keyboard_json"] = _keyboard_json(out) or "written"
         write_json(os.path.join(out, "meta.json"), meta)
     return 0
+
+
+def _panels(nodes, w, h):
+    """Sheets: app nodes nearly as wide as the screen that start below its top and reach its bottom."""
+    return [n["bounds"] for n in nodes if n["bounds"][2] >= 0.9 * w and 0.1 * h < n["bounds"][1] < 0.9 * h
+            and n["bounds"][1] + n["bounds"][3] >= 0.9 * h]
 
 
 def _keyboard_json(pack):

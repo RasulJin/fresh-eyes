@@ -37,6 +37,25 @@ def brightness(path, w=90, h=200):
     return round(sum(g) / float(len(g)))
 
 
+def lit_top(path, screen_wh, kb_top=None, panels=(), w=90, h=200):
+    """Mean gray 0-255 of the frame's top half (under the status bar, above an open keyboard), or of a panel's
+    visible part when that is lighter (a sheet over a dimmed screen): a light state snapped in the dark theme
+    reads near 20 (0.5.13 import: 17-18 against 243)."""
+    g = read_gray(path, w, h)
+    sw, sh = screen_wh
+    bottom = min(sh // 2, kb_top) if kb_top is not None else sh // 2
+
+    def mean(box):
+        x, y, bw, bh = box
+        r0, r1 = int(y * h / sh), int(min(y + bh, kb_top if kb_top is not None else sh) * h / sh)
+        c0, c1 = int(max(x, 0) * w / sw), int(min(x + bw, sw) * w / sw)
+        vals = [g[r * w + c] for r in range(r0, r1) for c in range(c0, c1)]
+        return sum(vals) / float(len(vals)) if vals else None
+    found = [m for m in map(mean, [[0, int(sh * 0.06), sw, bottom - int(sh * 0.06)]] + list(panels))
+             if m is not None]
+    return round(max(found)) if found else None
+
+
 def downscale(src, dst, long_side=1000):
     _parent(dst)
     w, h = image_size(src)
