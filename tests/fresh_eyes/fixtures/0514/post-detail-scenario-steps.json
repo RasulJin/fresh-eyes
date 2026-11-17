@@ -1,0 +1,10 @@
+[
+{"n":1,"kind":"task","via":"Ответить","did":"read-only run: opened the reply form on the first comment (no send)","expect":"banner 'Отвечаешь на ...' and focused input"},
+{"n":2,"kind":"task","via":"Изменить","did":"opened Изменить on own comment through its menu (not saved)","expect":"edit mode with the comment text and Сохранить"},
+{"n":3,"kind":"change","did":"closed edit mode, tried to reply to the third comment instead","expect":"banner names the third comment"},
+{"n":4,"kind":"invalid","did":"typed 400 'a' characters into the input (not sent)","expect":"input accepts or limits long text","unchanged":true},
+{"n":5,"kind":"task","via":"Ответить","did":"opened reply to the third comment (retry)","expect":"banner 'Отвечаешь на ...'"},
+{"n":6,"kind":"interrupt","how":"stop","did":"closed reply mode with Закрыть","expect":"banner gone, input stays"},
+{"n":7,"kind":"interrupt","how":"offline","did":"offline: opened reply form on first comment","expect":"form opens, no crash"},
+{"n":8,"kind":"check","did":"left to feed, reopened the post","expect":"3 comments, nothing new"}
+]

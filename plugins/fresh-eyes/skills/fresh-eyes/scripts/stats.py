@@ -2,7 +2,7 @@
 """Score card of a finished run (`coverage.py score`): the metrics of the 9.5 plan a script can count, from the run
 folder and, with the session id, the session's transcripts. The judge writes M4, M7 and M11 into score.json
 (`"M4": {"value": 0.04}`) and may correct a counted one (`"M1": {"value": 1, "by": "judge"}`: not every numbered
-step of run-log.md is a hand move); a rerun keeps them.
+step of run-log.md is a hand move); a rerun keeps them, and every metric's `note` and `by`.
 """
 import glob
 import json
@@ -84,8 +84,9 @@ def questions(text):
 
 
 def _transcript(path, lo, hi):
-    """(timestamps, cache_read, TaskStop calls) of the records inside [lo, hi]; a message's usage counts once."""
-    ts, cache, stops, seen = [], 0, 0, set()
+    """(timestamps, cache_read, TaskStop calls, context per turn) of the records inside [lo, hi]; a message's usage
+    counts once, its context is all its input tokens (fresh, read from cache and written to it)."""
+    ts, cache, stops, seen, ctx = [], 0, 0, set(), []
     with open(path, encoding="utf-8") as f:
         for line in f:
             try:
@@ -102,24 +103,29 @@ def _transcript(path, lo, hi):
             stops += sum(1 for c in m.get("content") or [] if isinstance(c, dict) and c.get("name") == "TaskStop")
             if m.get("usage") and m.get("id") not in seen:
                 seen.add(m.get("id"))
-                cache += m["usage"].get("cache_read_input_tokens") or 0
-    return ts, cache, stops
+                u = m["usage"]
+                cache += u.get("cache_read_input_tokens") or 0
+                ctx.append(sum(u.get(k) or 0 for k in ("input_tokens", "cache_read_input_tokens",
+                                                       "cache_creation_input_tokens")))
+    return ts, cache, stops, ctx
 
 
 def session(sid, lo, hi):
-    """Idle gaps, cache_read and TaskStop calls of the orchestrator's transcript and its subagents', or None."""
+    """Idle gaps, cache_read and TaskStop calls of the orchestrator's transcript and its subagents', and the
+    orchestrator's turns and context at its first and last turn of the run, or None."""
     main = glob.glob(os.path.join(PROJECTS, "*", sid + ".jsonl"))
     if not main:
         return None
-    ts, orch, stops = _transcript(main[0], lo, hi)
+    ts, orch, stops, ctx = _transcript(main[0], lo, hi)
     total = orch
     for sub in glob.glob(os.path.join(os.path.dirname(main[0]), sid, "subagents", "*.jsonl")):
-        t, cache, _ = _transcript(sub, lo, hi)
+        t, cache, _, _ = _transcript(sub, lo, hi)
         ts += t
         total += cache
     ts.sort()
     return {"idle_gaps": sum(1 for a, b in zip(ts, ts[1:]) if b - a > IDLE_S), "orchestrator": orch,
-            "total": total, "stops": stops}
+            "total": total, "stops": stops, "turns": len(ctx), "context_start": ctx[0] if ctx else None,
+            "context_end": ctx[-1] if ctx else None}
 
 
 def score(run, sid=None, out=None):
@@ -159,11 +165,15 @@ def score(run, sid=None, out=None):
         v = m[k]
         known = v is not None and not (isinstance(v, dict) and None in v.values())
         card[k] = {"value": v, "ok": LIMITS[k][1](v) if known else None, "what": LIMITS[k][0]}
-    for k in corrected:
-        card[k]["by"] = "judge"
+        card[k].update((f, old[k][f]) for f in ("by", "note") if f in (old.get(k) or {}))  # the judge's words stay
     card["M6"]["of"] = n["confirmed"]
     card["M2"]["flaky"] = flaky
     card["passed"] = sum(1 for k in LIMITS if card[k]["ok"])
     card["unknown"] = [k for k in LIMITS if card[k]["ok"] is None]
+    # П-42: a full run in a new session ends under 120 turns and 250 k of context
+    card["orchestrator"] = {k: s[k] for k in ("turns", "context_start", "context_end")} if s else None
+    if "bench" in old:  # bench.py score --run: the seeded bench this run was gated on
+        card["bench"] = old["bench"]
     write_json(out, card)
-    return {"passed": card["passed"], "unknown": card["unknown"], "transcript": bool(s), "out": out}
+    return {"passed": card["passed"], "unknown": card["unknown"], "transcript": bool(s),
+            "orchestrator": card["orchestrator"], "out": out}

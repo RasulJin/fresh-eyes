@@ -17,7 +17,8 @@ seed:  a run folder from the seeded fixtures (references/bench: one human-class 
        with a spec slice per screen and every cell done, for reviewer, verifier and judge without a device.
 
 CLI: bench.py sheet --cases cases.json --runs RUN [RUN ...] [--fix-runs ID=RUN ...] --out sheet.json
-     bench.py score --cases cases.json --sheet sheet.json [--out bench.json]
+     bench.py score --cases cases.json --sheet sheet.json [--out bench.json] [--run RUN]
+           (--run: the full run it gates; its score.json gets "bench": {"caught": n, "of": cases})
      bench.py seed --out RUN
 """
 import argparse
@@ -196,6 +197,15 @@ def seed(out, src=SEEDED):
     return {"out": out, "screens": screens, "cases": os.path.join(src, "cases.json")}
 
 
+def record(run, scores):
+    """The bench a full run was gated on, into its score.json (stats.py keeps it when it scores the run)."""
+    path = os.path.join(run, "score.json")
+    card = read_json(path) if os.path.exists(path) else {}
+    card["bench"] = {"caught": sum(1 for v in scores.values() if v["caught"]), "of": len(scores)}
+    write_json(path, card)
+    return card["bench"]
+
+
 def _roles_path(sheet_path):
     return os.path.splitext(sheet_path)[0] + ".roles.json"
 
@@ -212,6 +222,7 @@ def main():
     p.add_argument("--cases", required=True)
     p.add_argument("--sheet", required=True)
     p.add_argument("--out")
+    p.add_argument("--run", help="the full run this bench gates: the result goes to its score.json")
     p = sub.add_parser("seed", help="a run folder from the seeded fixtures, every cell done")
     p.add_argument("--out", required=True)
     a = ap.parse_args()
@@ -233,6 +244,8 @@ def main():
            "false_clean": false_clean(judged, roles, cases)}
     if a.out:
         write_json(a.out, res)
+    if a.run:
+        res["score_json"] = record(a.run, scores)
     print(json.dumps(res, ensure_ascii=False, indent=1))
     return 0
 

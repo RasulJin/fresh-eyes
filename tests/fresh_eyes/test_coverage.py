@@ -279,7 +279,7 @@ class StatusTest(unittest.TestCase):
         with self.assertRaisesRegex(FEError, "moved nothing"):
             set_status(cov, cell["id"], "done", evidence=[pack])
         # 20261116-1107-full: flight-search swipe-inside on one result went done "with a note"
-        with self.assertRaisesRegex(FEError, "na or blocked"):
+        with self.assertRaisesRegex(FEError, "not applicable: --status na"):
             set_status(cov, cell["id"], "done", evidence=[pack], note="one result, content fits one screen")
         self.assertEqual(cell["status"], "todo")
         set_status(cov, cell["id"], "na", evidence=[pack], note="not enough items")
@@ -790,14 +790,15 @@ class VerdictTest(unittest.TestCase):
         relative = [os.path.relpath(p) for p in packs]  # the reviewer may list paths in another form
         self.assertEqual(verdict(self.cov, [], "en", relative)["code"], "CLEAN")
 
-    def test_na_empty_plan_and_platformless_paths_never_clean(self):
+    def test_na_is_reported_and_an_empty_plan_or_platformless_paths_never_clean(self):
         packs = done_all(self.cov, self.root)
         with self.assertRaises(FEError):
             set_status(self.cov, self.cov["cells"][0]["id"], "na")  # needs a reason
         set_status(self.cov, self.cov["cells"][0]["id"], "na", note="no input on this screen")
-        v = verdict(self.cov, [], "en", packs)
-        self.assertEqual(v["code"], "INCOMPLETE")
-        self.assertIn("not applicable", " ".join(v["reasons"]))
+        v = verdict(self.cov, [], "en", packs)  # П-48: reported, not a cell left undone
+        self.assertEqual(v["code"], "CLEAN")
+        self.assertIn("1 cells not applicable: %s (no input on this screen)" % self.cov["cells"][0]["id"],
+                      v["reasons"])
         self.assertEqual(verdict({"cells": [], "unchecked": []}, [], "en")["code"], "INCOMPLETE")
         loose = os.path.join(self.root, "feed", "default-none")
         write_json(os.path.join(loose, "meta.json"), {})

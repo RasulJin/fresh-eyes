@@ -3,6 +3,8 @@
 
 CLI:
   backlog.py index --file F --out OUT [--statuses open,in-progress,planned] [--ref COMMIT] [--config C]
+                    (config backlog.extra: open tasks kept elsewhere, a file or {"cmd": ...} printing `<id>\t<title>`
+                    lines; they join the index and match like entries naming no screen)
   backlog.py append --file F --finding finding.json [--template ru-backlog] [--date YYYY-MM-DD]
                     [--attach CROP --images-dir D]
   backlog.py set-status --file F --id BUG-12 --status verified --note TEXT [--line N] [--template ru-backlog]
@@ -170,79 +172,118 @@ STOP = set("это или как что для при без над под уж�
 IMP_HEADS = {"ru": ("Новые улучшения", "Уже в бэклоге"), "en": ("New improvements", "Already in the backlog")}
 
 
-def _stems(text):
-    """First 5 letters of each word of 3+ letters: «прилёта» and «прилёт» meet, endings do not matter."""
-    return {w[:5] for w in re.findall(r"[a-zа-я]{3,}", text.lower().replace("ё", "е")) if w not in STOP}
+def _stems(text, n=5):
+    """First n letters of each word of 3+ letters: «прилёта» and «прилёт» meet, endings do not matter."""
+    return {w[:n] for w in re.findall(r"[a-zа-я]{3,}", text.lower().replace("ё", "е")) if w not in STOP}
 
 
 def entries(lines, prefix):
-    """(id, title, stems, screen) of the PREFIX lines `index` wrote; screen when the line ends in ` - <screen-id>`."""
+    """(id, title, screen) of the PREFIX lines `index` wrote (None: backlog.extra's, any other id); screen when the
+    line ends in ` - <screen-id>`."""
     out = []
     for line in lines:
         item_id, _, rest = line.strip().partition(" · ")
-        if item_id.startswith(prefix + "-"):
+        ours = item_id.startswith(prefix + "-") if prefix else bool(rest) and not item_id.startswith(("BUG-", "IMP-"))
+        if ours:
             title, _, where = rest.rpartition(" - ")
             if not (title and re.fullmatch(r"[a-z0-9][a-z0-9-]*", where)):
                 title, where = rest, None
-            out.append((item_id, title, _stems(title), where))
+            out.append((item_id, title, where))
     return out
 
 
-def match_entry(finding, entries, near=2):
-    """(id, title) of the open entry that already holds this finding: the most shared stems, at least half of the
-    shorter title's, `near` on the same screen and 3 for an entry naming none; an entry on another screen never."""
-    mine, best = _stems(finding.get("title", "")), None
-    for item_id, title, stems, where in entries:
-        n = len(mine & stems)
+def extra(spec):
+    """Index lines `<id> · <title>` of config backlog.extra: a file, or {"cmd": ...}, of `<id>\t<title>` lines."""
+    text = run(["sh", "-c", spec["cmd"]], timeout=120).stdout.decode("utf-8") if isinstance(spec, dict) \
+        else _read(spec)
+    return ["%s · %s" % (i.strip(), " ".join(t.split())) for i, _, t in (l.partition("\t") for l in text.splitlines())
+            if i.strip() and t.strip()]
+
+
+def match_entry(finding, entries, near=2, size=5):
+    """(id, title) of the open entry that already holds this finding: the most shared stems (`size` letters), at
+    least half of the shorter title's, `near` on the same screen and 3 for an entry naming none; an entry on another
+    screen never."""
+    mine, best = _stems(finding.get("title", ""), size), None
+    for item_id, title, where in entries:
+        n = len(mine & _stems(title, size))
         if (not where or where == finding.get("screen")) and n >= (near if where else 3) \
-                and n >= min(len(mine), len(stems)) / 2 and (best is None or n > best[0]):
+                and n >= min(len(mine), len(_stems(title, size))) / 2 and (best is None or n > best[0]):
             best = (n, item_id, title)
     return best[1:] if best else None
 
 
+def _groups(data):
+    """The IMPs of {path: findings file} in groups joined by same_as (findings.py same, or the verifier's), each
+    [(finding, ref, path)] with its head first; ref is `<platform>/<screen>/<file>#<id>`, as same_as names it."""
+    imps = {}
+    for p, d in data.items():
+        rel = "/".join(os.path.normpath(p).split(os.sep)[-3:])
+        for f in d.get("findings", []):
+            if f.get("kind") == "IMP" and f.get("verdict") != "rejected":
+                imps["%s#%s" % (rel, f.get("id"))] = (f, p)
+    groups = {}
+    for ref, (f, p) in imps.items():
+        head, seen = ref, {ref}
+        while imps[head][0].get("same_as"):
+            to = imps[head][0]["same_as"]
+            to = to if "#" in to else "%s#%s" % (head.rpartition("#")[0], to)  # a bare id: its own file
+            if to not in imps or to in seen:
+                break
+            head = to
+            seen.add(to)
+        groups.setdefault(head, []).append((f, ref, p))
+    return [sorted(g, key=lambda m: m[1] != head) for head, g in groups.items()]
+
+
 def match(index_lines, paths, out=None, language="en"):
-    """Give each IMP without backlog_id the open entry that already proposes it, and each pending BUG the open BUG
-    entry on its screen sharing 3 stems (before the verifier, which keeps it only for the same defect: no question
-    to the owner about a bug already in the backlog); findings files written back. With out, write imp.md: the
-    new IMPs in full, the known ones a line each. The report lists only the new ones."""
-    imps, bugs = entries(index_lines, "IMP"), entries(index_lines, "BUG")
+    """Give each pending BUG the open BUG entry on its screen sharing 3 stems (before the verifier, which keeps it
+    only for the same defect: no question to the owner about a bug already in the backlog), and each group of IMPs
+    (one case, linked by same_as) the open entry that already proposes any of them; findings files written back.
+    With out, write imp.md: one number per new group in full, its copies under it, the known groups a line each.
+    The report lists only the new ones."""
+    other = entries(index_lines, None)  # backlog.extra: either kind
+    imps, bugs = entries(index_lines, "IMP") + other, entries(index_lines, "BUG") + other
     titles = {e[0]: e[1] for e in imps}
-    new, known, matched, bug_hits = [], [], 0, 0
-    for p in paths:
-        data = read_json(p)
-        asked = {q.get("finding"): q.get("text", "") for q in data.get("questions") or [] if isinstance(q, dict)}
-        hits = 0
-        for f in data.get("findings", []):
-            if f.get("kind", "BUG") == "BUG":
-                hit = None if f.get("backlog_id") or f.get("verdict", "pending") != "pending" \
-                    else match_entry(f, bugs, 3)
-                if hit:
-                    f["backlog_id"], hits, bug_hits = hit[0], hits + 1, bug_hits + 1
-                continue
-            if f.get("kind") != "IMP" or f.get("verdict") == "rejected":
-                continue
-            hit = None if f.get("backlog_id") else match_entry(f, imps)
+    data = {p: read_json(p) for p in paths}
+    dirty, matched, bug_hits = set(), 0, 0
+    for p, d in data.items():
+        for f in d.get("findings", []):
+            # 4 letters: «Ветке» meets «Ветка»; a verifier keeps the id only for the same defect
+            hit = None if f.get("kind", "BUG") != "BUG" or f.get("backlog_id") \
+                or f.get("verdict", "pending") != "pending" else match_entry(f, bugs, 3, 4)
             if hit:
-                f["backlog_id"], hits, matched = hit[0], hits + 1, matched + 1
-            if out:
-                ref = "%s#%s" % (os.path.relpath(p, os.path.dirname(os.path.abspath(out))), f.get("id"))
-                (known if f.get("backlog_id") else new).append((f, ref, asked.get(f.get("id"))))
-        if hits:
-            write_json(p, data)
+                f["backlog_id"], bug_hits = hit[0], bug_hits + 1
+                dirty.add(p)
+    new, known = [], []
+    for group in _groups(data):  # 0.5.13 full: a copy of IMP-312 came new while its twin matched it
+        bid = next((f["backlog_id"] for f, _, _ in group if f.get("backlog_id")), None) or \
+            next((hit[0] for f, _, _ in group for hit in [match_entry(f, imps)] if hit), None)
+        for f, _, p in group:
+            if bid and not f.get("backlog_id"):
+                f["backlog_id"], matched = bid, matched + 1
+                dirty.add(p)
+        (known if bid else new).append(group)
+    for p in dirty:
+        write_json(p, data[p])
     if not out:
         return {"matched": matched, "bugs": bug_hits}
     heads = IMP_HEADS.get(language, IMP_HEADS["en"])
     lines = ["# %s: %d" % (heads[0], len(new)), ""]
-    for k, (f, ref, question) in enumerate(new, 1):
+    for k, ((f, ref, p), *copies) in enumerate(new, 1):
+        asked = {q.get("finding"): q.get("text") for q in data[p].get("questions") or [] if isinstance(q, dict)}
+        question = asked.get(f.get("id"))
         lines += ["## %d. %s" % (k, f.get("title", "")),
                   "%s · %s · %s · `%s`" % (f.get("screen"), f.get("platform"), f.get("severity"), ref)]
         lines += [x for x in (f.get("actual"), f.get("expected") and "→ " + f["expected"], f.get("verify_note"),
                               question and "? " + question) if x]
-        lines += ["`%s`" % e for e in (f.get("evidence") or [])[:1]] + [""]
+        lines += ["`%s`" % e for e in (f.get("evidence") or [])[:1]]
+        lines += ["+ %s · `%s`" % (c.get("screen"), cref) for c, cref, _ in copies] + [""]
     lines += ["# %s: %d" % (heads[1], len(known)), ""]
-    lines += ["- %s — %s%s · `%s`" % (f.get("title", ""), f["backlog_id"],
-                                      " «%s»" % titles[f["backlog_id"]] if f["backlog_id"] in titles else "", ref)
-              for f, ref, _ in known]
+    for (f, ref, _), *copies in known:
+        bid = f["backlog_id"]
+        lines.append("- %s — %s%s · %s" % (f.get("title", ""), bid, " «%s»" % titles[bid] if bid in titles else "",
+                                            " ".join("`%s`" % r for r in [ref] + [c[1] for c in copies])))
     _write(out, "\n".join(lines) + "\n")
     return {"new": len(new), "known": len(known), "matched": matched, "bugs": bug_hits, "out": out}
 
@@ -286,8 +327,14 @@ def main():
         names = {s["name"]: s["id"] for s in read_json(a.config).get("screens", []) if s.get("name")} \
             if a.config else None
         lines = index(read_at(a.file, a.ref), a.statuses.split(","), names)
+        more = ((read_json(a.config).get("backlog") or {}).get("extra") if a.config else None)
+        out = {}
+        try:
+            lines += extra(more) if more else []
+        except (FEError, OSError, KeyError) as e:  # the backlog still indexes; the reply says what is missing
+            out["extra_error"] = "backlog.extra not read: %s" % e
         _write(a.out, "".join(l + "\n" for l in lines))
-        out = {"entries": len(lines), "out": a.out}
+        out.update(entries=len(lines), out=a.out)
     elif a.cmd == "match":
         lines = _read(a.index).splitlines() if os.path.exists(a.index) else []
         out = match(lines, a.findings, a.out, a.language)

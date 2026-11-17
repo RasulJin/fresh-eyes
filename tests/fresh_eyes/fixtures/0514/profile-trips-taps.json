@@ -1,0 +1,90 @@
+[
+  {
+    "n": 1,
+    "label": "QA Tester",
+    "by": "label",
+    "pack": "tap-1",
+    "changed": true,
+    "result": "new: Закрыть, июнь 2027 · 5 дней"
+  },
+  {
+    "n": 2,
+    "label": "3, Страны",
+    "by": "label",
+    "pack": "tap-2",
+    "changed": false,
+    "result": "no change"
+  },
+  {
+    "n": 3,
+    "label": "10, Поездок",
+    "by": "label",
+    "pack": "tap-3",
+    "changed": false,
+    "result": "no change"
+  },
+  {
+    "n": 4,
+    "label": "33, Поста",
+    "by": "label",
+    "pack": "tap-4",
+    "changed": false,
+    "result": "no change"
+  },
+  {
+    "n": 5,
+    "label": "0, Подписок",
+    "by": "label",
+    "pack": "tap-5",
+    "changed": false,
+    "result": "no change"
+  },
+  {
+    "n": 6,
+    "label": "0, Подписчиков",
+    "by": "label",
+    "pack": "tap-6",
+    "changed": false,
+    "result": "no change"
+  },
+  {
+    "n": 7,
+    "label": "Редактировать профиль",
+    "by": "label",
+    "pack": "tap-7",
+    "changed": false,
+    "result": "no change"
+  },
+  {
+    "n": 8,
+    "label": "ЧЕРЕЗ 6 МЕС., Istanbul, Turkey, май 2027 · 4 дня",
+    "by": "label",
+    "pack": "tap-8",
+    "changed": false,
+    "result": "no change"
+  },
+  {
+    "n": 9,
+    "label": "ЧЕРЕЗ 7 МЕС., Tbilisi, Georgia, июнь 2027 · 5 дней",
+    "by": "label",
+    "pack": "tap-9",
+    "changed": false,
+    "result": "no change"
+  },
+  {
+    "n": 10,
+    "label": "Настройки",
+    "by": "label",
+    "pack": "tap-10",
+    "changed": false,
+    "result": "no change"
+  },
+  {
+    "n": 11,
+    "label": "Посты",
+    "by": "label",
+    "pack": "tap-11",
+    "changed": false,
+    "result": "no change"
+  }
+]

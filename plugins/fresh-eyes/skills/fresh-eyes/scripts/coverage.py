@@ -8,13 +8,14 @@ CLI:
   coverage.py plan --config C --preflight P --mode quick|full [--screens a,b] [--recheck BUG-1,BUG-2]
                    [--max-screens 4] --out cov.json
   coverage.py set --cov cov.json --cell ID --status todo|done|failed|blocked|na [--evidence P ...] [--note T]
-  coverage.py next --cov cov.json [--platform android|ios] [--limit 10]
+  coverage.py next --cov cov.json [--platform android|ios] [--queue main|small] [--limit 10]
   coverage.py verdict --cov cov.json --findings F [F ...] [--language ru|en]
   coverage.py map --cov cov.json [--language ru|en]
   coverage.py diff-screens --repo R --base REF --config C
   coverage.py packs --dir <run>/<platform>/<screen> [--max 15]
   coverage.py prune --runs .fresh-eyes/runs [--keep 3]
   coverage.py score --run RUN [--session ID] [--out RUN/score.json]   (stats.py: the run's M1-M12 card)
+  coverage.py notes --run RUN   (the subagents' RUN/notes/<screen>.md into RUN/orchestrator-notes.md)
 """
 import argparse
 import glob
@@ -53,8 +54,11 @@ PROBES = {
     "double-submit": {"mutating": True, "platforms": PLATFORMS},
 }
 # snaps inside the pack a done cell needs: a navigator skips a probe's extra steps unless the cell depends on them
-REQUIRED_SUBPACKS = {"rapid-tap": ("afterback",), "keyboard-open": ("return",), "search": ("typed",),
+REQUIRED_SUBPACKS = {"rapid-tap": ("afterback", "single"), "keyboard-open": ("left", "return"), "search": ("typed",),
                      "drag-interrupt": ("slow", "drag-back", "swipe-tap")}
+UNORDERED = {"single"}  # the control tap may come before or after the rapid one
+PROOFS = {"left", "restored"}  # sub-snaps that prove a step for `set`, not the screen: no reviewer gets them
+NO_CHANGE_RUN = 3  # tap-everything rows changing nothing in a row: the screen under them was another one
 # a scenario does the task, changes an input after the result, tries an invalid input, interrupts an action,
 # and checks what was kept
 SCENARIO_KINDS = {"task", "change", "invalid", "interrupt", "check"}
@@ -77,6 +81,8 @@ LABELS = {
 CODE_EXT = (".ts", ".tsx", ".js", ".jsx")
 GUESS = 0.4  # a BUG this unsure is a guess (0.5.12 run: guesses were 19 of the 32 rejects)
 DARK_MAX = 120  # mean gray of a dark-theme frame: dark screens measured 56-68, light ones 173-196
+LIGHT_MIN = 60  # lit_top under it is a dark frame (0.5.13 full: import's light cells left dark 17-18, light 243)
+THEME_STATES = ("dark", "theme-mismatch")
 
 
 def _cell(platform, screen, state, probe):
@@ -107,6 +113,8 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
         near = [n for s in chosen for n in by_id[s].get("neighbors", []) if n in by_id and n not in screens]
         unchecked += [{"what": "%s: all states" % n, "why": "neighbor of a checked screen; quick checks it when named"}
                       for n in dict.fromkeys(near)]
+    # screens without an account first: a full run starts from cleared data, signed out (0.5.13: by hand)
+    chosen.sort(key=lambda s: not by_id[s].get("signed_out"))
     plats = preflight.get("platforms", {})
     targets = config.get("platforms", PLATFORMS)
     ok = [p for p in targets if plats.get(p, {}).get("ok")]
@@ -181,6 +189,7 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
             c["drag"] = list(by_id[c["screen"]]["drag"])
         if c["probe"] == "swipe-inside" and by_id[c["screen"]].get("pages"):
             c["pages"] = list(by_id[c["screen"]]["pages"])
+    _queues(cells, {p for p in ok if plats[p].get("small_device")})
     if passes == 2:  # one pass catches ~75-80% of what two independent passes do: a release gets a second one
         cells += [dict(c, id=c["id"] + "#2", evidence=[], **{"pass": 2}) for c in cells
                   if not c["screen"].startswith("recheck-")]
@@ -189,6 +198,13 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
                 "or testID only this screen shows" % sid for sid in chosen if not by_id[sid].get("marker")]
     return {"run_id": time.strftime("%Y%m%d-%H%M") + "-" + mode, "mode": mode, "cells": cells,
             "unchecked": unchecked, "warnings": warnings, "motion_ceiling_ms": config.get("motion_ceiling_ms", 300)}
+
+
+def _queues(cells, two):
+    """Each cell's "queue": "small" for a small-screen cell of a platform with a small device (its own navigator
+    there), "main" for every other: screens sharing data (a post and its thread) stay on one device."""
+    for c in cells:
+        c["queue"] = "small" if c["state"] == "small-screen" and c["platform"] in two else "main"
 
 
 def _find(cov, cell_id):
@@ -297,7 +313,8 @@ def _order(pack, names):
         late = next((what % hh(t) for what, t in events(step) if ta and t and ta > t), None)
         if late:
             found.append("%s is snapped at %s, after %s" % (names[k - 1], hh(ta), late))
-    return ["%s: snap each step right after its action, never again later" % p for p in found]
+    return ["%s: snap each step right after its action, never again later; steps snapped in another order than "
+            "numbered: capture.py step --renumber <pack>, never delete a step folder" % p for p in found]
 
 
 def shows_marker(pack, markers):
@@ -327,6 +344,15 @@ def _scenario_problems(pack, cell):
                     and os.path.isfile(os.path.join(pack, "step-%s" % s.get("n"), "meta.json"))).casefold()
     problems += ["a task step with its own snap <pack>/step-<n> through the form «%s» (config forms)" % f
                  for f in cell.get("forms", []) if f.casefold() not in done]
+    # 0.5.13 full: post-detail's scenario may write but only opened and closed the forms ("read-only run")
+    wrote = {"wrote": any(s.get("wrote") for s in steps), "cleaned": any(s.get("cleaned") for s in steps),
+             "found_in": any(s.get("found_in") for s in steps if s.get("kind") == "check")}
+    if cell.get("mutating") and not all(wrote.values()):
+        problems.append("real writes, since the cell may write (mutating: true): a step with \"wrote\" (what it "
+                        "created or changed), a check step with \"found_in\" (where that turned up) and a step "
+                        "with \"cleaned\" (what it removed after); missing: %s. A read-only pass is not this "
+                        "cell: write the test data and fix steps.json, or mark it blocked with --note why it "
+                        "could not write" % ", ".join(k for k, v in wrote.items() if not v))
     if android and not os.path.isfile(os.path.join(pack, "logcat.txt")):
         problems.append("no logcat.txt (capture.py logs)")
     return problems
@@ -344,6 +370,23 @@ def _probe_problems(c, packs, note):
     if c["probe"] == "keyboard-open" and packs and not os.path.isfile(os.path.join(packs[0], "keyboard.json")):
         problems.append("no <pack>/keyboard.json: the focus tap recorded into <pack>/kb-show (and on Android Back "
                         "into <pack>/kb-hide) with capture.py around, then motion.py --keyboard <pack>")
+    left = os.path.join(packs[0], "left") if packs else ""
+    if c["probe"] == "keyboard-open" and c.get("marker") and os.path.isfile(os.path.join(left, "meta.json")) \
+            and shows_marker(left, c["marker"]):  # 0.5.13 quick: vio-guide's return was snapped without leaving
+        problems.append("<pack>/left still shows %s's markers %s, so the screen was never left: leave it by a link, "
+                        "avatar or tab, snap <pack>/left there, come back and snap <pack>/return"
+                        % (c["screen"], c["marker"]))
+    rows = read_json(os.path.join(packs[0], "taps.json")) \
+        if c["probe"] == "tap-everything" and packs and os.path.isfile(os.path.join(packs[0], "taps.json")) else []
+    last = {r.get("label"): r for r in rows}  # a label tapped again later counts by its last row
+    run_, worst = [], []
+    for r in (r for r in rows if last[r.get("label")] is r):
+        run_ = run_ + [r] if r.get("changed") is False else []
+        worst = run_ if len(run_) > len(worst) else worst
+    if len(worst) >= NO_CHANGE_RUN and not note:  # 0.5.13 quick: tap-2…11 under a photo viewer left open
+        problems.append("taps.json rows %s-%s changed nothing, %d in a row: something left open covered the screen "
+                        "(a viewer, a sheet) or it was another screen; close it and tap them again (new rows), or "
+                        "pass --note why they change nothing" % (worst[0].get("n"), worst[-1].get("n"), len(worst)))
     swiped = read_json(os.path.join(packs[0], "meta.json")) \
         if c["probe"] == "swipe-inside" and packs and os.path.isfile(os.path.join(packs[0], "meta.json")) else None
     if swiped is not None and "before" not in swiped:
@@ -351,8 +394,8 @@ def _probe_problems(c, packs, note):
                         "snapped before it>, so the scripts can tell what moved")
     elif swiped is not None and swiped.get("moved") == 0:  # nothing scrolled is nothing checked, note or not
         problems.append("the swipe moved nothing on screen: swipe inside the list or grid itself, not on a "
-                        "header, and longer; if it really does not scroll (too few items), mark the cell na or "
-                        "blocked with --note \"not enough items\"")
+                        "header, and longer; if it really does not scroll (too few items), the cell is not "
+                        "applicable: --status na --note \"not enough items\"")
     # A page laid out while a shorter one was open can stay cut to its height (a grid with blank under it).
     for k, page in enumerate(c.get("pages", []), 1):
         meta = os.path.join(packs[0], "page-%d" % k, "meta.json") if packs else ""
@@ -368,14 +411,24 @@ def _probe_problems(c, packs, note):
                             "interrupted; tap-back again with a longer --delay-ms or devices.py set --what "
                             "slow-animations")
     meta0 = os.path.join(packs[0], "meta.json") if packs else ""
-    lit = read_json(meta0).get("brightness", 0) if c["state"] == "dark" and os.path.isfile(meta0) else 0
+    top = read_json(meta0) if os.path.isfile(meta0) else {}
+    lit = top.get("brightness", 0) if c["state"] == "dark" else 0
     if lit > DARK_MAX and not note:
         problems.append("the dark frame is light (brightness %d > %d): the app's own theme is pinned, pick its Dark "
                         "the way config app_theme says and snap again; dark but lit by a photo or map: pass --note "
                         "saying so" % (lit, DARK_MAX))
+    lit_top = top.get("lit_top")  # capture.py: the top half, keyboard and sheet scrim left out
+    if c["state"] not in THEME_STATES and isinstance(lit_top, (int, float)) and lit_top < LIGHT_MIN and not note:
+        problems.append("the frame is dark (lit_top %d < %d) in a light-theme cell: the app's theme was left on Dark "
+                        "after a dark cell; put it back the way config app_theme says and snap again; dark by "
+                        "design (a photo, a map, a video): pass --note saying so" % (lit_top, LIGHT_MIN))
     theme = read_json(os.path.join(packs[0], "theme-note.json")) \
-        if c["state"] == "theme-mismatch" and packs and os.path.isfile(os.path.join(packs[0], "theme-note.json")) \
+        if c["state"] in THEME_STATES and packs and os.path.isfile(os.path.join(packs[0], "theme-note.json")) \
         else {}
+    if c["state"] == "dark" and theme.get("app_theme") and "app_theme_set" in top and not top["app_theme_set"]:
+        problems.append("theme-note.json names the app theme «%s», but this pack's capture did not set it "
+                        "(meta.json app_theme_set is empty): pass --app-theme only in the call that picks it, "
+                        "pick it the way config app_theme says and snap again" % theme["app_theme"])
     if c["state"] == "theme-mismatch" and packs and not (
             str(theme.get("ui_night_mode")).casefold().endswith(("yes", "true", "dark")) and theme.get("app_theme")):
         problems.append("no proof of the mismatch: <pack>/theme-note.json from capture.py must show the phone dark "
@@ -408,7 +461,8 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
         problems += _copies(packs)
         for e in [e for e in packs if os.path.isdir(e)]:
             steps = sorted((d for d in os.listdir(e) if STEP.fullmatch(d)), key=_natural)
-            problems += _order(e, steps) + _order(e, REQUIRED_SUBPACKS.get(c["probe"], ()))
+            problems += _order(e, steps) + _order(e, [s for s in REQUIRED_SUBPACKS.get(c["probe"], ())
+                                                      if s not in UNORDERED])
         # a dead app cannot do the probe's later steps: its pack and the note are the cell (reviewed as a crash)
         meta0 = os.path.join(packs[0], "meta.json") if packs else ""
         crashed = bool(note) and os.path.isfile(meta0) and read_json(meta0).get("app_running") is False
@@ -424,12 +478,14 @@ def set_status(cov, cell_id, status, evidence=None, note=""):
     return c
 
 
-def next_cells(cov, platform=None, limit=10, mutating_allowed=True):
-    """Todo cells; mutating ones are blocked when the current preflight no longer allows mutation (resume)."""
+def next_cells(cov, platform=None, limit=10, mutating_allowed=True, queue=None):
+    """Todo cells (of one queue: one navigator per device); mutating ones are blocked when the current preflight
+    no longer allows mutation (resume)."""
     for c in cov["cells"]:
         if c["status"] == "todo" and c.get("mutating") and not mutating_allowed:
             c["status"], c["note"] = "blocked", "mutation not allowed by the current preflight"
-    return [c for c in cov["cells"] if c["status"] == "todo" and (platform is None or c["platform"] == platform)][:limit]
+    return [c for c in cov["cells"] if c["status"] == "todo" and (platform is None or c["platform"] == platform)
+            and (queue is None or c.get("queue", "main") == queue)][:limit]
 
 
 def pack_key(path):
@@ -476,8 +532,9 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_st
     # an intermittent bug the repeat missed ends unsure: a human has to look before anyone says CLEAN
     doubtful = [f for f in findings if f.get("verdict") == "unsure" and f.get("kind", "BUG") == "BUG"
                 and f.get("severity") in ("high", "medium")]
-    # "na" (not applicable) is reported, never counted as checked: the config should drop that probe instead
-    open_cells = [c for c in cov["cells"] if c["status"] != "done"]
+    # "na" (not applicable: a list too short to swipe) is reported, not counted as a cell left undone
+    na = [c for c in cov["cells"] if c["status"] == "na"]
+    open_cells = [c for c in cov["cells"] if c["status"] not in ("done", "na")]
     seen = {pack_key(p) for p in reviewed}
     seen.discard(None)
     unreviewed = [c for c in cov["cells"] if c["status"] == "done"
@@ -490,9 +547,10 @@ def verdict(cov, findings, language="en", reviewed=(), build_changed=(), spec_st
     if not cov["cells"]:
         reasons.append("no cells planned")
     if open_cells:
-        na = [c for c in open_cells if c["status"] == "na"]
-        reasons.append("%d cells not done%s" % (len(open_cells), " (%d marked not applicable)" % len(na) if na
-                                                else ""))
+        reasons.append("%d cells not done" % len(open_cells))
+    if na:
+        reasons.append("%d cells not applicable: %s" % (len(na), "; ".join("%s (%s)" % (c["id"], c["note"])
+                                                                          for c in na[:5])))
     if unreviewed:
         reasons.append("%d done cells whose evidence no reviewer looked at: %s"
                        % (len(unreviewed), ", ".join(c["id"] for c in unreviewed[:5])))
@@ -564,7 +622,7 @@ def _conflicts(findings):
             pairs.append((a, b))
     first = defaultdict(list)
     for f in ruled:
-        t = by_ref.get(os.path.normpath(f["same_as"])) if f.get("same_as") else None
+        t = by_ref.get(_same_ref(f)) if f.get("same_as") else None
         if t is not None and t is not f:
             add(f, t)
         words = re.findall(r"\w+", re.sub(r"\d+", "#", (f.get("title") or "").casefold()))
@@ -576,15 +634,19 @@ def _conflicts(findings):
     return pairs
 
 
+def _same_ref(f):
+    """f's same_as as a normalized `<file>#<id>`; a bare id ("f1", a consequence in the same file) is f's own file."""
+    file, _, fid = f["same_as"].rpartition("#")
+    return os.path.normpath("%s#%s" % (file or f.get("_file", ""), fid))
+
+
 def _merged(f, findings):
     """A finding marked same_as another is left out of the counts only when that one already counts at least as
     much: confirmed, same kind, not lower severity, not itself a duplicate. Otherwise it counts on its own."""
-    ref = f.get("same_as")
-    if not ref or f.get("verdict", "pending") == "pending":  # never verified: it still keeps CLEAN away
+    if not f.get("same_as") or f.get("verdict", "pending") == "pending":  # never verified: it keeps CLEAN away
         return False
-    file, _, fid = ref.partition("#")
     for t in findings:
-        if t is not f and t.get("id") == fid and os.path.normpath(t.get("_file", "")) == os.path.normpath(file):
+        if t is not f and os.path.normpath(_ref(t)) == _same_ref(f):
             return (not t.get("same_as") and t.get("verdict") == "confirmed"
                     and t.get("kind", "BUG") == f.get("kind", "BUG")
                     and _RANK.get(t.get("severity"), 0) >= _RANK.get(f.get("severity"), 0))
@@ -695,7 +757,8 @@ def pack_groups(screen_dir, max_n=15, dropped=None, cov=None):
     d50/d100/d150) in groups of at most max_n, one reviewer each. A pack's sub-packs stay together unless they
     alone are more; a group never mixes the passes of `twice`. Left out, the reason appended to `dropped`: a
     folder capture.py did not write (_snap_problem) and, with cov, a top folder that is no cell's pack (a scratch
-    snap like post-detail/kb-before)."""
+    snap like post-detail/kb-before). Never reviewed: a pack's left/ (keyboard-open's proof it left: another screen)
+    and restored/ (the light control after a dark cell), proofs for `set`, not this screen's state."""
     groups, cur, cur_p2, max_n = [], [], False, max(1, max_n)
     where = tuple(os.path.normpath(os.path.abspath(screen_dir)).split(os.sep)[-2:])
     owned = None if cov is None else set()
@@ -711,7 +774,8 @@ def pack_groups(screen_dir, max_n=15, dropped=None, cov=None):
                 dropped.append("%s: no cell of %s has this pack" % (top, "/".join(where)))
             continue
         subs = sorted(r for r, _, files in os.walk(os.path.join(screen_dir, top))
-                      if "screen.png" in files or "around.json" in files)
+                      if ("screen.png" in files or "around.json" in files)
+                      and not PROOFS & set(os.path.relpath(r, screen_dir).split(os.sep)))
         bad = [r for r in subs if _snap_problem(r)]
         if dropped is not None:
             dropped += [_snap_problem(r) for r in bad]
@@ -764,10 +828,32 @@ def _load_findings(paths, run="."):
 
 
 def _asks_for(request, f):
-    """A request names the finding: `finding` "f1" (from its file, when `from` says which) or "<file>#f1"."""
+    """A request names the finding: `finding` "f1" (from its file, when `from` says which) or "<file>#f1"; or one
+    of the requests findings.py requests merged into it does."""
     file, _, fid = str(request.get("finding") or "").rpartition("#")
     file = file or request.get("from") or ""
-    return fid == f.get("id") and (not file or os.path.basename(file) == os.path.basename(f["_file"]))
+    return fid == f.get("id") and (not file or os.path.basename(file) == os.path.basename(f["_file"])) \
+        or any(_asks_for(m, f) for m in request.get("merged") or () if isinstance(m, dict))
+
+
+NOTES_MARK = "<!-- coverage.py notes: rebuilt from notes/*.md below this line -->"
+
+
+def notes(run):
+    """The subagents' details (RUN/notes/<screen>.md, one section each) under the orchestrator's own lines of
+    orchestrator-notes.md: the text above NOTES_MARK stays, everything below it is rebuilt."""
+    out = os.path.join(run, "orchestrator-notes.md")
+    head = ""
+    if os.path.isfile(out):
+        with open(out, encoding="utf-8") as f:
+            head = f.read().split(NOTES_MARK)[0].rstrip()
+    parts = []
+    for path in sorted(glob.glob(os.path.join(run, "notes", "*.md"))):
+        with open(path, encoding="utf-8") as f:
+            parts.append("## %s\n\n%s\n" % (os.path.splitext(os.path.basename(path))[0], f.read().strip()))
+    with open(out, "w", encoding="utf-8") as f:
+        f.write((head + "\n\n" if head else "") + NOTES_MARK + "\n\n" + "\n".join(parts))
+    return {"notes": len(parts), "out": out}
 
 
 BULKY = (".png", ".jpg", ".mp4")  # ~97% of a run (a full one is ~0.5 GB); the json, txt and report stay
@@ -809,6 +895,7 @@ def main():
     p.add_argument("--note", default="")
     p = sub.add_parser("next"); p.add_argument("--cov", required=True); p.add_argument("--platform")
     p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--queue", choices=["main", "small"], help="the cells of one device's navigator (plan's queue)")
     p = sub.add_parser("verdict"); p.add_argument("--cov", required=True); p.add_argument("--findings", nargs="*",
                                                                                         default=[])
     p.add_argument("--language", default="en")
@@ -821,6 +908,8 @@ def main():
     p = sub.add_parser("prune"); p.add_argument("--runs", required=True); p.add_argument("--keep", type=int, default=3)
     p = sub.add_parser("score"); p.add_argument("--run", required=True); p.add_argument("--out")
     p.add_argument("--session", help="the orchestrator's session id: its transcripts give M9, M10 and M12")
+    p = sub.add_parser("notes", help="gather RUN/notes/*.md into RUN/orchestrator-notes.md")
+    p.add_argument("--run", required=True)
     a = ap.parse_args()
     if a.cmd == "plan":
         cov = plan(read_json(a.config), read_json(a.preflight), a.mode, a.screens.split(",") if a.screens else None,
@@ -839,7 +928,7 @@ def main():
         allowed = os.path.exists(pf) and read_json(pf).get("mutating_allowed") is True
         with locked(a.cov):
             cov = read_json(a.cov)
-            cells = next_cells(cov, a.platform, a.limit, allowed)
+            cells = next_cells(cov, a.platform, a.limit, allowed, a.queue)
             write_json(a.cov, cov)
         print(json.dumps([c["id"] for c in cells], ensure_ascii=False))
     elif a.cmd == "verdict":
@@ -866,6 +955,8 @@ def main():
     elif a.cmd == "score":
         import stats
         print(json.dumps(stats.score(a.run, a.session, a.out), ensure_ascii=False))
+    elif a.cmd == "notes":
+        print(json.dumps(notes(a.run), ensure_ascii=False))
     else:
         print(json.dumps(screens_from_diff(a.repo, a.base, read_json(a.config)), ensure_ascii=False))
     return 0
