@@ -26,6 +26,7 @@ CLI:
   capture.py around --platform P --device ID --out PACK [--settle 2.5] [--ceiling-ms MS] [--frame-width PX]
                     -- CMD ...
   capture.py logs --platform android --device ID --out PACK --package PKG [--clear]
+  --queue Q on snap, around and logs: also refreshes <run>/<platform>/heartbeat-Q (nav.py idle --queue Q).
   capture.py step --renumber PACK   (step-N folders 1, 2, … in the order they were snapped, steps.json "n" with
                   them: the fix for steps out of order, never deleting one)
 """
@@ -434,6 +435,7 @@ def main():
         p.add_argument("--platform", required=True, choices=["android", "ios"])
         p.add_argument("--device", required=True)
         p.add_argument("--out", required=True)
+        p.add_argument("--queue", type=fe_common.queue_name, help="also <run>/<platform>/heartbeat-<queue>")
     s = sub.choices["snap"]
     s.add_argument("--before"); s.add_argument("--keyboard", action="store_true")
     s.add_argument("--expect-differs", help="pack whose screen must differ (state cells: the default pack)")
@@ -456,7 +458,7 @@ def main():
                                                              for k, v in renumber(a.renumber).items()}}))
         return 0
     fe_common.load_secrets(a.out)  # the config above the run: its credentials never reach a pack
-    fe_common.heartbeat(a.out, a.platform, "capture.py %s %s" % (a.cmd, a.out))
+    fe_common.heartbeat(a.out, a.platform, "capture.py %s %s" % (a.cmd, a.out), a.queue)
     out = {}
     if a.cmd == "snap":
         code = snap(a.platform, a.device, a.out, before=a.before, keyboard=a.keyboard,

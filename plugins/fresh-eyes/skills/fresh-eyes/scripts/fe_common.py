@@ -1,4 +1,5 @@
 """Shared helpers for fresh-eyes scripts. Python 3.9 stdlib only."""
+import argparse
 import contextlib
 import fcntl
 import json
@@ -60,15 +61,28 @@ def run_dir(path):
     return d
 
 
-def heartbeat(path, platform, did):
-    """Refresh <run>/<platform>/heartbeat, <run> being the folder with coverage.json at or above `path` (nav.py
-    --run, capture.py --out): the orchestrator stops a navigator only when it is 10 minutes old. Never fails the
-    command it marks."""
+def beat_file(queue=None):
+    """The heartbeat's name: one per queue when two navigators share a platform (coverage.py plan queues)."""
+    return "heartbeat-%s" % queue if queue else "heartbeat"
+
+
+def queue_name(value):
+    """argparse type of --queue: a plain word, it names a file."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", value or ""):
+        raise argparse.ArgumentTypeError("--queue takes a plain word such as main or small")
+    return value
+
+
+def heartbeat(path, platform, did, queue=None):
+    """Refresh <run>/<platform>/heartbeat (and heartbeat-<queue> with a queue), <run> being the folder with
+    coverage.json at or above `path` (nav.py --run, capture.py --out): the orchestrator stops a navigator only
+    when it is 10 minutes old. Never fails the command it marks."""
     d = run_dir(path)
     if d is None:
         return
     try:
-        write_json(os.path.join(d, platform, "heartbeat"), {"did": did})
+        for name in {beat_file(), beat_file(queue)}:
+            write_json(os.path.join(d, platform, name), {"did": did})
     except OSError:
         pass
 
@@ -145,18 +159,25 @@ def secret_values(config):
     return found
 
 
+def config_path(start):
+    """The project's .fresh-eyes/config.json at or above `start` (a run folder lies under .fresh-eyes/runs), or
+    None."""
+    d = os.path.abspath(start)
+    while not os.path.isfile(os.path.join(d, ".fresh-eyes", "config.json")):
+        if os.path.dirname(d) == d:
+            return None
+        d = os.path.dirname(d)
+    return os.path.join(d, ".fresh-eyes", "config.json")
+
+
 def load_secrets(start):
     """Read the credentials of the .fresh-eyes/config.json at or above `start` (once per config)."""
     d = os.path.abspath(start)
     if d in _searched:
         return
     _searched.add(d)
-    while not os.path.isfile(os.path.join(d, ".fresh-eyes", "config.json")):
-        if os.path.dirname(d) == d:
-            return
-        d = os.path.dirname(d)
-    path = os.path.join(d, ".fresh-eyes", "config.json")
-    if path in _configs:
+    path = config_path(d)
+    if path is None or path in _configs:
         return
     _configs.add(path)
     try:

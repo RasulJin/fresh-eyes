@@ -22,7 +22,8 @@ CLI (all print the compressed screen after acting; --platform defaults to androi
   nav.py idle   --run RUN [--platform P] --until S (--cells ID,... | --requests FILE...)   (blocks up to S seconds:
                  "done" when those cells are recorded / requests answered, "stuck" when no heartbeat came, else
                  "running")
---run RUN on any of them refreshes <run>/<platform>/heartbeat, as every capture.py call does.
+--run RUN on any of them refreshes <run>/<platform>/heartbeat, as every capture.py call does; --queue Q also
+<run>/<platform>/heartbeat-Q, and `idle --queue Q` reads that one (two navigators on one platform).
 Every text nav.py, taps.py and capture.py print or store has the credentials of config `accounts` (env, else
 keychain) cut out as ‹secret›.
 """
@@ -246,10 +247,11 @@ def _left(run, cells, requests):
     return left
 
 
-def wait_idle(run, platform, until, cells=(), requests=()):
+def wait_idle(run, platform, until, cells=(), requests=(), queue=None):
     """One blocking wait instead of polling: returns "done" as soon as nothing is left, else after `until` s
-    "running" (a heartbeat came: wait again) or "stuck" (none came during the whole wait)."""
-    beat = os.path.join(run, platform, "heartbeat")
+    "running" (a heartbeat came: wait again) or "stuck" (none came during the whole wait). queue: that queue's
+    navigator's own heartbeat (two on one platform)."""
+    beat = os.path.join(run, platform, fe_common.beat_file(queue))
     start = time.time()
     while True:
         try:
@@ -283,6 +285,7 @@ def main():
         p.add_argument("--platform", choices=["android", "ios"], default="android")
         p.add_argument("--max-chars", type=int, default=3000)
         p.add_argument("--run", help="the run folder: refreshes <run>/<platform>/heartbeat")
+        p.add_argument("--queue", type=fe_common.queue_name, help="also <run>/<platform>/heartbeat-<queue>")
         if name in ("tap", "wait"):
             p.add_argument("--text"); p.add_argument("--label"); p.add_argument("--id")
         if name == "tap":
@@ -301,6 +304,7 @@ def main():
     p.add_argument("--until", type=float, help="block up to this many seconds (under Bash's 10-minute limit)")
     p.add_argument("--cells", help="comma list: the navigator's cell ids")
     p.add_argument("--requests", nargs="+", default=[], help="requests-mode navigator: its requests.json files")
+    p.add_argument("--queue", type=fe_common.queue_name, help="that queue's heartbeat-<queue>, not the platform's")
     a = ap.parse_args()
     if a.cmd == "type" and (a.text is None) == (a.env is None and a.keychain is None):
         ap.error("type needs --text, or --env and/or --keychain")
@@ -308,15 +312,15 @@ def main():
         if not (a.cells or a.requests):
             ap.error("idle --until needs --cells or --requests")
         cells = [c for c in (a.cells or "").split(",") if c]
-        print(json.dumps(wait_idle(a.run, a.platform, a.until, cells, a.requests)))
+        print(json.dumps(wait_idle(a.run, a.platform, a.until, cells, a.requests, a.queue)))
         return 0
     if a.cmd == "idle":
-        beat = os.path.join(a.run, a.platform, "heartbeat")
+        beat = os.path.join(a.run, a.platform, fe_common.beat_file(a.queue))
         age = round(time.time() - os.path.getmtime(beat)) if os.path.exists(beat) else None
         print(json.dumps({"idle_s": age, "did": fe_common.read_json(beat)["did"] if age is not None else None}))
         return 0
     if a.run:
-        fe_common.heartbeat(a.run, a.platform, "nav.py " + a.cmd)
+        fe_common.heartbeat(a.run, a.platform, "nav.py " + a.cmd, a.queue)
         fe_common.load_secrets(a.run)
     dev = Device(a.platform, a.device, "")
     typed_secret = a.cmd == "type" and a.text is None

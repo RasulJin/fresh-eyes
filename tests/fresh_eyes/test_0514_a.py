@@ -381,7 +381,7 @@ class TapAllTest(unittest.TestCase):
              node(3, "", 800, rid="app:id/comment", cls="android.widget.EditText"), node(4, "Отправить", 1000),
              node(5, "Row B", 1200), node(6, "подпись", 1400, clickable=False)]
 
-    def run_all(self, extra=(), lost_after=None):
+    def run_all(self, extra=(), lost_after=None, config=None):
         events, dumps = [], [0]
 
         def hierarchy(dev):
@@ -401,6 +401,8 @@ class TapAllTest(unittest.TestCase):
             events.append(("tap", nav._name(hit)))
         with tmpdir() as d, contextlib.ExitStack() as stack:
             cov = run_folder(d)
+            if config:
+                write_json(os.path.join(d, ".fresh-eyes", "config.json"), config)
             pack = os.path.join(d, "android", "feed", "default-tap-everything")
             write_json(os.path.join(pack, "nodes.json"), self.NODES)
             write_json(os.path.join(pack, "som.json"), [{"n": k + 1, "node_ids": [n["id"]], "bbox": n["bounds"]}
@@ -428,6 +430,13 @@ class TapAllTest(unittest.TestCase):
         self.assertEqual((out["left"], out["stopped"]), (0, None))
         out, code, events, rows = self.run_all(["--limit", "1", "--skip", "comment"])
         self.assertEqual((events, out["left"]), ([("tap", "Row A")], 0))
+
+    def test_the_screens_skip_tap_labels_are_never_pressed(self):
+        # a chip of Vio's chat sends a message: config screens[].skip_tap keeps tap-everything off it
+        out, code, events, rows = self.run_all(config={"screens": [{"id": "feed", "skip_tap": ["row a"]},
+                                                                   {"id": "other", "skip_tap": ["comment"]}]})
+        self.assertEqual(events, [("tap", "app:id/comment"), ("back",)])
+        self.assertIn({"som": 2, "label": "Row A", "why": "skipped: config skip_tap"}, out["skipped"])
 
     def test_it_stops_where_the_cells_screen_is_lost(self):
         out, code, events, rows = self.run_all(lost_after=1)
@@ -549,6 +558,33 @@ class ToolDetailsTest(unittest.TestCase):
             square = make_png(os.path.join(d, "q.png"), 360, 800, bg=(60, 60, 60),
                               rects=[(0, 0, 266, 800, (250, 250, 250), 0)])
             self.assertEqual([c["node_ids"] for c in corner_candidates(square, nodes, [360, 800])], [["n1"]])
+
+
+class QueueHeartbeatTest(unittest.TestCase):
+    """Two navigators on one platform (coverage.py queues): each one's own heartbeat, read by nav.py idle --queue."""
+    def test_a_queue_beats_its_own_file_and_idle_reads_it(self):
+        with tmpdir() as run:
+            write_json(os.path.join(run, "coverage.json"), {"cells": [{"id": "android/feed/default/none",
+                                                                        "status": "todo"}]})
+            fe_common.heartbeat(os.path.join(run, "android", "feed", "default-none"), "android", "capture.py snap",
+                                "small")
+            beats = sorted(os.listdir(os.path.join(run, "android")))
+            self.assertEqual(beats, ["heartbeat", "heartbeat-small"])
+            old = os.path.join(run, "android", "heartbeat-small")
+            os.utime(old, (os.path.getmtime(old) - 700,) * 2)
+            idle = subprocess.run([sys.executable, os.path.join(SCRIPTS, "nav.py"), "idle", "--run", run,
+                                   "--queue", "small"], stdout=subprocess.PIPE, check=True).stdout
+            self.assertGreaterEqual(json.loads(idle)["idle_s"], 700)
+            with mock.patch.object(nav.time, "sleep", lambda s: None):
+                self.assertEqual(nav.wait_idle(run, "android", 0, ["android/feed/default/none"], queue="main")["state"],
+                                 "stuck")  # the main queue never beat
+        for script, sub in (("capture.py", "snap"), ("taps.py", "all"), ("nav.py", "screen")):
+            out = subprocess.run([sys.executable, os.path.join(SCRIPTS, script), sub, "--help"],
+                                 stdout=subprocess.PIPE).stdout
+            self.assertIn(b"--queue", out, script)
+        bad = subprocess.run([sys.executable, os.path.join(SCRIPTS, "nav.py"), "idle", "--run", "r", "--queue",
+                              "../x"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertEqual(bad.returncode, 2)
 
 
 if __name__ == "__main__":

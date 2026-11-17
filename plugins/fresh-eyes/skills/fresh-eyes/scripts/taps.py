@@ -18,8 +18,9 @@ CLI:
                   2 s after the screen settled are recorded there too (capture.py around), for a toast)
   taps.py all     --platform P --device ID --pack PACK [--skip RE] [--limit 20] --coverage C --cell ID
                   (tap-everything in one call: `tap --som N` on each clickable mark of PACK/som.json without a
-                  row yet, inputs first; labels that write data (delete, send, pay, log out…) and --skip are left
-                  out; Back after a tap that left the screen. Prints tapped, skipped, left, stopped: run again
+                  row yet, inputs first; labels that write data (delete, send, pay, log out…), the screen's config
+                  `skip_tap` labels (chips that send a message) and --skip are left out; Back after a tap that
+                  left the screen. Prints tapped, skipped, left, stopped: run again
                   while left > 0; exit 2 when the cell's screen was lost)
   taps.py outside --platform P --device ID --x X --y Y --coverage C --cell ID
   taps.py back    --platform P --device ID [--count 1] [--interval-ms 0] --coverage C --cell ID
@@ -37,6 +38,7 @@ CLI:
                     1.5 s later the snap of where it left, into PACK/<step> itself)
   taps.py edge    --platform P --device ID --pack P --node nN --side top|bottom|left|right [--dp 2]
                   --coverage C --cell ID      (a tap just outside the node's visible edge, from the pack's nodes)
+--queue Q on any of them: also refreshes <run>/<platform>/heartbeat-Q (nav.py idle --queue Q).
 """
 import argparse
 import json
@@ -50,7 +52,8 @@ import capture
 import devices
 import nav
 from devices import Device
-from fe_common import FEError, cli, heartbeat, image_size, load_secrets, read_json, write_json
+from fe_common import (FEError, cli, config_path, heartbeat, image_size, load_secrets, queue_name, read_json,
+                       write_json)
 from motion import run_ceiling_ms
 from nav import _xy
 from pixels import changed_fraction
@@ -230,11 +233,22 @@ DESTRUCTIVE = re.compile(r"delete|remove|log ?out|sign ?out|\bpay\b|\bsend\b|\bb
 SAME_SCREEN = 0.1  # changed share under which the result is still the cell's screen (a like, a toggle): no Back
 
 
+def skip_taps(coverage, screen):
+    """The screen's config `skip_tap`: labels tap-everything never presses (chips that send a message to a chat)."""
+    path = config_path(os.path.dirname(os.path.abspath(coverage)))
+    try:
+        screens = read_json(path).get("screens") or [] if path else []
+    except (OSError, ValueError):
+        return []
+    return next((s.get("skip_tap") or [] for s in screens if s.get("id") == screen), [])
+
+
 def tap_all(a, dev, cell):
     """tap-everything in one call: each clickable mark of PACK/som.json not yet in taps.json (inputs first), the
-    destructive ones and --skip left out, a Back after each tap that left the screen. Stops when the cell's screen
-    is lost (a Back did not bring it back) or after --limit taps; run it again to go on."""
+    destructive ones, the screen's config skip_tap and --skip left out, a Back after each tap that left the screen.
+    Stops when the cell's screen is lost (a Back did not bring it back) or after --limit taps; run it again."""
     marks = read_json(os.path.join(a.pack, "som.json"))
+    config_skip = [s.casefold() for s in skip_taps(a.coverage, cell.get("screen"))]
     nodes = {n["id"]: n for n in read_json(os.path.join(a.pack, "nodes.json"))}
     rows_path = os.path.join(a.pack, "taps.json")
     done = {r.get("som") for r in (read_json(rows_path) if os.path.isfile(rows_path) else [])}
@@ -244,9 +258,12 @@ def tap_all(a, dev, cell):
         if node is None or not node["clickable"] or m["n"] in done:
             continue
         name = nav._name(node) or ""
-        if DESTRUCTIVE.search(name) or (a.skip and re.search(a.skip, name, re.I)):
-            skipped.append({"som": m["n"], "label": name, "why": "skipped: writes data (probes.md)"
-                            if DESTRUCTIVE.search(name) else "skipped: --skip"})
+        said = " ".join((node["text"], node["label"], node["rid"])).casefold()
+        why = "skipped: writes data (probes.md)" if DESTRUCTIVE.search(name) else \
+            "skipped: config skip_tap" if any(s in said for s in config_skip) else \
+            "skipped: --skip" if a.skip and re.search(a.skip, name, re.I) else None
+        if why:
+            skipped.append({"som": m["n"], "label": name, "why": why})
         else:
             todo.append((not nav.is_input(node), m["n"], name))
     tapped, stopped, tried = [], None, 0
@@ -331,6 +348,7 @@ def main():
         p.add_argument("--device", required=True)
         p.add_argument("--coverage", required=True)
         p.add_argument("--cell", required=True)
+        p.add_argument("--queue", type=queue_name, help="also <run>/<platform>/heartbeat-<queue>")
         if name not in ("back", "slow", "drag-back", "edge", "all"):
             p.add_argument("--x", type=int, required=name not in ("tap", "swipe-tap"))
             p.add_argument("--y", type=int, required=name not in ("tap", "swipe-tap"))
@@ -383,7 +401,7 @@ def main():
         ap.error("swipe-tap needs one target: --id, --label, or --x --y")
     cell = guard(a.coverage, a.cell, a.platform)
     load_secrets(a.coverage)  # nodes, rows and tap.json never carry a credential (nav.hierarchy cuts them)
-    heartbeat(a.coverage, a.platform, "taps.py %s %s" % (a.cmd, a.cell))
+    heartbeat(a.coverage, a.platform, "taps.py %s %s" % (a.cmd, a.cell), a.queue)
     dev = Device(a.platform, a.device, "")
     if a.cmd == "rapid":
         t0 = time.time()
