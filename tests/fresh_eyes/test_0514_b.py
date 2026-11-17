@@ -1,18 +1,28 @@
 """0.5.14 part b: what the accounting scripts (coverage, findings, stats, backlog, bench) newly refuse or keep.
 Fixtures under fixtures/0514 are copied from the 0.5.13 runs 20261117-1228-full and 20261117-0916-quick."""
 import copy
+import json
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 
-from tests.fresh_eyes.helpers import FIXTURES
+from tests.fresh_eyes.helpers import FIXTURES, SCRIPTS
 from tests.fresh_eyes.test_coverage import BOTH_OK_MUT_ON, ONE_SCREEN, make_pack
 from fe_common import FEError, read_json, write_json
 from coverage import plan, set_status, verdict
+import backlog
 import stats
 
 F0514 = os.path.join(FIXTURES, "0514")
+
+
+def _cli(script, *args):
+    out = subprocess.run([sys.executable, os.path.join(SCRIPTS, script)] + list(args), stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, check=True)
+    return json.loads(out.stdout.decode("utf-8"))
 
 
 def _root(test):
@@ -213,6 +223,44 @@ class NotApplicableTest(unittest.TestCase):
             order = list(dict.fromkeys(c["screen"] for c in cov["cells"] if c["platform"] == "android"))
             self.assertEqual(order, ["welcome", "consent-doc", "feed", "trips"] if mode == "full"
                              else ["consent-doc", "feed"])
+
+
+class BacklogExtraTest(unittest.TestCase):
+    """П-45: open tasks kept outside the backlog (KDD) join the index, and a BUG gets their id."""
+    THREAD = ("Поле комментария на «Ветке» отстаёт от поднимающейся клавиатуры: несколько кадров клавиатура "
+              "накрывает поле")  # 0.5.13 full thread/findings-1.json#f1, reported without a number
+    KDD = "Пост и Ветка: поле комментария на 2-3 кадра под клавиатурой при открытии и останавливается на полпути"
+
+    def test_index_takes_a_file_or_a_command_and_survives_a_broken_one(self):
+        root = _root(self)
+        tsv = os.path.join(root, "kdd.tsv")
+        with open(tsv, "w", encoding="utf-8") as f:
+            f.write("#547\t%s\n\nno tab here\n#575\tГид: поле под клавиатурой\n" % self.KDD)
+        with open(os.path.join(root, "backlog.md"), "w", encoding="utf-8") as f:
+            f.write("### BUG-1 · Старый баг — `open`\n")
+        for spec in (tsv, {"cmd": "cat '%s'" % tsv}):
+            write_json(os.path.join(root, "config.json"), {"backlog": {"path": "backlog.md", "extra": spec}})
+            out = _cli("backlog.py", "index", "--file", os.path.join(root, "backlog.md"), "--out",
+                       os.path.join(root, "index.md"), "--config", os.path.join(root, "config.json"))
+            self.assertEqual(out, {"entries": 3, "out": os.path.join(root, "index.md")})
+            with open(os.path.join(root, "index.md"), encoding="utf-8") as f:
+                self.assertEqual(f.read().splitlines(), ["BUG-1 · Старый баг", "#547 · " + self.KDD,
+                                                         "#575 · Гид: поле под клавиатурой"])
+        write_json(os.path.join(root, "config.json"), {"backlog": {"extra": {"cmd": "exit 3"}}})
+        out = _cli("backlog.py", "index", "--file", os.path.join(root, "backlog.md"), "--out",
+                   os.path.join(root, "index.md"), "--config", os.path.join(root, "config.json"))
+        self.assertEqual(out["entries"], 1)
+        self.assertIn("backlog.extra not read", out["extra_error"])
+
+    def test_a_bug_already_open_outside_the_backlog_gets_its_id(self):
+        root = _root(self)
+        path = os.path.join(root, "android", "thread", "findings-1.json")
+        write_json(path, {"findings": [
+            {"id": "f1", "kind": "BUG", "screen": "thread", "title": self.THREAD},
+            {"id": "f2", "kind": "BUG", "screen": "thread", "title": "Кнопка «Назад» в шапке без подписи"}]})
+        out = backlog.match(["BUG-1 · Старый баг - thread", "#547 · " + self.KDD], [path])
+        self.assertEqual(out["bugs"], 1)
+        self.assertEqual([f.get("backlog_id") for f in read_json(path)["findings"]], ["#547", None])
 
 
 if __name__ == "__main__":

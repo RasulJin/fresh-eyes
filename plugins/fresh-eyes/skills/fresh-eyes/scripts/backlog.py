@@ -3,6 +3,8 @@
 
 CLI:
   backlog.py index --file F --out OUT [--statuses open,in-progress,planned] [--ref COMMIT] [--config C]
+                    (config backlog.extra: open tasks kept elsewhere, a file or {"cmd": ...} printing `<id>\t<title>`
+                    lines; they join the index and match like entries naming no screen)
   backlog.py append --file F --finding finding.json [--template ru-backlog] [--date YYYY-MM-DD]
                     [--attach CROP --images-dir D]
   backlog.py set-status --file F --id BUG-12 --status verified --note TEXT [--line N] [--template ru-backlog]
@@ -170,32 +172,43 @@ STOP = set("это или как что для при без над под уж�
 IMP_HEADS = {"ru": ("Новые улучшения", "Уже в бэклоге"), "en": ("New improvements", "Already in the backlog")}
 
 
-def _stems(text):
-    """First 5 letters of each word of 3+ letters: «прилёта» and «прилёт» meet, endings do not matter."""
-    return {w[:5] for w in re.findall(r"[a-zа-я]{3,}", text.lower().replace("ё", "е")) if w not in STOP}
+def _stems(text, n=5):
+    """First n letters of each word of 3+ letters: «прилёта» and «прилёт» meet, endings do not matter."""
+    return {w[:n] for w in re.findall(r"[a-zа-я]{3,}", text.lower().replace("ё", "е")) if w not in STOP}
 
 
 def entries(lines, prefix):
-    """(id, title, stems, screen) of the PREFIX lines `index` wrote; screen when the line ends in ` - <screen-id>`."""
+    """(id, title, screen) of the PREFIX lines `index` wrote (None: backlog.extra's, any other id); screen when the
+    line ends in ` - <screen-id>`."""
     out = []
     for line in lines:
         item_id, _, rest = line.strip().partition(" · ")
-        if item_id.startswith(prefix + "-"):
+        ours = item_id.startswith(prefix + "-") if prefix else bool(rest) and not item_id.startswith(("BUG-", "IMP-"))
+        if ours:
             title, _, where = rest.rpartition(" - ")
             if not (title and re.fullmatch(r"[a-z0-9][a-z0-9-]*", where)):
                 title, where = rest, None
-            out.append((item_id, title, _stems(title), where))
+            out.append((item_id, title, where))
     return out
 
 
-def match_entry(finding, entries, near=2):
-    """(id, title) of the open entry that already holds this finding: the most shared stems, at least half of the
-    shorter title's, `near` on the same screen and 3 for an entry naming none; an entry on another screen never."""
-    mine, best = _stems(finding.get("title", "")), None
-    for item_id, title, stems, where in entries:
-        n = len(mine & stems)
+def extra(spec):
+    """Index lines `<id> · <title>` of config backlog.extra: a file, or {"cmd": ...}, of `<id>\t<title>` lines."""
+    text = run(["sh", "-c", spec["cmd"]], timeout=120).stdout.decode("utf-8") if isinstance(spec, dict) \
+        else _read(spec)
+    return ["%s · %s" % (i.strip(), " ".join(t.split())) for i, _, t in (l.partition("\t") for l in text.splitlines())
+            if i.strip() and t.strip()]
+
+
+def match_entry(finding, entries, near=2, size=5):
+    """(id, title) of the open entry that already holds this finding: the most shared stems (`size` letters), at
+    least half of the shorter title's, `near` on the same screen and 3 for an entry naming none; an entry on another
+    screen never."""
+    mine, best = _stems(finding.get("title", ""), size), None
+    for item_id, title, where in entries:
+        n = len(mine & _stems(title, size))
         if (not where or where == finding.get("screen")) and n >= (near if where else 3) \
-                and n >= min(len(mine), len(stems)) / 2 and (best is None or n > best[0]):
+                and n >= min(len(mine), len(_stems(title, size))) / 2 and (best is None or n > best[0]):
             best = (n, item_id, title)
     return best[1:] if best else None
 
@@ -205,7 +218,8 @@ def match(index_lines, paths, out=None, language="en"):
     entry on its screen sharing 3 stems (before the verifier, which keeps it only for the same defect: no question
     to the owner about a bug already in the backlog); findings files written back. With out, write imp.md: the
     new IMPs in full, the known ones a line each. The report lists only the new ones."""
-    imps, bugs = entries(index_lines, "IMP"), entries(index_lines, "BUG")
+    other = entries(index_lines, None)  # backlog.extra: either kind
+    imps, bugs = entries(index_lines, "IMP") + other, entries(index_lines, "BUG") + other
     titles = {e[0]: e[1] for e in imps}
     new, known, matched, bug_hits = [], [], 0, 0
     for p in paths:
@@ -214,8 +228,9 @@ def match(index_lines, paths, out=None, language="en"):
         hits = 0
         for f in data.get("findings", []):
             if f.get("kind", "BUG") == "BUG":
+                # 4 letters: «Ветке» meets «Ветка»; a verifier keeps the id only for the same defect
                 hit = None if f.get("backlog_id") or f.get("verdict", "pending") != "pending" \
-                    else match_entry(f, bugs, 3)
+                    else match_entry(f, bugs, 3, 4)
                 if hit:
                     f["backlog_id"], hits, bug_hits = hit[0], hits + 1, bug_hits + 1
                 continue
@@ -286,8 +301,14 @@ def main():
         names = {s["name"]: s["id"] for s in read_json(a.config).get("screens", []) if s.get("name")} \
             if a.config else None
         lines = index(read_at(a.file, a.ref), a.statuses.split(","), names)
+        more = ((read_json(a.config).get("backlog") or {}).get("extra") if a.config else None)
+        out = {}
+        try:
+            lines += extra(more) if more else []
+        except (FEError, OSError, KeyError) as e:  # the backlog still indexes; the reply says what is missing
+            out["extra_error"] = "backlog.extra not read: %s" % e
         _write(a.out, "".join(l + "\n" for l in lines))
-        out = {"entries": len(lines), "out": a.out}
+        out.update(entries=len(lines), out=a.out)
     elif a.cmd == "match":
         lines = _read(a.index).splitlines() if os.path.exists(a.index) else []
         out = match(lines, a.findings, a.out, a.language)
