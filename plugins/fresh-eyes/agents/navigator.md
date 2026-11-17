@@ -36,7 +36,9 @@ nobody answers in a night run.
   a `… N more` line hides what you need (bottom bars, toolbars), repeat with `--max-chars 8000`.
   It refuses an empty `--id`/`--text` and a target under the open keyboard (the tap would land on a key): hide
   the keyboard with `nav.py back` first. Probe taps go through `taps.py tap`, which finds its node in a dump
-  taken right before the tap; never reuse coordinates from an older screen.
+  taken right before the tap; never reuse coordinates from an older screen. With `--cell` it first checks the
+  screen's marker: "not this screen: <marker> missing" means something else is up (a viewer, a sheet, another
+  screen): close it or reach the screen again, then tap.
 - **A crash**: the launcher or another app on the printed screen after an action means the app died. Snap
   into the cell's pack first (`capture.py snap` with `--package` saves the crash log), record it done with
   `--note "app crashed after <action>"`, and only then relaunch with `devices.py app --do launch`. Do not
@@ -45,7 +47,9 @@ nobody answers in a night run.
   (slow, ~35 s).
 - A screen that never gets idle (an endless animation): `nav.py` and `capture.py` read it through the Maestro
   CLI by themselves (~20 s a call, `source: maestro` in meta.json); they refuse while a Maestro driver runs.
-- Packs come only from `capture.py` and `taps.py`: never copy, move or write a pack's files yourself. Each step
+- Packs come only from `capture.py` and `taps.py`: never copy, move, delete or write a pack's files or folders
+  yourself (a failed try stays as evidence; snap the cell again into the same pack). Steps out of order
+  (`coverage.py` says so): `python3 $S/capture.py step --renumber <pack>`, never a deleted step. Each step
   gets its own snap, even on the same screen (`coverage.py` refuses `step-N is a copy of step-M`). Every snap
   goes inside its cell's pack (`<state>-<probe>/...`), never into a folder of its own beside the packs.
 - iOS: `nav.py` talks to the Maestro driver the orchestrator started. If `nav.py` says "no Maestro iOS driver",

@@ -1,9 +1,8 @@
 # Probe library
 
-A probe is the action that makes a hidden bug visible. The navigator runs it, the scripts capture it, the
-reviewer judges it. `S` = `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/scripts`. Every probe call names its
-coverage cell (`--coverage <run>/coverage.json --cell <id>`); mutating probes only exist in the plan when
-preflight allowed mutation.
+A probe is the action that makes a hidden bug visible: the navigator runs it, the scripts capture it, the
+reviewer judges it. `S` = `${CLAUDE_PLUGIN_ROOT}/skills/fresh-eyes/scripts`. Every probe call names its coverage
+cell (`--coverage <run>/coverage.json --cell <id>`); mutating probes exist only when preflight allowed mutation.
 
 Fast probes go straight to the device (`taps.py`, both platforms): a model round-trip or a Maestro flow (which
 waits for the screen to settle) is too slow to reproduce races. Navigation to the state goes through `nav.py`.
@@ -61,8 +60,7 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
 - Reveals: lost drafts/replies/results, a request that dies in background, double charges on resume.
 - Android: `devices.py app --do background` (Home, wait, relaunch). Stock emulators keep sockets alive in the
   background; to imitate aggressive OEMs also toggle the network off while in background (own devices only).
-- iOS: the same call (opens Settings, waits, relaunches the app).
-- Best done during a long request (send, then background immediately).
+- iOS: the same call (opens Settings, waits, relaunches). Best during a long request (send, then background).
 
 ### kill-relaunch
 - Reveals: state that should persist (session, drafts, theme, onboarding done) but does not; welcome flashes.
@@ -75,18 +73,18 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
   `capture.py snap --keyboard --before <pack before focus>`; Android: Back only hides it, recorded with
   `capture.py around --out <pack>/kb-hide -- python3 $S/taps.py back ...`; `keyboard.json` comes by itself
   (after the snap, again after kb-hide). Then the other inputs; type with real key taps when the IME matters.
-- Focus it again, leave (a link, avatar or tab, not Back; a modal: close and reopen) and return; keyboard up
-  again: one `taps.py back`, wait 1.5 s; `capture.py snap --out <pack>/return` (a stale inset). `coverage.py set`
-  needs `keyboard.json` and that snap with the keyboard closed. Open/close 3–4 times: does the form creep?
+- Focus it again, leave (a link, avatar or tab above the keyboard, not Back; a modal: close and reopen), snap
+  where you landed into `<pack>/left` (the screen's marker gone) and return; keyboard up again: one `taps.py
+  back`, wait 1.5 s; `capture.py snap --out <pack>/return` (a stale inset). `coverage.py set` needs
+  `keyboard.json`, `left` and that snap with the keyboard closed. Open/close 3–4 times: does the form creep?
 
 ### search
 - Reveals: suggestions in mixed languages, wrong or duplicate matches, results that contradict the form or each
   other (prices, counts), labels and screen-reader names stuck after the request ("busy").
 - Steps: type 3–4 chars of a real name into the search field (`nav.py type`, Latin: non-ASCII is slow on
-  Android) and `capture.py snap --keyboard --out <pack>/typed` (`coverage.py set` refuses the cell without
-  it). Pick a suggestion, fill the rest, tap the primary button that only reads (Search, Find, Show, Filter),
-  wait for the results and snap the pack itself. Results on another screen: also Back and snap the form into
-  `<pack>/form-after`.
+  Android) and `capture.py snap --keyboard --out <pack>/typed` (required). Pick a suggestion, fill the rest, tap
+  the primary button that only reads (Search, Find, Show, Filter), wait for the results and snap the pack
+  itself. Results on another screen: also Back and snap the form into `<pack>/form-after`.
 - Mutating: no. A button that writes data (Send, Save, Pay) is `double-submit`, never this probe.
 
 ### scenario
@@ -94,8 +92,7 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
   side effect (something saved without asking), invalid input accepted (from = to, letters in a number), a
   stopped or failed action left unmarked, a retry that duplicates, an edit that loses focus or text, state
   gone or stale after coming back, app errors in the log while the screen looks fine.
-- Before: `capture.py logs --platform android --device ID --out PACK --package PKG --clear` (PKG =
-  `app.android_id`).
+- Before: `capture.py logs --platform android --device ID --out PACK --package PKG --clear` (PKG: `app.android_id`).
 - Steps: snap after each into `<pack>/step-<n>/` and write `<pack>/steps.json`:
   `[{"n": 1, "kind": "task", "did": "...", "expect": "..."}]`, with `expect` written before you look; a step
   whose action left the screen as it was (an invalid input refused in place) also gets `"unchanged": true`.
@@ -104,8 +101,7 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
      wait for each result. Go through every form the screen opens itself (config `forms`: a header button's
      sheet, a picker, an edit mode), one `task` step each, naming it in `via`.
   2. `change`: after the result, change one input and run again (another value, an edited item, a new question).
-  3. `invalid`: one invalid or edge input (equal values in fields that must differ, empty, letters in a number,
-     too long).
+  3. `invalid`: one invalid or edge input (equal values in fields that must differ, empty, letters, too long).
   4. `interrupt`, twice (a tab switch is not one): `how: "stop"`: stop a running action with the screen's own
      Stop or Cancel (Back only when it has none), then retry it; `how: "offline"` (Android): `devices.py set
      --what offline`, run the action, snap what the app says, `devices.py set --what online`, then retry.
@@ -171,6 +167,8 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
   the keyboard), waits until the screen settles (≤3 s), snaps the result with `tap.json` into `<pack>/tap-<k>`
   and appends row k of `taps.json` (label, `changed`, `result`) itself. Go back. `--record` on a label that
   promises a short reply (Copy, Like, Save): a 2 s toast is gone by the snap, the video keeps it.
+- Three `"changed": false` in a row: something covers the screen (a photo viewer, a sheet left open). Close it,
+  reach the screen, tap those again; `coverage.py set` refuses such a run of three unless `--note` says why.
 - Reply/comment buttons and inputs only focus a field, they change no data: tap them too, and first, so the
   later taps leave and return with the keyboard having been up.
 
@@ -180,8 +178,8 @@ swipe the list back to the top with `nav.py swipe` (slow, short drags) before th
 
 ### offline
 - Reveals: offline shown as "empty"/"not found", zero counters, lying banners.
-- Android: `devices.py set --what offline`, snap the screen, restore with `--what online`.
-- Note: after airplane mode an emulator can lose DNS until restarted; prefer wifi/data toggles.
+- Android: `devices.py set --what offline`, snap the screen, restore with `--what online` (wifi/data toggles:
+  after airplane mode an emulator can lose DNS until restarted).
 
 ### replay
 - `quick BUG-N`: replay the backlog entry's steps into `<run>/<platform>/recheck-BUG-N/default-replay/`

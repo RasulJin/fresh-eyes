@@ -42,7 +42,8 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    sub-folders with a `meta.json` (`afterback/`, `return/`, `typed/`, `form-after/`, journey and scenario
    `step-N/`, `scroll-N/`) are packs too; `scroll-N/` is the same screen scrolled N half-screens down: judge what
    the first frame could not show, and a row cut at its top or bottom edge is the scroll, not a defect.
-   `restored/` only proves the light theme came back after a dark cell: not evidence, skip it.
+   `restored/` only proves the light theme came back after a dark cell, `left/` only that a probe left the
+   screen: not evidence, skip them.
    Image budget, ~30 in total: `som.png` is required for the first pack of each state (`default-none`,
    `dark-none`, …) and for the first sub-pack of a probe (`scroll-1/`, `step-1/`, or its only one). Judge every
    other pack by its crops and `candidates.json`, and open its `som.png` only when they leave a doubt.

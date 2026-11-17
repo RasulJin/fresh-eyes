@@ -51,6 +51,19 @@ class Text0514Test(unittest.TestCase):
         self.assertNotIn("the app's option now picked", nav)
         self.assertIn("`restored/` only proves the light theme came back", agent("reviewer"))
 
+    def test_p38_the_probe_runs_on_its_screen_and_no_evidence_is_deleted(self):
+        # 0.5.13 quick: step-10 and step-13 deleted to pass the order check; ten "no change" taps under a photo
+        # viewer; keyboard-open "return" snapped without ever leaving
+        nav = agent("navigator")
+        for word in ("never copy, move, delete or write a pack's files or folders yourself",
+                     "capture.py step --renumber <pack>", '"not this screen: <marker> missing"'):
+            self.assertIn(word, nav, word)
+        probes = ref("probes.md")
+        for word in ("snap where you landed into `<pack>/left` (the screen's marker gone)",
+                     'Three `"changed": false` in a row', "`<pack>/single`"):
+            self.assertIn(word, probes, word)
+        self.assertIn("`left/` only that a probe left the screen", agent("reviewer"))
+
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):
