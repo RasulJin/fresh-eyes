@@ -294,5 +294,43 @@ class ConsequenceTest(unittest.TestCase):
                          [["android/a/findings.json#f2", "android/a/findings.json#f1"]])
 
 
+class RequestsMergeTest(unittest.TestCase):
+    """П-40: findings.py requests makes one entry of a screen's requests that ask for one repeat."""
+
+    def test_one_repeat_is_asked_once(self):
+        run = _root(self)
+        real = read_json(os.path.join(F0514, "requests-open.json"))  # 0.5.13 full, done/failed taken off
+        for screen, entries in real.items():
+            write_json(os.path.join(run, "android", screen, "requests.json"), entries)
+        write_json(os.path.join(run, "android", "trips", "requests.json"),
+                   real["trips"] + [{"do": "redo-cell", "cell": "android/trips/default/none", "why": "x"},
+                                    dict(real["trips"][1], done="android/trips/default-swipe-inside-recheck")])
+        out = _cli("findings.py", "requests", "--run", run)
+        self.assertEqual(out["merged"], 3)  # trip-map: f1 resnap twice, f2 d50 twice; settings: two dialogs
+        trip_map = read_json(os.path.join(run, "android", "trip-map", "requests.json"))
+        self.assertEqual([(r["pack"].split("/")[-1], len(r.get("merged", []))) for r in trip_map],
+                         [("dark-none", 1), ("d50", 1), ("drag-1", 0)])
+        self.assertEqual(trip_map[0]["why"], real["trip-map"][0]["why"] + "\n" + real["trip-map"][1]["why"])
+        self.assertEqual(trip_map[0]["times"], 2)
+        settings = read_json(os.path.join(run, "android", "settings", "requests.json"))
+        self.assertEqual(len(settings), 2)
+        self.assertIn("«Удалить аккаунт»", settings[1]["why"])
+        trips = read_json(os.path.join(run, "android", "trips", "requests.json"))
+        self.assertEqual(len(trips), 5)  # two crops of other boxes, a redo-cell and a done entry stay apart
+        self.assertEqual(_cli("findings.py", "requests", "--run", run), {"merged": 0, "files": []})
+
+    def test_a_merged_request_still_names_its_finding(self):
+        run = _root(self)
+        folder = os.path.join(run, "android", "trip-map")
+        write_json(os.path.join(folder, "findings.json"), {"findings": [
+            {"id": "f1", "kind": "BUG", "confidence": 0.3, "title": "a"},
+            {"id": "f2", "kind": "BUG", "confidence": 0.3, "title": "b"}]})
+        ask = {"pack": "android/trip-map/dark-none", "do": "resnap", "probe": "none", "from": "findings.json"}
+        write_json(os.path.join(folder, "requests.json"), [dict(ask, finding="f1"), dict(ask, finding="f2")])
+        findings.requests(run)
+        loaded, _ = _load_findings([os.path.join(folder, "findings.json")], run)
+        self.assertEqual([f["_requested"] for f in loaded], [True, True])
+
+
 if __name__ == "__main__":
     unittest.main()

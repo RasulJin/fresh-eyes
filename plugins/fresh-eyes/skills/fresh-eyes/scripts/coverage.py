@@ -814,10 +814,12 @@ def _load_findings(paths, run="."):
 
 
 def _asks_for(request, f):
-    """A request names the finding: `finding` "f1" (from its file, when `from` says which) or "<file>#f1"."""
+    """A request names the finding: `finding` "f1" (from its file, when `from` says which) or "<file>#f1"; or one
+    of the requests findings.py requests merged into it does."""
     file, _, fid = str(request.get("finding") or "").rpartition("#")
     file = file or request.get("from") or ""
-    return fid == f.get("id") and (not file or os.path.basename(file) == os.path.basename(f["_file"]))
+    return fid == f.get("id") and (not file or os.path.basename(file) == os.path.basename(f["_file"])) \
+        or any(_asks_for(m, f) for m in request.get("merged") or () if isinstance(m, dict))
 
 
 BULKY = (".png", ".jpg", ".mp4")  # ~97% of a run (a full one is ~0.5 GB); the json, txt and report stay

@@ -12,9 +12,13 @@ same:  before each verifier's first pass, and once more before the verdict. A pe
        Prints `verify`: the --findings files that still need a verifier (a pending BUG not linked, or requests),
        and `links`: every [copy, target] of those files, for run-log.md (a wrong link hides a bug: a human checks).
 known: appends to OUT the run's `known` questions and the BUGs rejected as `test data:`, each text once.
+requests: before a navigator takes the requests: in each screen folder's requests.json, open entries asking for one
+       thing (the same pack, do, probe, args, bbox) become one: the first keeps its fields, every `why` and the most
+       `times`; the others go into its `merged` as they were (their `finding` and `from` still count).
 
 CLI: findings.py same --run RUN --findings F [F ...]
      findings.py known --run RUN --out .fresh-eyes/known-proposed.md
+     findings.py requests --run RUN
 """
 import argparse
 import glob
@@ -132,6 +136,35 @@ def known(run, out):
     return {"added": len(new), "out": out}
 
 
+ASKS = ("why", "finding", "from", "times", "merged")  # what may differ between two requests for one repeat
+
+
+def requests(run):
+    """Merge each requests.json's open entries that ask for one repeat (0.5.13 full: 44 entries, 36 of them
+    without a finding; trip-map asked twice for each of two repeats). Done, failed and redo-cell entries stay."""
+    merged, files = 0, []
+    for path in sorted(glob.glob(os.path.join(run, "*", "*", "requests.json"))):
+        keep, first, before = [], {}, merged
+        for r in read_json(path):
+            if not isinstance(r, dict) or r.get("done") or r.get("failed") or r.get("do") == "redo-cell":
+                keep.append(r)
+                continue
+            key = json.dumps({k: v for k, v in r.items() if k not in ASKS}, sort_keys=True, ensure_ascii=False)
+            t = first.setdefault(key, r)
+            if t is r:
+                keep.append(r)
+                continue
+            t.setdefault("merged", []).append(r)
+            t["why"] = "\n".join(w for w in (t.get("why"), r.get("why")) if w)
+            if r.get("times") or t.get("times"):
+                t["times"] = max(r.get("times") or 1, t.get("times") or 1)
+            merged += 1
+        if merged > before:
+            write_json(path, keep)
+            files.append(path)
+    return {"merged": merged, "files": files}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -141,8 +174,11 @@ def main():
     p = sub.add_parser("known", help="append the run's known candidates and test data to known-proposed.md")
     p.add_argument("--run", required=True)
     p.add_argument("--out", required=True)
+    p = sub.add_parser("requests", help="merge each screen's open requests that ask for one repeat")
+    p.add_argument("--run", required=True)
     a = ap.parse_args()
-    out = same(a.run, a.findings) if a.cmd == "same" else known(a.run, a.out)
+    out = same(a.run, a.findings) if a.cmd == "same" else known(a.run, a.out) if a.cmd == "known" \
+        else requests(a.run)
     print(json.dumps(out, ensure_ascii=False))
     return 0
 

@@ -1,0 +1,104 @@
+{
+ "trip-map": [
+  {
+   "finding": "f1",
+   "pack": "android/trip-map/dark-none",
+   "do": "resnap",
+   "probe": "none",
+   "times": 2,
+   "why": "f1: выйти с карты и снова открыть её в тёмной теме (система — тёмная, в приложении «Как в системе»), снять через 5 с, когда карта встала; если кластеры снова под полоской дней и кластера аэропорта нет на экране — камера в тёмной теме вписывает остановки неверно.",
+   "from": "findings.json"
+  },
+  {
+   "finding": "f1",
+   "pack": "android/trip-map/dark-none",
+   "do": "resnap",
+   "probe": "none",
+   "times": 2,
+   "why": "f1: повторить ровно тем путём, каким снят dark-none (тем же способом включения тёмной темы — в т.ч. переключением системы при открытой карте, если так и было — и с той же паузой до снимка); записать в пакет, как включалась тема. Нужно, чтобы отделить «каждый вход в тёмной теме» от «только после смены темы на открытой карте»."
+  },
+  {
+   "finding": "f2",
+   "pack": "android/trip-map/default-back-during-animation/d50",
+   "do": "repeat-probe",
+   "probe": "back-during-animation",
+   "args": "--delay-ms 50",
+   "times": 2,
+   "why": "f2: если после «Назад» через 50 мс после тапа по «⋯» меню «Обновить точки / Сбросить прогресс» снова стоит открытым в конце записи, а экран не ушёл — «Назад» во время открытия теряется.",
+   "from": "findings.json"
+  },
+  {
+   "pack": "android/trip-map/default-tap-outside/drag-1",
+   "do": "repeat-probe",
+   "probe": "tap-outside",
+   "times": 2,
+   "why": "Подъём листа на 45 % после закрытия карточки: в sheet_1 кадр 21 камера приблизилась к Dolmabahçe, а финальный снимок — обзор всей поездки, т.е. камера делает два перелёта подряд. Записать подъём листа целиком (8+ кадров после остановки листа): если видно приближение, затем отдаление — двойной прыжок камеры.",
+   "from": "findings.json"
+  },
+  {
+   "finding": "f2",
+   "pack": "android/trip-map/default-back-during-animation/d50",
+   "do": "repeat-probe",
+   "probe": "back-during-animation",
+   "args": "--delay-ms 50",
+   "times": 2,
+   "why": "f2: повтор в условиях оригинала — с замедленными анимациями (devices.py set --what slow-animations; orchestrator-notes: ячейка переснята с slow-animations, при обычной скорости кадры не двигались). d50-recheck-1/-2 сняты на обычной скорости (around.json animated: false) — это не повтор. Если в конце записи меню «Обновить точки / Сбросить прогресс» открыто, а экран не ушёл — «Назад» во время открытия потерялось. После снять slow-animations."
+  }
+ ],
+ "settings": [
+  {
+   "pack": "android/settings/default-none",
+   "do": "resnap",
+   "probe": "none",
+   "why": "Навигатор: первый снимок default вышел тёмным, когда тема приложения считалась «Светлая». Телефон в тёмной теме, в «Настройках» выбрать «Светлая», снять: если экран тёмный — settings#2/theme-mismatch нарушен (выбор приложения не применяется).",
+   "from": "findings-1.json"
+  },
+  {
+   "pack": "android/settings/default-tap-everything",
+   "do": "repeat-probe",
+   "probe": "tap-everything",
+   "why": "open and cancel, never confirm: tap «Выйти» alone, snap the dialog, then «Отмена». settings#3: должен открыться фирменный диалог по центру, не системный Alert. Ни один кадр прогона не показывает этот диалог.",
+   "from": "findings-1.json"
+  },
+  {
+   "pack": "android/settings/default-tap-everything",
+   "do": "repeat-probe",
+   "probe": "tap-everything",
+   "why": "open and cancel, never confirm: tap «Удалить аккаунт» alone, snap the dialog, then «Отмена». settings#3: фирменный диалог с красной разрушительной кнопкой, не системный Alert.",
+   "from": "findings-1.json"
+  }
+ ],
+ "trips": [
+  {
+   "pack": "android/trips/default-none",
+   "do": "crop",
+   "bbox": [
+    840,
+    236,
+    240,
+    126
+   ],
+   "why": "trips#2: обрезанная у правого края пилюля «Черновики» должна затухать; на обзорном кадре затухание не различить. Если край пилюли и текста срезан резко, без градиента, — BUG по spec:trips#2.",
+   "from": "findings-1.json"
+  },
+  {
+   "pack": "android/trips/default-swipe-inside",
+   "do": "repeat-probe",
+   "probe": "swipe-inside",
+   "why": "Свайп-внутри прокрутил список вертикально, а ряд фильтров не трогал: «Корзина» (trips#2) ни в одном кадре не видна. Свайпнуть влево по ряду пилюль и снять: пятая пилюля «Корзина» есть и прокручивается в кадр целиком; если её нет — BUG по spec:trips#2.",
+   "from": "findings-1.json"
+  },
+  {
+   "pack": "android/trips/default-none",
+   "do": "crop",
+   "bbox": [
+    880,
+    386,
+    160,
+    140
+   ],
+   "why": "«⋯» (Дополнительно) в правом верхнем углу большой карточки на обзоре почти теряется на светлом пёстром фото: если на кроп-кадре глиф не читается на подложке — IMP/BUG по контрасту (кнопка меню незаметна).",
+   "from": "findings-1.json"
+  }
+ ]
+}
