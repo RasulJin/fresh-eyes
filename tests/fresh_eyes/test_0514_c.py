@@ -89,6 +89,17 @@ class Text0514Test(unittest.TestCase):
             self.assertIn(word, body, word)
         self.assertIn("these cells come with the small device as yours", agent("navigator"))
 
+    def test_p42_checkpoints_resume_and_short_replies(self):
+        # 0.5.13 run: the orchestrator read 87 M (M10); a hand-written RESUME.md carried the run across a pause
+        body = skill()
+        for word in ("resume [<run>]", "## Checkpoints and resume", "`$RUN/RESUME.md`",
+                     "`/fresh-eyes resume <run>` in a new session", "coverage.py notes --run $RUN",
+                     "their details go to `<run>/notes/`", "in two messages: one Bash call chaining"):
+            self.assertIn(word, body, word)
+        self.assertNotIn("[--resume]", body)
+        for name in ("navigator", "reviewer", "verifier"):
+            self.assertIn("<run>/notes/<screen>-", agent(name), name)
+
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):

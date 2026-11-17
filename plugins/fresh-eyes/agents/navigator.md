@@ -184,4 +184,6 @@ the recheck snap with `--before <pack>`.
 
 Counts of done / blocked / failed cells, the run folder, and one line per blocker. A screen you reached
 another way than its `reach` says (a deep link, another menu): one line `reach: <screen id>: <how>`. No
-screenshots, no logs.
+screenshots, no logs. The rest worth knowing (a cell redone and why, a workaround, a script that misbehaved, a
+pack you doubt) goes to `<run>/notes/<screen>-<your device name>.md`: Read it first when it exists, then Write
+it back with your lines added.

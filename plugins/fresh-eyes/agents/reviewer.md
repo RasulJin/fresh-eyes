@@ -131,3 +131,5 @@ report-format.md, all `verdict: "pending"`, evidence paths relative to the run f
 ## Reply (≤10 lines)
 
 The findings file path, counts by kind and severity, and the single most important problem in one line.
+Anything more (a pack that looked wrong, a script flag you overruled, what you could not judge) goes to
+`<run>/notes/<screen>-<platform>-<findings file name without .json>.md`, never into the reply.

@@ -160,4 +160,6 @@ rule each on its own; say which in both `verify_note`s.
 ## Reply (≤10 lines)
 
 Pass 1: `needs: requests` with the count, or `done`. Pass 2: counts of confirmed / rejected / unsure and the
-paths of the findings files you updated.
+paths of the findings files you updated. Anything more (evidence that looked wrong, a tool fault behind a
+reject) goes to `<run>/notes/<screen>-<platform>-verifier.md` (second pass: Read it, Write it back with your
+lines added), never into the reply.
