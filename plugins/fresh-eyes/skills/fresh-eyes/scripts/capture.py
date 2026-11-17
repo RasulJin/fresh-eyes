@@ -157,8 +157,9 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
     with open(os.path.join(out, "hierarchy.txt"), "w", encoding="utf-8") as f:
         f.write(compress(nodes))
     kb_top = devices.keyboard_top(dev, nodes)  # recorded on every snap: a `return` snap must show no keyboard
+    # every snap with the keyboard up gets the keyboard checks (a scenario step, a tap's result), not only --keyboard
     ctx = {"screen_wh": [w, h], "px_per_dp": devices.px_per_dp(dev), "min_dp": MIN_DP.get(platform, 48),
-           "keyboard_top": kb_top if keyboard else None, "keyboard": keyboard}
+           "keyboard_top": kb_top, "keyboard": keyboard}
     before_nodes = read_json(os.path.join(before, "nodes.json")) if before else None
     candidates = run_all(nodes, ctx, before_nodes)
     app_nodes = [n for n in nodes if not n["rid"].startswith("com.android.systemui")]

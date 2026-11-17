@@ -436,5 +436,24 @@ class TapAllTest(unittest.TestCase):
         self.assertEqual((len(out["tapped"]), out["left"]), (1, 1))
 
 
+class KeyboardStateTest(unittest.TestCase):
+    """П-49: trip-wizard's fifth suggestion was cut mid-row by «Дальше» with the keyboard up and went in as IMP 76:
+    the footer reaches 63 px under the keyboard, so «pinned on the keyboard» never matched."""
+    def test_a_footer_partly_behind_the_keyboard_cuts_the_suggestions(self):
+        from geometry import run_all
+        nodes = [node(0, "", 0, cls="android.widget.FrameLayout", clickable=False),
+                 node(1, "Paris", 287, cls="android.widget.EditText", focused=True),
+                 node(2, "Paris, Кентукки, США", 1047, cls="android.widget.Button"),
+                 node(3, "Paris, Иллинойс, США", 1213, cls="android.widget.Button"),
+                 node(4, "", 1323, rid="wizard-footer", cls="android.view.ViewGroup", clickable=False),
+                 node(5, "Дальше", 1355, cls="android.widget.Button")]
+        for n, b in zip(nodes, ([0, 0, 1080, 2400], [172, 287, 811, 108], [61, 1047, 960, 166], [61, 1213, 960, 110],
+                                [0, 1323, 1080, 257], [47, 1355, 986, 132])):
+            n["bounds"] = b
+        found = [c for c in run_all(nodes, {"screen_wh": [1080, 2400], "keyboard_top": 1517}) if c["check"] == "under_bar"]
+        self.assertEqual([c["node_ids"] for c in found], [["n4", "n3"]])
+        self.assertIn("Дальше", found[0]["detail"])
+
+
 if __name__ == "__main__":
     unittest.main()

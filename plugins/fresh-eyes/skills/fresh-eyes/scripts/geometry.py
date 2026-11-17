@@ -349,6 +349,15 @@ def _inside(a, b):
     return b[0] <= a[0] and b[1] <= a[1] and a[0] + a[2] <= b[0] + b[2] and a[1] + a[3] <= b[1] + b[3]
 
 
+def _pinned(b, field, keyboard_top, width):
+    """b rides the keyboard: its bottom on the keyboard's top, or (a footer whose padding hides behind the
+    keyboard, 0.5.13 trip-wizard) edge to edge, its top below the field's and its bottom past the keyboard's top
+    (a list row behind a composer is not edge to edge)."""
+    x, top, w, h = b["bounds"]
+    return abs(top + h - keyboard_top) <= 2 or \
+        x <= 2 and x + w >= width - 2 and field["bounds"][1] < top < keyboard_top <= top + h + 2
+
+
 def under_bar(nodes, keyboard_top):
     """Keyboard up: a bar pinned on it (a footer with Next or Send) cuts the focused field or the controls under it
     (suggestions, recent chips). uiautomator cuts their bounds at the bar, so they end on its top edge. The bar is
@@ -357,7 +366,8 @@ def under_bar(nodes, keyboard_top):
     if field is None:
         return []
     taps = [n for n in nodes if n["clickable"] and n["bounds"][3] > 0]
-    bar = min((b for b in nodes if abs(b["bounds"][1] + b["bounds"][3] - keyboard_top) <= 2
+    width = max(n["bounds"][0] + n["bounds"][2] for n in nodes)
+    bar = min((b for b in nodes if _pinned(b, field, keyboard_top, width)
                and not _inside(field["bounds"], b["bounds"]) and any(_inside(t["bounds"], b["bounds"]) for t in taps)),
               key=lambda b: b["bounds"][1], default=None)  # the outermost: its top is the edge that cuts
     if bar is None:
