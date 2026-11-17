@@ -213,11 +213,11 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
 
 ## Checkpoints and resume
 
-Checkpoints: after navigation (`coverage.py next` empty on every queue) and after every first verifier pass,
-once each agent you started is back, write `$RUN/RESUME.md`: the step reached; what is left (todo cells, packs
-no reviewer listed, folders without a first pass, open requests); the verifiers' agent ids; steps taken by hand;
-`sessions: <ids>` (every session of the run, this one last). In `full`, then stop with one line: "continue:
-`/fresh-eyes resume <run>` in a new session" (a fresh context costs far less than carrying this one). `resume
+Checkpoints: after navigation (`coverage.py next` empty on every queue) and after every first verifier pass, once
+each agent you started is back, write `$RUN/RESUME.md`: the step reached; what is left (todo cells, packs no
+reviewer listed, folders without a first pass, open requests); the verifiers' agent ids; steps taken by hand;
+`sessions: <ids>` (every session of the run, this one last). Then go on: a run nobody watches must reach its report.
+After an interruption (a crash, a closed session) the user runs `/fresh-eyes resume <run>` in a new session. `resume
 [<run>]` (default: the newest run; `full --resume`: the newest full one): read its `RESUME.md`, add
 `${CLAUDE_SESSION_ID}` to its `sessions:`, run step 3 into it again (same mode and `--source`), then go on from the
 first unfinished step (a second pass goes to a fresh verifier when the first one is gone). Never redo a done cell.

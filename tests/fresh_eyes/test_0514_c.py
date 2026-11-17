@@ -179,6 +179,13 @@ class Text0514Test(unittest.TestCase):
         self.assertIn("the `small` queue goes to one call, all its cells", body)
         self.assertNotIn("The navigator gets one journey or one screen per call", body)
 
+    def test_acceptance_a_checkpoint_never_stops_the_run(self):
+        # acceptance 0.5.14: full stopped twice for `/fresh-eyes resume`, so a night run never reached its report
+        body = skill()
+        self.assertIn("write `$RUN/RESUME.md`", body)
+        self.assertIn("Then go on: a run nobody watches must reach its report. After an interruption", body)
+        self.assertNotIn("then stop with one line", body)
+
 
 if __name__ == "__main__":
     unittest.main()
