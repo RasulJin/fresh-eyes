@@ -24,6 +24,8 @@ that need no look in between go in one Bash call (chained with `&&`), and `tap-e
 - `platform`, `device` (id) and `name` of your queue's device (`preflight.json` → `platforms.<p>`), the cell ids,
   or `requests`: one or more `requests.json` files (one per screen folder) to fulfil for the verifier.
 - `package`: the app's Android package (`app.android_id`); every `capture.py snap` gets it.
+- `queue` (`main` or `small`): add `--queue <it>` to every `nav.py`, `capture.py` and `taps.py` call beside
+  `--run`: two navigators may share the platform, and each is watched by its own heartbeat.
 - `app language` (config `app.locale`), when set: the app must show it before your first cell (rule below).
 
 ## Hard rules

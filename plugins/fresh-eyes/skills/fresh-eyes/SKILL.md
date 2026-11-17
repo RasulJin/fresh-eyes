@@ -124,19 +124,20 @@ words / nothing (= the current diff).
 7. Navigation: per platform two `fresh-eyes:navigator`s at once, one per queue, ≤15 cells per call, until
    `coverage.py next --cov $RUN/coverage.json --queue main|small` is empty: `main` on preflight's `device`,
    `small` on its `small_device_id` (none: the small queue after main, on `device`). Prompt: run folder, config
-   path, platform, that device's id and name, the cell ids, `package: <app.android_id>` (`capture.py snap
-   --package` keeps the crash log), and `app language: <app.locale>` when config sets it. A navigator that finds
-   the app signed out signs in with `accounts` itself; cells blocked with "signed out: <variable> not set" mean
-   the user has to export that variable or add its keychain item (`$R/config-format.md`) before the next run;
-   cells blocked with "consent: <text>" need the user's yes for that dialog in config `consents` (ask after the
-   report, never let an agent accept it). A reply line `reach: <screen>: <how>`: write `<how>` into that
-   screen's `reach` in `.fresh-eyes/config.json`. Liveness: every `capture.py` call and every `nav.py` call
-   with `--run $RUN` refreshes `$RUN/<platform>/heartbeat`. Right after starting navigators, wait
-   in one blocking call each, in one message (Bash timeout 600000), never by polling: `python3 $S/nav.py idle
-   --run $RUN --platform <p> --until 540 --cells <its cell ids>` (requests mode: `--requests <its requests.json
-   paths>`). `"state"`: `done` = its cells are recorded; `running` = call again; `stuck` = no heartbeat for 9
-   minutes (a permission prompt nobody answers, a loop): stop it (TaskStop) and start a fresh one on the cells
-   `coverage.py next` still lists. Never go by the mtime of the agent's output file (a symlink).
+   path, platform, `queue: <main|small>`, that device's id and name, the cell ids, `package: <app.android_id>`
+   (`capture.py snap --package` keeps the crash log), and `app language: <app.locale>` when config sets it. A
+   navigator that finds the app signed out signs in with `accounts` itself; cells blocked with "signed out:
+   <variable> not set" mean the user has to export that variable or add its keychain item (`$R/config-format.md`)
+   before the next run; cells blocked with "consent: <text>" need the user's yes for that dialog in config
+   `consents` (ask after the report, never let an agent accept it). A reply line `reach: <screen>: <how>`: write
+   `<how>` into that screen's `reach` in `.fresh-eyes/config.json`. Liveness: every `capture.py`, `taps.py` and
+   `nav.py` call with `--run $RUN --queue <q>` refreshes `$RUN/<platform>/heartbeat-<q>`. Right after starting
+   navigators, wait in one blocking call each, in one message (Bash timeout 600000), never by polling: `python3
+   $S/nav.py idle --run $RUN --platform <p> --until 540 --queue <q> --cells <its cell ids>` (requests mode:
+   `--requests <its requests.json paths>`). `"state"`: `done` = its cells are recorded; `running` = call again;
+   `stuck` = no heartbeat for 9 minutes (a permission prompt nobody answers, a loop): stop it (TaskStop) and start
+   a fresh one on the cells `coverage.py next` still lists. Never go by the mtime of the agent's output file (a
+   symlink).
 8. Pipeline: as soon as a screen's cells on a platform are recorded (`idle` said `done`, or its navigator
    replied), run this step and step 9's first pass for that screen while the navigators work, in two messages:
    one Bash call chaining its `spec.py slice` and `coverage.py packs`, then all its reviewers (and the next
@@ -206,8 +207,8 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
   --keychain fresh-eyes-<role>-email`, the same for the password (the values live in the user's environment or
   keychain, never in prompts or files). No `accounts` in config → keep the installed state, and say so.
 - The navigator gets one journey or one screen per call.
-- Before step 6: `bench seeded` (it needs no device); fewer than 4 of 5 caught → stop and tell the user (the
-  reviewers would miss what a person sees: verdict INCOMPLETE). score.json carries it as `bench`.
+- Before step 6: `bench seeded` (it needs no device) with `--run $RUN` on its `bench.py score`, which writes
+  `bench` into score.json; fewer than 4 of 5 caught → stop and tell the user (verdict INCOMPLETE).
 
 ## Checkpoints and resume
 

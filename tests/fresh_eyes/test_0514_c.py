@@ -144,8 +144,18 @@ class Text0514Test(unittest.TestCase):
     def test_p50_full_size_frames_and_message_chips(self):
         # 0.5.13 run: a reject compared screen_1000.png; quick and full treated Vio's prompt chips differently
         self.assertIn("on `screen.png`, never `screen_1000.png`", agent("verifier"))
-        self.assertIn("Chips that send a message (a chat's suggested prompts) are sending: skip them here; "
+        self.assertIn("Chips that send a message (a chat's prompts): skip them here (config `skip_tap`); "
                       "`scenario` presses them", ref("probes.md"))
+
+    def test_followups_queue_heartbeat_skip_tap_and_bench_run(self):
+        # parts a and b: --queue gives each navigator its own heartbeat-<q>; skip_tap; bench.py score --run
+        body = skill()
+        for word in ("`queue: <main|small>`", "refreshes `$RUN/<platform>/heartbeat-<q>`", "--until 540 --queue <q>",
+                     "with `--run $RUN` on its `bench.py score`"):
+            self.assertIn(word, body, word)
+        self.assertIn("add `--queue <it>` to every `nav.py`, `capture.py` and `taps.py` call", agent("navigator"))
+        self.assertIn("`skip_tap` (optional): labels `taps.py all` never taps", ref("config-format.md"))
+        self.assertIn("(config `skip_tap`)", ref("probes.md"))
 
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done

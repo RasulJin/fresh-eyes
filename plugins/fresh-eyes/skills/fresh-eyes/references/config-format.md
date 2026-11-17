@@ -107,6 +107,9 @@ noted. Example (generic values):
   labels ("the Posts tab", "the Saved tab"); the probe opens each, comes back and scrolls to the end.
   `signed_out` (optional, `true`): reached without an account (a welcome screen, a consent document); the plan
   puts these screens first, since a full run starts from cleared data.
+  `skip_tap` (optional): labels `taps.py all` never taps on this screen, each matched case-insensitively as part
+  of a node's text, label or id: controls with a harmless look that send or write (a chat's suggested-prompt
+  chips that send a message); the `scenario` presses them.
 - `app_theme`: how to pick the app's own Light, Dark and system ("as in the system") theme, in words (where the
   control is, its labels); the navigator picks the system one before signing out for screens without an account;
   without it the `theme-mismatch` state is reported as not checked. List `theme-mismatch` after `dark`.
