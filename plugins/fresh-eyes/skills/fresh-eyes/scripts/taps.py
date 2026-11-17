@@ -40,7 +40,7 @@ import capture
 import devices
 import nav
 from devices import Device
-from fe_common import FEError, cli, heartbeat, image_size, read_json, write_json
+from fe_common import FEError, cli, heartbeat, image_size, load_secrets, read_json, write_json
 from motion import run_ceiling_ms
 from nav import _xy
 from pixels import changed_fraction
@@ -258,6 +258,7 @@ def main():
         if a.x is not None and not a.expect_id:
             ap.error("--x --y only with --expect-id: a point from an older screen lands on whatever moved there")
     cell = guard(a.coverage, a.cell, a.platform)
+    load_secrets(a.coverage)  # nodes, rows and tap.json never carry a credential (nav.hierarchy cuts them)
     heartbeat(a.coverage, a.platform, "taps.py %s %s" % (a.cmd, a.cell))
     dev = Device(a.platform, a.device, "")
     if a.cmd == "rapid":

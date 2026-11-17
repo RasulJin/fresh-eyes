@@ -137,7 +137,7 @@ def snap(platform, device_id, out, before=None, keyboard=False, expect_differs=N
         if not meta["app_running"]:
             logs(platform, device_id, out, package)
     if hierarchy_error is not None:
-        meta["blocked"] = "hierarchy unavailable: %s" % hierarchy_error
+        meta["blocked"] = fe_common.redact("hierarchy unavailable: %s" % hierarchy_error)  # it may quote the dump
         write_json(os.path.join(out, "meta.json"), meta)
         return 3
     if expect_differs and changed_fraction(shot, os.path.join(expect_differs, "screen.png")) < STATE_MIN_CHANGE:
@@ -385,6 +385,7 @@ def main():
     g = sub.choices["logs"]
     g.add_argument("--package", required=True); g.add_argument("--clear", action="store_true")
     a = ap.parse_args(argv)
+    fe_common.load_secrets(a.out)  # the config above the run: its credentials never reach a pack
     fe_common.heartbeat(a.out, a.platform, "capture.py %s %s" % (a.cmd, a.out))
     out = {}
     if a.cmd == "snap":

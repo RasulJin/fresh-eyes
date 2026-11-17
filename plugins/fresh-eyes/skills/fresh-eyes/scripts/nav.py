@@ -12,7 +12,9 @@ CLI (all print the compressed screen after acting; --platform defaults to androi
   nav.py tap    --device ID (--text RE | --label RE | --id SUFFIX | --point X,Y) [--index N]   (refused: an empty
                  one, a target under the open keyboard; a node half under it is tapped on its visible part)
   nav.py type   --device ID (--text "text" | [--env VAR] [--keychain SERVICE])   (Android: ASCII only; secrets:
-                 the variable when set, else the macOS keychain item; never printed)
+                 the variable when set, else the macOS keychain item; never printed. Refused unless a text field
+                 has focus in a fresh dump, and, for a password (VAR or SERVICE says "password"), one with the
+                 password flag; the field then prints as ‹typed›)
   nav.py swipe  --device ID --from X,Y --to X,Y [--ms 300]
   nav.py back   --device ID                      (iOS: edge swipe)
   nav.py wait   --device ID (--text RE | --label RE | --id SUFFIX) [--timeout 15]
@@ -21,6 +23,8 @@ CLI (all print the compressed screen after acting; --platform defaults to androi
                  "done" when those cells are recorded / requests answered, "stuck" when no heartbeat came, else
                  "running")
 --run RUN on any of them refreshes <run>/<platform>/heartbeat, as every capture.py call does.
+Every text nav.py, taps.py and capture.py print or store has the credentials of config `accounts` (env, else
+keychain) cut out as ‹secret›.
 """
 import argparse
 import json
@@ -33,7 +37,7 @@ import devices
 import fe_common
 from devices import Device
 from fe_common import FEError, cli
-from hierarchy import compress, normalize
+from hierarchy import XCUI_TEXT_INPUTS, compress, normalize
 
 SETTLE_S = 1.0
 
@@ -65,7 +69,14 @@ IDLE = "idle state"  # uiautomator dump: "could not get idle state" on a screen 
 
 
 def hierarchy(dev):
-    """(nodes, source). Android: uiautomator; when it fails (a UI that never gets idle), the Maestro CLI."""
+    """(nodes, source), credentials cut out of every text (fe_common.redact): whatever prints or stores a dump
+    (nav.py, taps.py, capture.py) never shows a secret typed into a field without the password flag."""
+    nodes, source = _hierarchy(dev)
+    return fe_common.scrub(nodes), source
+
+
+def _hierarchy(dev):
+    """Android: uiautomator; when it fails (a UI that never gets idle), the Maestro CLI."""
     if dev.platform == "ios":
         base = devices.ios_driver(dev)
         raw = devices.ios_call(dev, "viewHierarchy", {"appIds": [], "excludeKeyboardElements": False}, base=base)
@@ -181,6 +192,28 @@ def wait_for(dev, text=None, label=None, rid=None, timeout=15):
             time.sleep(1)
 
 
+TYPED = "‹typed›"
+
+
+def is_input(node):
+    """A text field: Android EditText and its kin (android.widget.TextView is plain text), iOS input types."""
+    return node["cls"].endswith(("EditText", "AutoCompleteTextView")) or node["cls"] in XCUI_TEXT_INPUTS
+
+
+def secret_field(nodes, password):
+    """The focused field a secret may go into: an input, with the password flag for a password. A refusal never
+    prints the field's text (it may hold the email typed a moment ago)."""
+    field = next((n for n in nodes if n["focused"]), None)
+    if field is None or not is_input(field):
+        raise FEError("no text field has focus (focused: %s): tap the field from a fresh `nav.py screen` first"
+                      % (field["cls"] if field else "nothing"))
+    if password and not field.get("password"):
+        raise FEError("the focused field (%s) has no password flag: a password typed there shows in plain text. "
+                      "Tap the password field from a fresh `nav.py screen` and type again"
+                      % (field["rid"] or field["cls"]))
+    return field
+
+
 def secret(var=None, service=None):
     """A test credential: the environment variable when set, else the macOS keychain item (`security`)."""
     if var and os.environ.get(var):
@@ -282,12 +315,18 @@ def main():
         return 0
     if a.run:
         fe_common.heartbeat(a.run, a.platform, "nav.py " + a.cmd)
+        fe_common.load_secrets(a.run)
     dev = Device(a.platform, a.device, "")
+    typed_secret = a.cmd == "type" and a.text is None
     if a.cmd == "tap":
         node = tap(dev, a.text, a.label, a.id, a.point, a.index)
         print("tapped %s %r" % (node.get("id"), node.get("text") or node.get("label", "")))
     elif a.cmd == "type":
-        text = a.text if a.text is not None else secret(a.env, a.keychain)
+        text = a.text
+        if typed_secret:  # a fresh dump: the field that has focus now, not the one an older dump showed
+            text = secret(a.env, a.keychain)
+            fe_common.add_secret(text)
+            secret_field(screen_nodes(dev), "password" in ("%s %s" % (a.env, a.keychain)).lower())
         if dev.platform == "ios":
             devices.ios_type(dev, text)
         else:
@@ -306,7 +345,8 @@ def main():
     elif a.cmd == "wait":
         node = wait_for(dev, a.text, a.label, a.id, a.timeout)
         print("found %s %r" % (node["id"], node["text"] or node["label"]))
-    nodes = [n for n in screen_nodes(dev) if not n["rid"].startswith("com.android.systemui")]
+    nodes = [dict(n, text=TYPED) if typed_secret and n["focused"] else n
+             for n in screen_nodes(dev) if not n["rid"].startswith("com.android.systemui")]
     print(compress(nodes, a.max_chars))
     return 0
 
