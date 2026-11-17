@@ -57,6 +57,7 @@ PROBES = {
 REQUIRED_SUBPACKS = {"rapid-tap": ("afterback", "single"), "keyboard-open": ("left", "return"), "search": ("typed",),
                      "drag-interrupt": ("slow", "drag-back", "swipe-tap")}
 UNORDERED = {"single"}  # the control tap may come before or after the rapid one
+PROOFS = {"left", "restored"}  # sub-snaps that prove a step for `set`, not the screen: no reviewer gets them
 NO_CHANGE_RUN = 3  # tap-everything rows changing nothing in a row: the screen under them was another one
 # a scenario does the task, changes an input after the result, tries an invalid input, interrupts an action,
 # and checks what was kept
@@ -188,7 +189,7 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
             c["drag"] = list(by_id[c["screen"]]["drag"])
         if c["probe"] == "swipe-inside" and by_id[c["screen"]].get("pages"):
             c["pages"] = list(by_id[c["screen"]]["pages"])
-    _queues(cells, by_id, {p for p in ok if plats[p].get("small_device")})
+    _queues(cells, {p for p in ok if plats[p].get("small_device")})
     if passes == 2:  # one pass catches ~75-80% of what two independent passes do: a release gets a second one
         cells += [dict(c, id=c["id"] + "#2", evidence=[], **{"pass": 2}) for c in cells
                   if not c["screen"].startswith("recheck-")]
@@ -199,34 +200,11 @@ def plan(config, preflight, mode, screens=None, recheck=(), max_screens=QUICK_MA
             "unchecked": unchecked, "warnings": warnings, "motion_ceiling_ms": config.get("motion_ceiling_ms", 300)}
 
 
-def _queues(cells, by_id, two):
-    """Each cell's "queue": "main" (the main device) or "small" (the small one, when the platform has it: two
-    navigators at once). small-screen cells go small; screens linked by neighbors (shared data: a post and its
-    thread, a trip and its map) stay in one queue; whole groups go to the queue with fewer cells so far."""
+def _queues(cells, two):
+    """Each cell's "queue": "small" for a small-screen cell of a platform with a small device (its own navigator
+    there), "main" for every other: screens sharing data (a post and its thread) stay on one device."""
     for c in cells:
         c["queue"] = "small" if c["state"] == "small-screen" and c["platform"] in two else "main"
-    for p in two:
-        mine = [c for c in cells if c["platform"] == p]
-        screens = list(dict.fromkeys(c["screen"] for c in mine if c["screen"] in by_id))
-        group = {s: s for s in screens}
-
-        def root(s):
-            while group[s] != s:
-                s = group[s]
-            return s
-        for s in screens:
-            for n in by_id[s].get("neighbors", []):
-                if n in group:
-                    group[root(n)] = root(s)
-        load = Counter(c["queue"] for c in mine if c["queue"] == "small" or c["screen"] not in by_id)
-        size = Counter(root(c["screen"]) for c in mine if c["screen"] in by_id and c["queue"] == "main")
-        # ponytail: a cell is the unit of time; weight by probe if a scenario keeps one queue running long
-        for g in sorted(size, key=lambda g: -size[g]):
-            q = "small" if load["small"] < load["main"] else "main"
-            load[q] += size[g]
-            for c in mine:
-                if c["screen"] in by_id and root(c["screen"]) == g and c["state"] != "small-screen":
-                    c["queue"] = q
 
 
 def _find(cov, cell_id):
@@ -779,7 +757,8 @@ def pack_groups(screen_dir, max_n=15, dropped=None, cov=None):
     d50/d100/d150) in groups of at most max_n, one reviewer each. A pack's sub-packs stay together unless they
     alone are more; a group never mixes the passes of `twice`. Left out, the reason appended to `dropped`: a
     folder capture.py did not write (_snap_problem) and, with cov, a top folder that is no cell's pack (a scratch
-    snap like post-detail/kb-before)."""
+    snap like post-detail/kb-before). Never reviewed: a pack's left/ (keyboard-open's proof it left: another screen)
+    and restored/ (the light control after a dark cell), proofs for `set`, not this screen's state."""
     groups, cur, cur_p2, max_n = [], [], False, max(1, max_n)
     where = tuple(os.path.normpath(os.path.abspath(screen_dir)).split(os.sep)[-2:])
     owned = None if cov is None else set()
@@ -795,7 +774,8 @@ def pack_groups(screen_dir, max_n=15, dropped=None, cov=None):
                 dropped.append("%s: no cell of %s has this pack" % (top, "/".join(where)))
             continue
         subs = sorted(r for r, _, files in os.walk(os.path.join(screen_dir, top))
-                      if "screen.png" in files or "around.json" in files)
+                      if ("screen.png" in files or "around.json" in files)
+                      and not PROOFS & set(os.path.relpath(r, screen_dir).split(os.sep)))
         bad = [r for r in subs if _snap_problem(r)]
         if dropped is not None:
             dropped += [_snap_problem(r) for r in bad]

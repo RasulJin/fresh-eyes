@@ -8,14 +8,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from collections import Counter
 from datetime import datetime, timezone
 from unittest import mock
 
 from tests.fresh_eyes.helpers import FIXTURES, SCRIPTS
 from tests.fresh_eyes.test_coverage import BOTH_OK_MUT_ON, ONE_SCREEN, make_pack
 from fe_common import FEError, read_json, write_json
-from coverage import NOTES_MARK, _load_findings, next_cells, plan, set_status, verdict
+from coverage import NOTES_MARK, _load_findings, next_cells, pack_groups, plan, set_status, verdict
 import backlog
 import bench
 import findings
@@ -343,17 +342,18 @@ class OrchestratorContextTest(unittest.TestCase):
         run = _root(self)
         with open(os.path.join(run, "orchestrator-notes.md"), "w", encoding="utf-8") as f:
             f.write("# Заметки оркестратора\n\n- preflight: сборка уже стояла\n")
-        for screen, text in (("post-detail", "- scenario: reply sent and deleted\n"), ("import", "- dark: Тёмная\n")):
+        for name, text in (("post-detail-navigator", "- scenario: reply sent and deleted\n"),  # <screen>-<who>
+                           ("import-verifier", "- dark: Тёмная\n")):
             os.makedirs(os.path.join(run, "notes"), exist_ok=True)
-            with open(os.path.join(run, "notes", screen + ".md"), "w", encoding="utf-8") as f:
+            with open(os.path.join(run, "notes", name + ".md"), "w", encoding="utf-8") as f:
                 f.write(text)
         for _ in range(2):  # a second gathering rebuilds, never repeats
             out = _cli("coverage.py", "notes", "--run", run)
         self.assertEqual(out["notes"], 2)
         with open(out["out"], encoding="utf-8") as f:
             self.assertEqual(f.read(), "# Заметки оркестратора\n\n- preflight: сборка уже стояла\n\n%s\n\n"
-                                       "## import\n\n- dark: Тёмная\n\n## post-detail\n\n- scenario: reply sent "
-                                       "and deleted\n" % NOTES_MARK)
+                                       "## import-verifier\n\n- dark: Тёмная\n\n## post-detail-navigator\n\n"
+                                       "- scenario: reply sent and deleted\n" % NOTES_MARK)
 
     def test_the_card_counts_the_orchestrators_turns_and_context(self):
         root = _root(self)
@@ -484,26 +484,17 @@ class TwoQueuesTest(unittest.TestCase):
                                           "states": ["default", "dark", "small-screen"], "probes": ["tap-everything"]}
                                          for s in ids])
 
-    def test_small_screen_goes_small_neighbors_stay_together_and_the_queues_even_out(self):
+    def test_only_small_screen_cells_go_to_the_small_device(self):
         pre = {"platforms": {"android": {"ok": True, "small_device": True}, "ios": {"ok": True}}}
         cov = plan(self._cfg(), pre, "full", passes=2)
         android = [c for c in cov["cells"] if c["platform"] == "android"]
-        self.assertTrue(all(c["queue"] == "small" for c in android if c["state"] == "small-screen"))
-        queue = {}
-        for c in android:
-            if c["state"] != "small-screen":
-                queue.setdefault(c["screen"], set()).add(c["queue"])
-        self.assertTrue(all(len(q) == 1 for q in queue.values()))  # a screen never split
-        for together in (["post-detail", "thread"], ["trips", "trip-detail", "trip-map", "trip-schedule"],
-                         ["welcome", "consent-doc"]):
-            self.assertEqual(len({min(queue[s]) for s in together}), 1, together)
-        n = Counter(c["queue"] for c in android)
-        self.assertLessEqual(abs(n["main"] - n["small"]), 12)  # a group of 4 screens is 12 cells a pass
+        self.assertEqual({(c["state"] == "small-screen", c["queue"]) for c in android},
+                         {(True, "small"), (False, "main")})  # a post and its thread: both main
         self.assertEqual({c["queue"] for c in cov["cells"] if c["platform"] == "ios"}, {"main"})  # no small iPhone
         path = os.path.join(_root(self), "coverage.json")
         write_json(path, cov)
         small = _cli("coverage.py", "next", "--cov", path, "--queue", "small", "--limit", "500")
-        self.assertEqual(sorted(small), sorted(c["id"] for c in android if c["queue"] == "small"))
+        self.assertEqual(sorted(small), sorted(c["id"] for c in android if c["state"] == "small-screen"))
 
     def test_without_a_small_device_every_cell_is_main(self):
         pre = {"platforms": {"android": {"ok": True}}}
@@ -511,6 +502,28 @@ class TwoQueuesTest(unittest.TestCase):
         self.assertEqual({c["queue"] for c in cov["cells"]}, {"main"})
         self.assertEqual(len(next_cells(cov, queue="small")), 0)
         self.assertEqual(len(next_cells(cov, queue="main", limit=500)), len(cov["cells"]))
+
+
+class ProofSnapsTest(unittest.TestCase):
+    """Part c's left/ and restored/ snaps prove a step to `set`; no reviewer judges them as the screen."""
+
+    def test_packs_leave_out_left_and_restored(self):
+        screen = os.path.join(_root(self), "android", "vio-guide")
+        for sub in ("", "kb-show", "left", "return", "dark-restored-x"):  # a pack merely named so stays
+            write_json(os.path.join(screen, "default-keyboard-open", sub, "meta.json"),
+                       {"source": "uiautomator", "time": "2026-11-15T10:00:00"})
+            with open(os.path.join(screen, "default-keyboard-open", sub, "screen.png"), "wb") as f:
+                f.write(b"png")
+        write_json(os.path.join(screen, "dark-none", "restored", "meta.json"), {"time": "2026-11-15T10:00:00"})
+        with open(os.path.join(screen, "dark-none", "restored", "screen.png"), "wb") as f:
+            f.write(b"png")
+        write_json(os.path.join(screen, "dark-none", "meta.json"), {"time": "2026-11-15T10:00:00"})
+        with open(os.path.join(screen, "dark-none", "screen.png"), "wb") as f:
+            f.write(b"png")
+        groups = pack_groups(screen)
+        self.assertEqual(sorted(os.path.relpath(r, screen) for g in groups for r in g),
+                         ["dark-none", "default-keyboard-open", "default-keyboard-open/dark-restored-x",
+                          "default-keyboard-open/kb-show", "default-keyboard-open/return"])
 
 
 if __name__ == "__main__":
