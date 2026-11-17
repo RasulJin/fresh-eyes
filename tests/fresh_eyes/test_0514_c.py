@@ -64,6 +64,23 @@ class Text0514Test(unittest.TestCase):
             self.assertIn(word, probes, word)
         self.assertIn("`left/` only that a probe left the screen", agent("reviewer"))
 
+    def test_p40_fewer_requests_that_carry_their_conditions(self):
+        # 0.5.13 run: 45 requests took 1.3 h; repeats ran from another page and at normal animation speed (M3, M9)
+        reviewer = agent("reviewer")
+        for word in ("ask only when the answer can make a BUG of medium or higher or settles an invariant",
+                     "at most 2 per group of packs"):
+            self.assertIn(word, reviewer, word)
+        self.assertIn("at most 2 per group", ref("checklist.md"))
+        conditions = '"conditions": {"slow_animations"'
+        self.assertIn(conditions, agent("verifier"))
+        self.assertIn(conditions, ref("report-format.md"))
+        nav = agent("navigator")
+        self.assertIn("reach the pack's screen first and set its `conditions`", nav)
+        self.assertIn("check on `nav.py screen` that it starts as the original did", nav)
+        body = skill()
+        self.assertIn("findings.py requests --run $RUN", body)
+        self.assertIn("≤15 open entries per call", body)
+
     def test_p48_nothing_to_scroll_is_na(self):
         # 0.5.13 run: flight-search/default/swipe-inside blocked, so the verdict listed it as not done
         for text in (ref("probes.md"), agent("navigator")):

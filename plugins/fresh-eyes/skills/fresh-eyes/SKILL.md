@@ -168,7 +168,9 @@ words / nothing (= the current diff).
    folder's verifier also gets the findings files of the screens its findings concern (to mark duplicates). Folders whose verifier
    answered `needs: requests`: first, each `"do": "redo-cell"` entry → `python3 $S/coverage.py set --cov
    $RUN/coverage.json --cell <cell> --status todo --note "<why>"`, that cell navigated again (step 7) and its new
-   pack reviewed (step 8, a new `findings-<k>.json`), then the entry gets `"done": "<pack>"`; then one navigator per platform in requests mode with their `requests.json` paths;
+   pack reviewed (step 8, a new `findings-<k>.json`), then the entry gets `"done": "<pack>"`; then `python3
+   $S/findings.py requests --run $RUN` (merges an entry asked twice) and navigators in requests mode, ≤15 open
+   entries per call, packs shot on the small device to its navigator, both devices at once;
    when every entry has `done` or `failed`, send `second pass` with SendMessage to that folder's first-pass
    verifier (it keeps what it already read). A fresh verifier with `second pass` and the same inputs only when
    that agent is gone. A second pass that answers `needs: requests` again (a medium with one repeat back) gets

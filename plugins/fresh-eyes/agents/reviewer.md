@@ -91,7 +91,9 @@ Every turn re-reads your whole context, so open files in batches: one message wi
    evidence shows if it is a bug>"}`; the verifier has it fetched and rules on it. So is a tap whose result no
    frame shows (no snap after it, one from before the transition, another screen on it):
    `{"pack": "<that tap's pack>", "do": "repeat-probe", "probe": "tap-everything", "why": "tap «<label>» alone,
-   snap after: <what it should open>"}`. A doubt no evidence can settle (a word, a choice): an IMP. So a BUG has
+   snap after: <what it should open>"}`. Each request is a trip to the device: ask only when the answer can make
+   a BUG of medium or higher or settles an invariant, at most 2 per group of packs (the most severe); a doubt
+   about a low one, or one no evidence can settle (a word, a choice), is an IMP. So a BUG has
    confidence above 0.4 and a frame or log line that shows it; its title never starts «Not verified» / «Не
    проверено», and its `actual` never says the evidence is missing («needs a frame», «not checked», «seems»,
    «нужен кадр», «не проверено», «похоже»).

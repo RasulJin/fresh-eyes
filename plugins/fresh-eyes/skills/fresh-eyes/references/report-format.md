@@ -73,10 +73,12 @@ then returns it in `merged`, and the report lists it under that finding.
 ## `requests.json` (verifier → navigator, in the screen folder)
 
 `[{"finding": "f1", "pack": "<path>", "do": "resnap|repeat-probe|crop", "probe": "<id>", "bbox": [..],
-"args": "<extra probe flags, optional: --interval-ms 150>", "times": 2, "why": "", "from": "<findings file>"},
-{"do": "redo-cell", "cell": "<cell id>", "why": ""}]` (`times`, `why`, `from` optional; `from`: a reviewer's);
-the navigator adds `"done": "<path>"` or `"failed": "<why>"` to each entry but `redo-cell`, which the
-orchestrator handles (the cell back to `todo`, navigated and reviewed again, then `done`).
+"args": "<extra probe flags, optional: --interval-ms 150>", "times": 2, "why": "", "from": "<findings file>",
+"conditions": {"slow_animations": false, "app_theme": "<label> | null", "start_page": "<tab or page> | null"}},
+{"do": "redo-cell", "cell": "<cell id>", "why": ""}]` (`times`, `why`, `from` optional; `from`: a reviewer's;
+`conditions`: the source pack's, written by the verifier, set by the navigator before the repeat); the
+navigator adds `"done": "<path>"` or `"failed": "<why>"` to each entry but `redo-cell`, which the orchestrator
+handles (the cell back to `todo`, navigated and reviewed again, then `done`).
 
 ## Verdict
 
@@ -175,8 +177,7 @@ Also: <title of a finding merged into it> (<file>#<id>)
 ```
 
 - Not checked in this run: the plan's `unchecked` items without `gap`, then each cell not done (`na`, `blocked`,
-  `failed`) with its note, e.g. `android/flight-search/default/swipe-inside — not enough items` (a swipe that
-  moved nothing is never done).
+  `failed`) with its note, e.g. `android/flight-search/default/swipe-inside — not enough items`.
 - A bug is at most 10 lines: at most 5 steps (join the way there into one, "Open Trips → Paris → Schedule"),
   expected and actual one sentence each; the backlog entry gets the full finding.
 - Unsure, by class, never one block per finding, in this order and only classes that have findings: `stale`
@@ -188,8 +189,7 @@ Also: <title of a finding merged into it> (<file>#<id>)
   findings files). At most 10 question sub-items in all, the same way. `coverage.py score` counts the sub-items (M5); keep the marker `spec text:` as is in any
   language: that sub-item is no question.
 - Open spec conflicts: the `conflict` entries, one line each, no question (the spec already asks the owner).
-- Known candidates: the `known` entries, one line each, not counted as questions; what the owner accepts goes
-  to `known.md`.
+- Known candidates: the `known` entries, one line each, not counted as questions; the owner's yes: `known.md`.
 
 ## Backlog templates
 

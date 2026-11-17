@@ -15,7 +15,8 @@ How a picky QA engineer + product designer looks at one screen. Used by the revi
 6. A finding needs a frame. Never report a bug from code, a guess or a single hierarchy line. A guess
    (confidence ≤ 0.4, "needs a frame", "not checked", "seems") is a `requests` entry when new evidence can
    settle it, else an IMP; never a BUG, and no title "Not verified: …".
-7. "Could not see it" is not "it is fine": ask for the missing evidence in `requests`.
+7. "Could not see it" is not "it is fine": ask for the missing evidence in `requests` (only what can make a BUG
+   of medium or higher or settle an invariant, at most 2 per group: reviewer.md).
 
 ## Display defects (one frame shows it)
 

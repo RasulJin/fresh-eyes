@@ -160,7 +160,10 @@ Swipe-inside cells, `P=<run>/<platform>/<screen>/<state>-swipe-inside`, snap exa
 
 ## Requests mode (for the verifier)
 
-For each entry in each `requests.json` that has no `done` yet, reach the pack's screen first: `resnap` → new
+For each entry in each `requests.json` that has no `done` yet, reach the pack's screen first and set its
+`conditions` (`devices.py set --what slow-animations` when `slow_animations`, the app theme `app_theme` names
+picked in the app, the tab or page `start_page` names), check on `nav.py screen` that it starts as the original
+did, and restore them after (`--what animations-on`, the app on Light). Then: `resnap` → new
 `snap` into `<pack>-recheck` (exit 5: another screen is up; reach it and redo, never mark that entry done);
 `repeat-probe` → run the probe
 again into `<pack>-recheck` with every step of it the original ran (keyboard-open: kb-show, the `--keyboard`

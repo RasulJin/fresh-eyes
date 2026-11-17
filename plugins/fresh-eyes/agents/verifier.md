@@ -88,7 +88,12 @@ For each BUG with `verdict: "pending"`:
 4. If it depends on behaviour (double sheets, dismissal, a one-frame jump) or the crop is too small →
    append to `requests.json` in the screen folder: `{"finding": "<id>", "pack": "<pack>", "do": "resnap|repeat-probe|crop",
    "probe": "<probe id>", "bbox": [x, y, w, h]}` and leave it pending. A repeat with other probe flags gets
-   `"args"`, e.g. `"--interval-ms 150"` (a person's pace) or `"--delay-ms 200"`.
+   `"args"`, e.g. `"--interval-ms 150"` (a person's pace) or `"--delay-ms 200"`. Every entry you append (a
+   reviewer's too) gets the source pack's `"conditions": {"slow_animations": <bool>, "app_theme": <label|null>,
+   "start_page": <tab or page|null>}`, read from its `meta.json` (`conditions`, `app_theme_set`), `around.json`
+   (slow animations) and its first frame (the selected tab or page): the navigator sets them before the repeat,
+   so a repeat under other conditions never comes back. The same pack, `do` and probe once (`findings.py
+   requests` merges copies).
 5. A cell whose probe never tested its oracle (snapped on another screen, the gesture never reached what it
    should interrupt): `{"do": "redo-cell", "cell": "<cell id>", "why": "<one line>"}`; the orchestrator runs it
    again, and on the second pass you rule on its findings from the new pack (the entry's `done`).
