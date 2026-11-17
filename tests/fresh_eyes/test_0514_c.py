@@ -165,6 +165,14 @@ class Text0514Test(unittest.TestCase):
         self.assertNotIn("`na` too: drop that probe", ref("report-format.md"))
         self.assertIn("`signed_out` (optional, `true`)", ref("config-format.md"))
 
+    def test_acceptance_a_resumed_run_is_scored_over_all_its_sessions(self):
+        # acceptance 0.5.14: step 11 passed only the last session, so M10 and the turns counted a third of the run
+        body = skill()
+        for word in ("`sessions: <ids>` (every session of the run, this one last)",
+                     "add `${CLAUDE_SESSION_ID}` to its `sessions:`",
+                     '--session "<RESUME.md\'s sessions>,${CLAUDE_SESSION_ID}"'):
+            self.assertIn(word, body, word)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,7 +14,7 @@ CLI:
   coverage.py diff-screens --repo R --base REF --config C
   coverage.py packs --dir <run>/<platform>/<screen> [--max 15]
   coverage.py prune --runs .fresh-eyes/runs [--keep 3]
-  coverage.py score --run RUN [--session ID] [--out RUN/score.json]   (stats.py: the run's M1-M12 card)
+  coverage.py score --run RUN [--session ID[,ID…]] [--out RUN/score.json]   (stats.py: the run's M1-M12 card)
   coverage.py notes --run RUN   (the subagents' RUN/notes/<screen>.md into RUN/orchestrator-notes.md)
 """
 import argparse
@@ -907,7 +907,8 @@ def main():
     p.add_argument("--max", type=int, default=15, help="snaps per reviewer (~30 images in all)")
     p = sub.add_parser("prune"); p.add_argument("--runs", required=True); p.add_argument("--keep", type=int, default=3)
     p = sub.add_parser("score"); p.add_argument("--run", required=True); p.add_argument("--out")
-    p.add_argument("--session", help="the orchestrator's session id: its transcripts give M9, M10 and M12")
+    p.add_argument("--session", action="append", help="the orchestrator's session id: its transcripts give M9, M10 "
+                   "and M12; a run resumed in new sessions gives them all (repeated, or joined by commas)")
     p = sub.add_parser("notes", help="gather RUN/notes/*.md into RUN/orchestrator-notes.md")
     p.add_argument("--run", required=True)
     a = ap.parse_args()

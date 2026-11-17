@@ -377,7 +377,46 @@ class OrchestratorContextTest(unittest.TestCase):
         expect = {"turns": 2, "context_start": 116003, "context_end": 249002}  # m0 is before the run
         self.assertEqual(out["orchestrator"], expect)
         self.assertEqual(read_json(out["out"])["orchestrator"], expect)
-        self.assertIsNone(stats.score(run)["orchestrator"])  # no session id: not known
+        self.assertEqual(stats.score(run)["orchestrator"], expect)  # no session id: what was counted stays
+        os.remove(out["out"])
+        self.assertIsNone(stats.score(run)["orchestrator"])  # never counted: not known
+
+    def test_a_run_resumed_in_new_sessions_is_scored_over_all_of_them(self):
+        # acceptance 0.5.14: П-42 splits a full run into sessions and step 11 passed only the last one; a rerun
+        # without a session turned M10 from 190 M into null
+        root = _root(self)
+        run = os.path.join(root, "run")
+        shutil.copytree(os.path.join(FIXTURES, "score-run"), run)
+        t0 = 1700000000
+        for name in os.listdir(run):
+            os.utime(os.path.join(run, name), (t0, t0) if name != "report.md" else (t0 + 5 * 3600,) * 2)
+
+        def turn(dt, mid, read, *tools):
+            return {"type": "assistant", "timestamp": datetime.fromtimestamp(t0 + dt, timezone.utc).isoformat(),
+                    "message": {"id": mid, "content": [{"type": "tool_use", "name": n} for n in tools],
+                                "usage": {"input_tokens": 1, "cache_read_input_tokens": read}}}
+        projects = os.path.join(root, ".claude", "projects", "-repo")
+        for rel, recs in (("s1.jsonl", [turn(10, "a1", 1000), turn(20, "a2", 50000, "TaskStop")]),
+                          ("s2.jsonl", [turn(3 * 3600, "b1", 2000), turn(3 * 3600 + 60, "b2", 9000)]),  # 3 h later
+                          ("s2/subagents/agent-x.jsonl", [turn(3 * 3600 + 30, "x1", 700)])):
+            os.makedirs(os.path.dirname(os.path.join(projects, rel)), exist_ok=True)
+            with open(os.path.join(projects, rel), "w") as f:
+                f.writelines(json.dumps(r) + "\n" for r in recs)
+
+        def score(*args):
+            out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "coverage.py"), "score", "--run", run] +
+                                 list(args), env=dict(os.environ, HOME=root), stdout=subprocess.PIPE, check=True)
+            return json.loads(out.stdout.decode("utf-8")), read_json(os.path.join(run, "score.json"))
+        out, card = score("--session", "s2", "--session", "s1,s2")
+        self.assertEqual(card["M10"]["value"], {"total": 62700, "orchestrator": 62000})
+        self.assertEqual(card["M9"]["value"]["idle_gaps"], 0)  # the 3 h between the sessions is no idle gap
+        self.assertEqual(card["M12"]["value"]["stops"], 1)
+        self.assertEqual(out["orchestrator"], {"turns": 4, "context_start": 1001, "context_end": 9001})
+        for args in ((), ("--session", "s1,s3")):  # no session, or one not found: what was counted stays
+            out, again = score(*args)
+            self.assertFalse(out["transcript"])
+            self.assertEqual([again[k]["value"] for k in ("M9", "M10", "M12")] + [again["orchestrator"]],
+                             [card[k]["value"] for k in ("M9", "M10", "M12")] + [card["orchestrator"]])
 
 
 def _imp(fid, screen, title, **kw):

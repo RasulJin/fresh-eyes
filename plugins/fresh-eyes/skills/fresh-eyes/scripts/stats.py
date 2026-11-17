@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Score card of a finished run (`coverage.py score`): the metrics of the 9.5 plan a script can count, from the run
-folder and, with the session id, the session's transcripts. The judge writes M4, M7 and M11 into score.json
-(`"M4": {"value": 0.04}`) and may correct a counted one (`"M1": {"value": 1, "by": "judge"}`: not every numbered
-step of run-log.md is a hand move); a rerun keeps them, and every metric's `note` and `by`.
+folder and, with its session ids (a run resumed in new sessions has several), their transcripts. The judge writes
+M4, M7 and M11 into score.json (`"M4": {"value": 0.04}`) and may correct a counted one (`"M1": {"value": 1, "by":
+"judge"}`: not every numbered step of run-log.md is a hand move); a rerun keeps them, and every metric's `note` and
+`by`, and without a transcript what an earlier score counted from one.
 """
 import glob
 import json
@@ -110,25 +111,33 @@ def _transcript(path, lo, hi):
     return ts, cache, stops, ctx
 
 
-def session(sid, lo, hi):
-    """Idle gaps, cache_read and TaskStop calls of the orchestrator's transcript and its subagents', and the
-    orchestrator's turns and context at its first and last turn of the run, or None."""
-    main = glob.glob(os.path.join(PROJECTS, "*", sid + ".jsonl"))
-    if not main:
-        return None
-    ts, orch, stops, ctx = _transcript(main[0], lo, hi)
-    total = orch
-    for sub in glob.glob(os.path.join(os.path.dirname(main[0]), sid, "subagents", "*.jsonl")):
-        t, cache, _, _ = _transcript(sub, lo, hi)
-        ts += t
-        total += cache
-    ts.sort()
-    return {"idle_gaps": sum(1 for a, b in zip(ts, ts[1:]) if b - a > IDLE_S), "orchestrator": orch,
-            "total": total, "stops": stops, "turns": len(ctx), "context_start": ctx[0] if ctx else None,
+def session(sids, lo, hi):
+    """Idle gaps, cache_read and TaskStop calls of the orchestrator's transcripts and their subagents', and the
+    orchestrator's turns and context at its first and last turn of the run, or None (one session not found too).
+    A run resumed in new sessions (П-42) counts them all: idle gaps inside each one (the pause between two is no
+    idle gap), context from the first one's first turn to the last one's last."""
+    parts = []
+    for sid in sids:
+        main = glob.glob(os.path.join(PROJECTS, "*", sid + ".jsonl"))
+        if not main:
+            return None  # part of a run is no number for it
+        ts, orch, stops, ctx = _transcript(main[0], lo, hi)
+        total = orch
+        for sub in glob.glob(os.path.join(os.path.dirname(main[0]), sid, "subagents", "*.jsonl")):
+            t, cache, _, _ = _transcript(sub, lo, hi)
+            ts += t
+            total += cache
+        parts.append((sorted(ts), orch, total, stops, ctx))
+    parts.sort(key=lambda p: p[0][:1])
+    ctx = [c for p in parts for c in p[4]]
+    return {"idle_gaps": sum(1 for p in parts for a, b in zip(p[0], p[0][1:]) if b - a > IDLE_S),
+            "orchestrator": sum(p[1] for p in parts), "total": sum(p[2] for p in parts),
+            "stops": sum(p[3] for p in parts), "turns": len(ctx), "context_start": ctx[0] if ctx else None,
             "context_end": ctx[-1] if ctx else None}
 
 
 def score(run, sid=None, out=None):
+    """sid: the run's session id, or several (a list, or joined by commas) when it was resumed in new sessions."""
     out = out or os.path.join(run, "score.json")
     report = os.path.join(run, "report.md")
     text = _read(report) if os.path.exists(report) else None
@@ -151,12 +160,19 @@ def score(run, sid=None, out=None):
     m["M6"] = len(coverage.verdict(cov, findings, spec_stale=read_json(ss) if os.path.exists(ss) else None)["stale"])
     lo = min(os.path.getmtime(p) for p in glob.glob(os.path.join(run, "*")) if os.path.isfile(p))
     hi = os.path.getmtime(report) if text is not None else time.time()
-    s = session(sid, lo, hi) if sid else None
-    m["M9"] = {"hours": round((hi - lo) / 3600, 2), "idle_gaps": s and s["idle_gaps"]}
-    m["M10"] = {"total": s and s["total"], "orchestrator": s and s["orchestrator"]}
-    m["M12"] = {"stops": s and s["stops"], "consent_blocked": sum(1 for c in cov["cells"] if c["status"] == "blocked"
-                                                                  and CONSENT.search(c.get("note") or ""))}
+    sids = list(dict.fromkeys(x.strip() for v in ([sid] if isinstance(sid, str) else sid or ())
+                              for x in v.split(",") if x.strip()))
+    s = session(sids, lo, hi) if sids else None
     old = read_json(out) if os.path.exists(out) else {}
+
+    def was(k, f):  # no transcript this time: what an earlier score counted from one stays
+        v = (old.get(k) or {}).get("value")
+        return v.get(f) if isinstance(v, dict) else None
+    m["M9"] = {"hours": round((hi - lo) / 3600, 2), "idle_gaps": s["idle_gaps"] if s else was("M9", "idle_gaps")}
+    m["M10"] = {f: s[f] if s else was("M10", f) for f in ("total", "orchestrator")}
+    m["M12"] = {"stops": s["stops"] if s else was("M12", "stops"),
+                "consent_blocked": sum(1 for c in cov["cells"] if c["status"] == "blocked"
+                                       and CONSENT.search(c.get("note") or ""))}
     corrected = [k for k in LIMITS if k not in JUDGE and (old.get(k) or {}).get("by") == "judge"]
     for k in JUDGE + tuple(corrected):
         m[k] = (old.get(k) or {}).get("value")
@@ -170,8 +186,9 @@ def score(run, sid=None, out=None):
     card["M2"]["flaky"] = flaky
     card["passed"] = sum(1 for k in LIMITS if card[k]["ok"])
     card["unknown"] = [k for k in LIMITS if card[k]["ok"] is None]
-    # П-42: a full run in a new session ends under 120 turns and 250 k of context
-    card["orchestrator"] = {k: s[k] for k in ("turns", "context_start", "context_end")} if s else None
+    # П-42: a full run's sessions together end under 120 turns, each under 250 k of context
+    card["orchestrator"] = {k: s[k] for k in ("turns", "context_start", "context_end")} if s else \
+        old.get("orchestrator")
     if "bench" in old:  # bench.py score --run: the seeded bench this run was gated on
         card["bench"] = old["bench"]
     write_json(out, card)

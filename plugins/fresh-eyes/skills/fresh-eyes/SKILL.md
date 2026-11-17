@@ -190,8 +190,9 @@ words / nothing (= the current diff).
     data, which the next run's reviewers skip.
 11. Write `$RUN/report.md`, `rejected.md` and `run-log.md` by `$R/report-format.md` (see "Report"; `imp.md` is
     step 10's). Then `python3 $S/coverage.py notes --run $RUN` (the agents' notes into `orchestrator-notes.md`)
-    and `python3 $S/coverage.py score --run $RUN --session "${CLAUDE_SESSION_ID}"`: the run's score card
-    (`$RUN/score.json`, the metrics a script counts; the judge fills M4, M7 and M11, may correct M1; a rerun keeps them).
+    and `python3 $S/coverage.py score --run $RUN --session "<RESUME.md's sessions>,${CLAUDE_SESSION_ID}"` (every
+    session of the run; no RESUME.md: this one): the run's score card (`$RUN/score.json`, the metrics a script
+    counts; the judge fills M4, M7 and M11, may correct M1; a rerun keeps them).
 12. Review with the user, then write the backlog and regression flows (see "After the report").
 
 ## full
@@ -214,11 +215,12 @@ Goal: before a release, everything from a fresh install. Same as quick, with the
 
 Checkpoints: after navigation (`coverage.py next` empty on every queue) and after every first verifier pass,
 once each agent you started is back, write `$RUN/RESUME.md`: the step reached; what is left (todo cells, packs
-no reviewer listed, folders without a first pass, open requests); the verifiers' agent ids; steps taken by hand.
-In `full`, then stop with one line: "continue: `/fresh-eyes resume <run>` in a new session" (a fresh context
-costs far less than carrying this one). `resume [<run>]` (default: the newest run; `full --resume`: the newest
-full one): read its `RESUME.md`, run step 3 into it again (same mode and `--source`), then go on from the first
-unfinished step (a second pass goes to a fresh verifier when the first one is gone). Never redo a done cell.
+no reviewer listed, folders without a first pass, open requests); the verifiers' agent ids; steps taken by hand;
+`sessions: <ids>` (every session of the run, this one last). In `full`, then stop with one line: "continue:
+`/fresh-eyes resume <run>` in a new session" (a fresh context costs far less than carrying this one). `resume
+[<run>]` (default: the newest run; `full --resume`: the newest full one): read its `RESUME.md`, add
+`${CLAUDE_SESSION_ID}` to its `sessions:`, run step 3 into it again (same mode and `--source`), then go on from the
+first unfinished step (a second pass goes to a fresh verifier when the first one is gone). Never redo a done cell.
 
 ## twice
 

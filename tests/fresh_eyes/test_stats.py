@@ -59,12 +59,14 @@ class ScoreTest(unittest.TestCase):
                 write_json(out["out"], card)
                 with open(os.path.join(run, "run-log.md"), "w", encoding="utf-8") as f:
                     f.write("# Ход прогона\n1. reach поправлен руками\n- заметка\n")
-                card = read_json(stats.score(run)["out"])  # no session: transcript metrics unknown
+                card = read_json(stats.score(run)["out"])  # no session: the transcript metrics stay
             self.assertEqual((card["M4"]["value"], card["M4"]["ok"]), (0.04, True))
             self.assertEqual((card["M1"]["value"], card["M1"]["ok"], card["M1"]["by"]), (0, True, "judge"))
-            self.assertEqual(card["M10"]["ok"], None)
+            self.assertEqual((card["M10"]["value"], card["M10"]["ok"]), ({"total": 157, "orchestrator": 107}, True))
+            self.assertEqual((card["M9"]["value"]["idle_gaps"], card["M12"]["value"]["stops"]), (1, 1))
             os.remove(os.path.join(run, "score.json"))
-            self.assertEqual(read_json(stats.score(run)["out"])["M1"]["value"], 1)  # run-log.md: 1 numbered step
+            card = read_json(stats.score(run)["out"])  # nothing counted before: transcript metrics unknown
+            self.assertEqual(card["M1"]["value"], 1)  # run-log.md: 1 numbered step
             for name in ("score.json", "run-log.md"):
                 os.remove(os.path.join(run, name))
             with open(os.path.join(run, "report.md"), "w", encoding="utf-8") as f:
