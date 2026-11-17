@@ -23,8 +23,10 @@ CLI:
                     (--to: where a drag across the whole surface ends; drags 40 % of it, 1.5 s later 60 %)
   taps.py drag-back --platform android --device ID --from X,Y --to X,Y [--ms 2000] [--back-at-ms 700]
                     --pack PACK --coverage C --cell ID
-  taps.py swipe-tap --platform android --device ID --from X,Y --to X,Y [--ms 250] [--delay-ms MS] --x X --y Y
-                    --pack PACK --coverage C --cell ID   (--delay-ms: the run's motion_ceiling_ms unless given)
+  taps.py swipe-tap --platform android --device ID --from X,Y --to X,Y [--ms 250] [--delay-ms MS]
+                    (--id SUFFIX | --label RE | --x X --y Y) --pack PACK --coverage C --cell ID
+                    (--delay-ms: the run's motion_ceiling_ms unless given; the target is found in the snap before
+                    the swipe, and PACK/swipe-tap/tap.json gets the point, node, bounds and delay)
                     (slow, drag-back, swipe-tap: a drag-interrupt step in one call: PACK/<step>/before snapped on
                     the cell's screen (its marker; refused elsewhere), the gesture recorded into PACK/<step>, and
                     1.5 s later the snap of where it left, into PACK/<step> itself)
@@ -34,6 +36,8 @@ CLI:
 import argparse
 import json
 import os
+import re
+import sys
 import tempfile
 import time
 
@@ -204,15 +208,46 @@ GESTURE_SETTLE_S = 1.5  # after a drag-interrupt gesture: the snap shows where i
 
 
 def gesture(a, dev, cell, call):
-    """Snap PACK/<step>/before, record call() into PACK/<step>, snap PACK/<step>: all in one call, so no step is
-    snapped again after the next one ran (0.5.12 profile-trips: three sub-snaps retaken after all gestures)."""
+    """Snap PACK/<step>/before, record call(before) into PACK/<step>, snap PACK/<step>: all in one call, so no step
+    is snapped again after the next one ran (0.5.12 profile-trips: three sub-snaps retaken after all gestures)."""
     sub = os.path.join(a.pack, a.cmd)
-    code = capture.snap(a.platform, a.device, os.path.join(sub, "before"), marker=tuple(cell.get("marker") or ()))
+    before = os.path.join(sub, "before")
+    code = capture.snap(a.platform, a.device, before, marker=tuple(cell.get("marker") or ()))
     if code:
         raise FEError("%s/before: snap exit %d (see its meta.json): the gesture did not run; bring the screen back "
                       "to rest and run it again" % (sub, code))
-    capture.around(a.platform, a.device, sub, ["taps.py", a.cmd], settle=GESTURE_SETTLE_S, call=call)
+    capture.around(a.platform, a.device, sub, ["taps.py"] + sys.argv[1:], settle=GESTURE_SETTLE_S,
+                   call=lambda: call(before))
     return capture.snap(a.platform, a.device, sub)
+
+
+def swipe_target(a, before):
+    """((x, y), tap.json) of swipe-tap's tap: --id/--label found in the before snap (the dump before the swipe),
+    or --x --y with the innermost clickable node there under it."""
+    path = os.path.join(before, "nodes.json")
+    nodes = read_json(path) if os.path.isfile(path) else []
+    if a.x is None:
+        node, by = nav.find_node(nodes, label=a.label, rid=a.id), "id" if a.id else "label"
+        x, y = nav.center({"bounds": nav.visible_box(node, None, read_json(os.path.join(before, "meta.json"))
+                                                     .get("screen_wh"))})
+    else:
+        (x, y), by = (a.x, a.y), "point"
+        under = [n for n in nodes if n["clickable"] and n["bounds"][0] <= x < n["bounds"][0] + n["bounds"][2]
+                 and n["bounds"][1] <= y < n["bounds"][1] + n["bounds"][3]]
+        node = max(under, key=lambda n: n["depth"], default=None)
+    return (x, y), {"point": [x, y], "by": by, "node": node and {k: node[k] for k in ("cls", "rid", "text", "label")},
+                    "bounds": node and node["bounds"], "delay_ms": a.delay_ms}
+
+
+TAP_DIR = re.compile(r"tap-(\d+)")
+
+
+def next_row(pack, rows):
+    """The number of the next row of PACK/taps.json: after its last row and after any tap-<k> folder (a tap that
+    failed before its row, or rows from before a restart), so a row never takes an older folder."""
+    folders = [int(m.group(1)) for d in (os.listdir(pack) if os.path.isdir(pack) else ())
+               for m in [TAP_DIR.fullmatch(d)] if m]
+    return 1 + max([r.get("n", 0) for r in rows] + folders, default=0)
 
 
 def _part(src, to, f):
@@ -229,8 +264,10 @@ def main():
         p.add_argument("--coverage", required=True)
         p.add_argument("--cell", required=True)
         if name not in ("back", "slow", "drag-back", "edge"):
-            p.add_argument("--x", type=int, required=name != "tap")
-            p.add_argument("--y", type=int, required=name != "tap")
+            p.add_argument("--x", type=int, required=name not in ("tap", "swipe-tap"))
+            p.add_argument("--y", type=int, required=name not in ("tap", "swipe-tap"))
+        if name == "swipe-tap":
+            p.add_argument("--id"); p.add_argument("--label")
         if name == "tap":
             for flag in ("--id", "--label", "--text", "--expect-id"):
                 p.add_argument(flag)
@@ -269,6 +306,9 @@ def main():
             ap.error("tap needs one target: --id, --label, --text, --som, or --x --y with --expect-id")
         if a.x is not None and not a.expect_id:
             ap.error("--x --y only with --expect-id: a point from an older screen lands on whatever moved there")
+    if a.cmd == "swipe-tap" and len([v for v in (a.id, a.label, a.x) if v not in (None, "")]) != 1 \
+            or a.cmd == "swipe-tap" and (a.x is None) != (a.y is None):
+        ap.error("swipe-tap needs one target: --id, --label, or --x --y")
     cell = guard(a.coverage, a.cell, a.platform)
     load_secrets(a.coverage)  # nodes, rows and tap.json never carry a credential (nav.hierarchy cuts them)
     heartbeat(a.coverage, a.platform, "taps.py %s %s" % (a.cmd, a.cell))
@@ -280,9 +320,10 @@ def main():
     elif a.cmd == "tap":
         rows_path = os.path.join(a.pack or "", "taps.json")
         rows = read_json(rows_path) if a.pack and os.path.isfile(rows_path) else []
-        after = os.path.join(a.pack, "tap-%d" % (len(rows) + 1)) if a.pack else a.after
+        k = next_row(a.pack, rows) if a.pack else None
+        after = os.path.join(a.pack, "tap-%d" % k) if a.pack else a.after
         code, rec = tap(a, dev, after, a.pack or os.path.dirname(os.path.normpath(a.after)), cell.get("marker"))
-        row = dict({"n": len(rows) + 1, "label": nav._name(rec["node"]), "by": rec["by"]},
+        row = dict({"n": k, "label": nav._name(rec["node"]), "by": rec["by"]},
                    **({"som": a.som} if a.som is not None else {}),
                    pack=os.path.basename(after), changed=rec["changed"], result=rec["result"])
         if a.pack:  # the folder is the row's number, the navigator writes no row (0.5.12: tap-7/8/9 were rows 4-6)
@@ -304,18 +345,21 @@ def main():
         devices.tap_then_back(dev, a.x, a.y, a.delay_ms)
     elif a.cmd in ("slow", "drag-back", "swipe-tap"):
         if a.cmd == "slow":  # under half it springs back, over half it moves on
-            def call():
+            def call(before):
                 devices.swipe(dev, *a.src, *_part(a.src, a.to, 0.4), a.ms)
                 time.sleep(GESTURE_SETTLE_S)
                 devices.swipe(dev, *a.src, *_part(a.src, a.to, 0.6), a.ms)
         elif a.cmd == "drag-back":
-            def call():
+            def call(before):
                 devices.drag_then_back(dev, *a.src, *a.to, ms=a.ms, back_at_ms=a.back_at_ms)
         else:
-            delay = a.delay_ms if a.delay_ms is not None else run_ceiling_ms(os.path.dirname(a.coverage))
+            if a.delay_ms is None:
+                a.delay_ms = run_ceiling_ms(os.path.dirname(a.coverage))
 
-            def call():
-                devices.swipe_then_tap(dev, *a.src, *a.to, a.x, a.y, ms=a.ms, delay_ms=delay)
+            def call(before):
+                (x, y), rec = swipe_target(a, before)
+                write_json(os.path.join(a.pack, a.cmd, "tap.json"), rec)  # the verifier's tap.json (П-23)
+                devices.swipe_then_tap(dev, *a.src, *a.to, x, y, ms=a.ms, delay_ms=a.delay_ms)
         code = gesture(a, dev, cell, call)
         print(json.dumps({"probe": a.cmd, "cell": a.cell, "pack": os.path.join(a.pack, a.cmd), "snap_exit": code}))
         return code

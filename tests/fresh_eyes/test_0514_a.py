@@ -275,5 +275,59 @@ class RenumberTest(unittest.TestCase):
             self.assertEqual(capture.renumber(pack), {})  # in order now
 
 
+class SwipeTapTest(unittest.TestCase):
+    """П-39: side-menu#1f1 was confirmed with no tap.json: swipe-tap took only a point and wrote none."""
+    def run_swipe_tap(self, target):
+        events = []
+        before_nodes = [node(1, "Посты", 300, label="Посты"), node(2, "", 300, rid="app:id/trips-tab",
+                                                                    label="Поездки", depth=3)]
+        before_nodes[1]["bounds"] = [540, 250, 540, 120]
+
+        def snap(platform, dev, out, **kw):
+            if os.path.basename(out) == "before":
+                write_json(os.path.join(out, "nodes.json"), before_nodes)
+                write_json(os.path.join(out, "meta.json"), {"screen_wh": [1080, 2400]})
+            return 0
+
+        def around(platform, dev, out, action, settle=2.5, ceiling_ms=None, call=None):
+            events.append(action)
+            call()
+        with tmpdir() as d:
+            cell = dict(TAP_CELL, id="android/feed/default/drag-interrupt", probe="drag-interrupt")
+            cov = run_folder(d, [cell])
+            write_json(cov, {"run_id": "r", "cells": [cell], "motion_ceiling_ms": 280})
+            pack = os.path.join(d, "android", "feed", "default-drag-interrupt")
+            argv = ["taps.py", "swipe-tap", "--platform", "android", "--device", "e", "--from", "700,1200",
+                    "--to", "100,1200", "--pack", pack, "--coverage", cov, "--cell", cell["id"]] + target
+            with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(io.StringIO()), \
+                    mock.patch.object(taps.capture, "snap", snap), mock.patch.object(taps.capture, "around", around), \
+                    mock.patch.object(devices, "swipe_then_tap",
+                                      lambda dev, *a, **kw: events.append(("tap", a[4], a[5], kw["delay_ms"]))):
+                taps.main()
+            return events, read_json(os.path.join(pack, "swipe-tap", "tap.json"))
+
+    def test_the_target_is_found_before_the_swipe_and_tap_json_written(self):
+        events, rec = self.run_swipe_tap(["--label", "Поездки"])
+        self.assertEqual(events[1], ("tap", 810, 310, 280))
+        self.assertEqual((rec["point"], rec["bounds"], rec["node"]["rid"], rec["delay_ms"], rec["by"]),
+                         ([810, 310], [540, 250, 540, 120], "app:id/trips-tab", 280, "label"))
+        self.assertIn("--label", events[0])  # around.json keeps the whole command
+        events, rec = self.run_swipe_tap(["--x", "900", "--y", "300", "--delay-ms", "120"])
+        self.assertEqual((events[1], rec["node"]["label"], rec["by"]), (("tap", 900, 300, 120), "Поездки", "point"))
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            self.run_swipe_tap(["--id", "trips-tab", "--x", "1", "--y", "2"])
+
+    def test_rows_continue_after_the_last_row_and_any_tap_folder(self):
+        with tmpdir() as pack:
+            rows = [{"n": k} for k in (1, 2, 3)]
+            for k in (1, 2, 3):
+                os.makedirs(os.path.join(pack, "tap-%d" % k))
+            os.makedirs(os.path.join(pack, "tap-2-recheck"))
+            self.assertEqual(taps.next_row(pack, rows), 4)
+            os.makedirs(os.path.join(pack, "tap-4"))  # a tap that failed before its row
+            self.assertEqual(taps.next_row(pack, rows), 5)
+            self.assertEqual(taps.next_row(os.path.join(pack, "new"), []), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
